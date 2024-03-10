@@ -79,8 +79,8 @@ For security purposes, please change the default credentials immediately after t
 
 ## Known Issues
 
-    Currently running this in Django development environment
-    Clipboard API is not available when not using SSL / TLS
+- **Django Dev Env**: Currently running this in Django development environment.  Need to migrate to a different web server.
+- **Clipboard**: Clipboard API is not available when not using SSL / TLS and I haven't gotten to that point yet.
 
 ## About EDLs
 
