@@ -59,10 +59,10 @@ After running the setup script, it's important to review the generated .env file
 To run the application in a manner suited for internal use, testing, or demonstration, you can utilize Django's built-in development server. While not recommended for production use, this server is suitable for scenarios where ease of setup and use is prioritized.
 
 ```
-python manage.py runserver 0.0.0.0:8000 &&
+python manage.py runserver 127.0.0.1:8000 &
 ```
 
-This command starts the Django development server, making the application accessible on port 8000 of your machine or server. Replace 0.0.0.0 with your specific IP address if you want to restrict access to a particular network interface.
+This command starts the Django development server, making the application accessible on port 8000 of your machine or server. Replace 127.0.0.1 with your specific IP address and port if you want to restrict access to a particular network interface.
 
 ## Default Credentials
 
