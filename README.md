@@ -46,7 +46,10 @@ cd KineticLull
 
 We've provided a setup.sh script to streamline the initial setup process, which includes creating a virtual environment, installing dependencies, and setting up initial configurations.
 
-`./setup.sh`
+```
+chmod +x setup.sh
+./setup.sh
+```
 
 Note: The script will prompt you for the necessary configuration settings (such as the IP or FQDN where the application will be accessible) during its execution. These settings are crucial for the proper functioning of the application.
 
@@ -59,6 +62,7 @@ After running the setup script, it's important to review the generated .env file
 To run the application in a manner suited for internal use, testing, or demonstration, you can utilize Django's built-in development server. While not recommended for production use, this server is suitable for scenarios where ease of setup and use is prioritized.
 
 ```
+source venv/bin/activate
 python manage.py runserver 127.0.0.1:8000 &
 ```
 
