@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %} Review Script{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2> Review Script: {{ form.instance.name }}</h2>
+    {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+    {% else %}
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_div }}
+        <button type="submit" class="btn btn-outline-primary">Save</button>
+        <a href="{% url 'app:script_list' %}" class="btn btn-outline-secondary">Cancel</a>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

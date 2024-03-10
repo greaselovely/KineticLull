@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block title %}Review API Submission{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Review API Submission</h1>
+    <div class="justify-content-start mt-2">
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_div}}
+    <button type="submit" class="btn btn-outline-primary">Save</button>
+    <a href="{% url 'app:delete_submission' submission.id %}" class="btn btn-outline-danger">Delete</a>
+    <a href="{% url 'app:submission_list' %}" class="btn btn-outline-secondary">Cancel</a>
+</form>
+</div>
+{% endblock %}

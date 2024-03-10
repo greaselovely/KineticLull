@@ -1,0 +1,39 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+      <div class="navbar-brand">KL</div>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+              <li class="nav-item">
+                  <a class="nav-link" href="{% url 'app:index' %}" aria-expanded="false">
+                      Home
+                  </a>
+              </li>
+              <!-- Conditional links for authenticated users -->
+              {% if user.is_authenticated %}
+              {% if not title is 'Profile' %}
+              <li class="nav-item">
+                  <a class="nav-link" href="{% url 'app:new_edl' %}" aria-expanded="false">
+                      New
+                  </a>
+              </li>
+            {% endif %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'app:submission_list' %}">Inbox</a>
+                </li>
+                {% comment %} <li class="nav-item">
+                    <a class="nav-link" href="{% url 'app:script_list' %}">Scripts</a>
+                </li> {% endcomment %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'app:profile' %}">Profile</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'app:logout' %}">Logout</a>
+                </li>
+              {% endif %}
+          </ul>
+      </div>
+  </div>
+</nav>

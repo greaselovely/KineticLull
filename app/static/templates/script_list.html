@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Scripts{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Scripts</h2>
+    {% if script_list %}
+    <table class="table table-borderless table-hover">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for script in script_list %}
+            <tr>
+                <td><a href="{% url 'app:review_script' script.id %}">{{ script.id }}</a></td>
+                <td>{{ script.name }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No Scripts</p>
+    {% endif %}
+</div>
+{% endblock %}

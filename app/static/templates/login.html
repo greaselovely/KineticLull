@@ -1,0 +1,20 @@
+
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}- Login{% endblock %}
+{% block content %}
+
+{% if form.errors %}
+  <p>Your username and password didn't match. Please try again.</p>
+{% endif %}
+
+<form style="form-control mb-3" method="post" action="{% url 'app:login' %}">
+  {% csrf_token %}
+  Email Address <br>
+  {{form.username}}<br>
+  Password <br>
+  {{form.password}}<br><br>
+  <button type="submit" class="btn btn-outline-primary">Login</button>
+</form>
+
+{% endblock %}

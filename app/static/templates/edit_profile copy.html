@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %} - {{title}}{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2>{{title}}</h2>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_div }}
+        <button type="submit" class="btn btn-outline-primary">Save</button>
+    </form>
+    <hr>
+    <div>
+        <h3>API Key</h3>
+        {% if api_key %}
+            <p>Your API Key: <code>{{ api_key }}</code></p>
+        {% else %}
+            <p>You do not have an API key yet.</p>
+        {% endif %}
+        <form method="post">
+            {% csrf_token %}
+            <button name="generate_api_key" type="submit" class="btn btn-outline-warning">
+                {% if api_key %}
+                    Regenerate
+                {% else %}
+                    Generate
+                {% endif %}
+                    API Key
+                </button>
+            <a href="{% url 'app:profile' %}" class="btn btn-outline-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

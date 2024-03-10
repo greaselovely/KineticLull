@@ -1,0 +1,101 @@
+
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}- Home{% endblock %}
+{% block content %}
+
+
+<table class="table table-borderless table-hover">
+    <thead>
+        <tr class="text-left">
+            <th>EDL Name</th>
+            <th>URL</th>
+            <th>IP/FQDN</th>
+            <th class="actions-column">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in page_obj %}
+        <tr>
+            <td>{{ item.friendly_name }}</td>
+            <td><a href="{{ item.full_url }}/" target="_blank">{{ item.full_url }}/</a></td>
+            <td>
+                {% for ip in item.ip_fqdn %}
+                    {% if forloop.counter == 3 %}
+                        {% if item.display_ellipsis%}
+                            {{ ip }} <br><a href="{% url 'app:item_detail' item_id=item.id %}" target="_blank">more</a><br>
+                        {% else %}
+                            {{ ip }}<br>
+                        {% endif %}
+                    {% else %}
+                        {{ ip }}<br>
+                    {% endif %}
+                {% endfor %}
+            </td>
+            <td class="actions-column">
+                <a href="{% url 'app:edit' id=item.id %}" title="Edit"><img class="icon action-items" src="{% static 'images/edit.svg' %}" alt="Edit"></a>
+                <a href="{% url 'app:clone' item.id %}" title="Clone"><img class="icon action-items" src="{% static 'images/clone.svg' %}" alt="Clone"></a>
+                <a href="{% url 'app:download_ip_fqdn' item.id %}" title="Download"><img class="icon action-items" src="{% static 'images/download.svg' %}" alt="Download"></a>
+                <img class="icon action-items" src="{% static 'images/delete.svg' %}" alt="Delete" onclick="deleteRecord('{{ item.id }}', event)" title="Delete">
+                <img src="{% static 'images/copy.svg' %}" alt="Copy" class="icon action-items copy-url-btn" data-url="{{ item.full_url }}" style="cursor: pointer;" title="Copy URL">
+                <span class="copy-confirmation" style="display: none; transition: opacity 600ms;">👍</span>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="4">No EDLs in Database. Add one!</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+    <tr>
+        <td>
+            <nav>
+                <ul class="pagination">
+                    {% if page_obj.paginator.num_pages > 1 %}
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1">&laquo;</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">&lsaquo; </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo;</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">&lsaquo; </span>
+                            </li>
+                        {% endif %}
+                    
+            
+                    <!-- Display current page info here, if needed -->
+                    <li class="page-item disabled">
+                        <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                    </li>
+            
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}">&rsaquo; </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">&raquo;</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">&rsaquo; </span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link">&raquo;</span>
+                        </li>
+                    {% endif %}
+                    {% endif %}
+                </ul>
+            </nav>
+        </td>
+    </tr>
+    </tfoot>
+</table>
+
+{% endblock %}

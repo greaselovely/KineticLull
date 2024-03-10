@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %} - Edit {{ form.friendly_name.value }}{% endblock %}
+{% block content %}
+<div class="container">
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_div}}
+        <button type="submit" class="btn btn-outline-primary">Save</button>
+        <a href="{% url 'app:index' %}" class="btn btn-outline-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

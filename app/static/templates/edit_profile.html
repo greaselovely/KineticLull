@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %} - {{title}}{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2>{{title}}</h2>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_div }}
+        <button type="submit" class="btn btn-outline-primary">Save</button>
+    </form>
+    <hr>
+    <div>
+        <h3>API Key</h3>
+        {% if api_key %}
+        <div id="api-key-container">
+            <p>Your API Key: 
+                <code id="api-key" class="blur-text">{{ api_key }}</code>
+                <img src="{% static 'images/show.svg' %}" alt="Show/Hide" class="icon action-items" id="toggle-api-key-visibility" style="cursor: pointer;">
+                <img src="{% static 'images/copy.svg' %}" alt="Copy" class="icon action-items" id="copy-api-key" style="cursor: pointer;">
+                <span id="copy-confirmation" style="display: none; transition: opacity 600ms;">👍</span>
+            </p>
+        </div>
+    {% else %}
+            <p>You do not have an API key yet.</p>
+        {% endif %}
+        <form method="post">
+            {% csrf_token %}
+            <button name="generate_api_key" type="submit" class="btn btn-outline-warning">
+                {% if api_key %}
+                    Regenerate
+                {% else %}
+                    Generate
+                {% endif %}
+                    API Key
+                </button>
+            <a href="{% url 'app:profile' %}" class="btn btn-outline-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+<script src="{% static 'js/edit_profile.js' %}"></script>
+{% endblock %}
