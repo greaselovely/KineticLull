@@ -77,6 +77,11 @@ A default superuser account is created during the setup process for accessing th
 
 For security purposes, please change the default credentials immediately after the setup is complete.
 
+## Known Issues
+
+    Currently running this in Django development environment
+    Clipboard API is not available when not using SSL / TLS
+
 ## About EDLs
 
 External Dynamic Lists (EDLs) play a critical role in this project by allowing dynamic updates and enforcement of firewall policies based on real-time changes to the lists without needing manual configuration adjustments on the firewall.
