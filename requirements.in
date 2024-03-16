@@ -2,3 +2,4 @@ django
 django-debug_toolbar
 whitenoise
 python-dotenv
+gunicorn

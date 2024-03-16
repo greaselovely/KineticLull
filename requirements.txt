@@ -12,6 +12,10 @@ django==5.0.2
     #   django-debug-toolbar
 django-debug-toolbar==4.3.0
     # via -r requirements.in
+gunicorn==21.2.0
+    # via -r requirements.in
+packaging==24.0
+    # via gunicorn
 python-dotenv==1.0.1
     # via -r requirements.in
 sqlparse==0.4.4
