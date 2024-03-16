@@ -3,7 +3,7 @@ logs/
 staticfiles/
 config.json
 MM.jpeg
-
+*.pem
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

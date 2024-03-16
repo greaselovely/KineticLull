@@ -1,101 +1,80 @@
-# KineticLull - Setup Guide
+# KineticLull
 
 ## Overview
 
-KineticLull is a powerful web application designed to streamline the management and deployment of External Dynamic Lists (EDLs). EDLs are critical tools for network security, allowing administrators to dynamically update firewall policies based on real-time changes to IP addresses, URLs, and domain lists hosted externally. KineticLull simplifies this process, providing a user-friendly interface for creating, managing, and deploying EDLs without direct firewall access.
+KineticLull is a powerful web application designed to streamline the management and deployment of External Dynamic Lists (EDLs). These lists are indispensable for network security, enabling dynamic updates to firewall policies based on real-time changes. KineticLull offers a user-friendly interface for the effortless creation, management, and deployment of EDLs without requiring direct firewall access.
 
 ## Key Features
 
-- **EDL Management**: Users can create and manage EDLs directly through KineticLull's interface. This includes adding, updating, and removing entries such as URLs, FQDNs, IP hosts/subnets.
-
-- **Access Control Lists (ACLs)**: Each EDL comes with an associated ACL that can be configured to limit access to the EDL. This feature ensures that only authorized users or systems can access sensitive EDLs.
-
-- **API Integration**: KineticLull supports API integration, allowing EDLs to be uploaded programatically. This does not automatically create the EDL as the submission via API has to be reviewed and saved by an administrator.  Future versions will allow EDLs to be updated once approved.
-
-- **Cloning and Deletion**: EDLs can be easily cloned, allowing users to create duplicates for different purposes or backup. EDLs can also be deleted when no longer needed.
-
-- **Backup and Export**: EDLs can be downloaded as text files, providing a simple method for backup or use in other systems.
-
-- **API Key Generation**: While there is no default API key, KineticLull allows users to generate API keys. This feature facilitates secure API integration for automated EDL management.
-
-- **Security Analyst Empowerment**: By abstracting EDL management from direct firewall access, KineticLull empowers security analysts to update EDLs as needed. This capability ensures that security policies can be rapidly adapted to emerging threats without compromising firewall security or providing wide access.
-
-- **Documentation and Notes**: KineticLull supports maintaining detailed notes for each EDL, allowing users to document the purpose, changes, or any other relevant information for future reference.
+- **EDL Management**: Direct interface for creating, managing, and deploying EDLs.
+- **Access Control Lists (ACLs)**: Configurable ACLs for each EDL to ensure secure access.
+- **API Integration**: Supports API integration for programmatically uploading EDLs, subject to admin review.
+- **Cloning and Deletion**: Simple cloning and deletion of EDLs for flexible management.
+- **Backup and Export**: Easy backup and export options for EDLs.
+- **API Key Generation**: Secure API key generation for automated EDL management.
+- **Security Analyst Empowerment**: Allows security analysts to update EDLs swiftly in response to emerging threats.
+- **Documentation and Notes**: Detailed documentation and note-keeping for each EDL.
 
 ## Getting Started
 
-To set up KineticLull for your organization, please follow the setup instructions detailed in the Setup Instructions section. Ensure that you have Python 3.12 or higher installed on your system before beginning the installation process.
-
-## Contributing
-
-Contributions to KineticLull are welcome! Please refer to our contributing guidelines for more information on how to contribute to the project.
-
+To set up KineticLull, ensure Python 3.12 or higher is installed on your system. Follow the setup instructions below to prepare KineticLull for your organization.
 
 ## Setup Instructions
 
 ### 1. Clone the Repository
 
-Start by cloning the project repository to your local system or server.
+Clone the KineticLull repository to your local system or server making sure you are in the desired installation path:
 
 ```
-git clone https://github.com/greaselovely/KineticLull
+git clone https://github.com/greaselovely/KineticLull.git
 cd KineticLull
 ```
 
-## Run the Setup Script
+### 2. Run the Setup Script
 
-We've provided a setup.sh script to streamline the initial setup process, which includes creating a virtual environment, installing dependencies, and setting up initial configurations.
-
-```
-chmod +x setup.sh
-./setup.sh
-```
-
-Note: The script will prompt you for the necessary configuration settings (such as the IP or FQDN where the application will be accessible) during its execution. These settings are crucial for the proper functioning of the application.
-
-## Review and Adjust Configuration
-
-After running the setup script, it's important to review the generated .env file and any other configuration settings. Adjust any settings as necessary to fit your specific environment or requirements.
-
-## Running the Application
-
-To run the application in a manner suited for internal use, testing, or demonstration, you can utilize Django's built-in development server. While not recommended for production use, this server is suitable for scenarios where ease of setup and use is prioritized.
+Execute the provided `setup.sh` script to automate the initial setup. This script handles the creation of a virtual environment, installation of dependencies, and initial configuration:
 
 ```
-source venv/bin/activate
-python manage.py runserver 127.0.0.1:8000 &
+bash setup.sh
 ```
 
-This command starts the Django development server, making the application accessible on port 8000 of your machine or server. Replace 127.0.0.1 with your specific IP address and port if you want to restrict access to a particular network interface.
+**Note**: During execution, the script will prompt for necessary configurations, such as the IP address or FQDN for application access. These configurations are vital for the application's functionality.
 
-## Default Credentials
+### 3. Review and Adjust Configuration
 
-A default superuser account is created during the setup process for accessing the Django admin interface:
+Post-setup, ensure to review and adjust configurations in the generated `.env` file or other configuration files to meet your specific needs.
 
-    Username: support@kineticlull.com
-    Password: Password!
+### 4. Running the Application
 
-For security purposes, please change the default credentials immediately after the setup is complete.
+The `setup.sh` file should get you all the information you need to get this running under systemd
 
-## Known Issues
+### 5. Default Credentials
 
-- **Django Dev Env**: Currently running this in Django development environment.  Need to migrate to a different web server.
-- **Clipboard**: Clipboard API is not available when not using SSL / TLS and I haven't gotten to that point yet.
+Upon setup, a default superuser account is created for admin access:
+
+- **Username**: support@kineticlull.com
+- **Password**: Password!
+
+Change these credentials immediately for security purposes.
 
 ## About EDLs
 
-External Dynamic Lists (EDLs) play a critical role in this project by allowing dynamic updates and enforcement of firewall policies based on real-time changes to the lists without needing manual configuration adjustments on the firewall.
+External Dynamic Lists (EDLs) are central to KineticLull, allowing for dynamic firewall policy updates based on real-time list changes without manual firewall configurations.
 
 ## Complimentary Tools
 
-Refer to GhostHunter for Firefox and Chrome.
+For complementary tools, check out GhostHunter for Firefox and Chrome.
 
-## Testing API
+## Contributing
 
-Use the following to test API against the provided database (changing IP and port as needed):
+Contributions are welcome! Please see our contributing guidelines for details on how to contribute to KineticLull.
+
+## Testing the API
+
+Test the API using the following curl command (adjust IP and port as needed):
 
 ```
-curl -X POST http://<<your ip address>>:<<your port number>>/api/submit_fqdn/
-    -H "Content-Type: application/json" -H "Authorization: Bearer <<your api key here>>" 
+curl -X POST http://<<your ip address>>:<<your port number>>/api/submit_fqdn/ \
+    -H "Content-Type: application/json" -H "Authorization: Bearer <<your api key here>>" \
     -d '{"fqdn_list": ["example1.com", "example2.net", "example3.org", "example4.io", "example5.co"]}'
 ```
