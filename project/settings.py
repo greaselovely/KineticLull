@@ -17,7 +17,7 @@ dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
 
 if not os.path.isfile(dotenv_path):
     clear()
-    kl_url_question = input("[?]\tWhat is the IP or FQDN this will be accessible at? (ie...http://10.1.1.1:8000) :")
+    kl_url_question = input("[?]\tWhat is the IP or FQDN this will be accessible at? (ie...http://10.1.1.1:8000) : ")
     print("[i]\tTo update this, edit the .env file\n\n")
     secret_key = generate_random_string(65)
     debug = 'False'
