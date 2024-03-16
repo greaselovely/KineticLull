@@ -74,7 +74,8 @@ Contributions are welcome! Please see our contributing guidelines for details on
 Test the API using the following curl command (adjust IP and port as needed):
 
 ```
-curl -X POST http://<<your ip address>>:<<your port number>>/api/submit_fqdn/ \
-    -H "Content-Type: application/json" -H "Authorization: Bearer <<your api key here>>" \
+curl -X POST http://<<your ip address>>:<<your port number>>/api/submit_fqdn/
+    -H "Content-Type: application/json" 
+    -H "Authorization: Bearer <<your api key here>>"
     -d '{"fqdn_list": ["example1.com", "example2.net", "example3.org", "example4.io", "example5.co"]}'
 ```
