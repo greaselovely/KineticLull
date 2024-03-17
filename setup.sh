@@ -14,20 +14,19 @@ LOGFILE="${PROJECT_DIR}/setup.log"
 # Initialize log file
 echo "Setup script started at $(date)" > "${LOGFILE}"
 
-# Function to check for Python 3.12
+# Improved Function to check for Python 3.12
 check_python_version() {
-  if ! python3 --version | grep 'Python 3.12' &>/dev/null; then
-    echo -e "[!]\tCompatible Python version is not installed." | tee -a "${LOGFILE}"
-    echo -e "[!]\tAttempting with 'python' command..." | tee -a "${LOGFILE}"
-    if ! python --version | grep 'Python 3.12' &>/dev/null; then
-      echo -e "[!]\tPython 3.12 is not installed." | tee -a "${LOGFILE}"
-      echo -e "[!]\tPlease install Python 3.12 and try again." | tee -a "${LOGFILE}"
-      exit 1
-    else
-      echo -e "[i]\tPython 3.12 is installed (using 'python')." | tee -a "${LOGFILE}"
-    fi
-  else
+  # Capture both stdout and stderr
+  PYTHON_VERSION=$(/usr/bin/python3.12 --version 2>&1)
+  # PYTHON_VERSION=$(python3 --version 2>&1)
+  echo "Detected Python version: ${PYTHON_VERSION}" | tee -a "${LOGFILE}"
+  if [[ $PYTHON_VERSION =~ Python\ 3\.12\.* ]]; then
     echo -e "[i]\tPython 3.12 is installed (using 'python3')." | tee -a "${LOGFILE}"
+  else
+    echo -e "[!]\tCompatible Python version is not installed." | tee -a "${LOGFILE}"
+    echo -e "[!]\tDetected version: ${PYTHON_VERSION}" | tee -a "${LOGFILE}"
+    echo -e "[!]\tPlease install Python 3.12 and try again." | tee -a "${LOGFILE}"
+    exit 1
   fi
 }
 
