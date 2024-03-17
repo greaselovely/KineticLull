@@ -48,7 +48,7 @@ bash setup.sh
 
 ### 3. Review and Adjust Configuration
 
-Post-setup, ensure to review and adjust configurations in the generated `.env` file or other configuration files to meet your specific needs.
+Post-setup, ensure to review and adjust configurations in the generated `project/.env` file or other configuration files to meet your specific needs.
 
 ### 4. Running the Application
 
