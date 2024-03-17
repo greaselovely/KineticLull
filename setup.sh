@@ -14,22 +14,6 @@ LOGFILE="${PROJECT_DIR}/setup.log"
 # Initialize log file
 echo "Setup script started at $(date)" > "${LOGFILE}"
 
-# Improved Function to check for Python 3.12
-check_python_version() {
-  # Capture both stdout and stderr
-  PYTHON_VERSION=$(/usr/bin/python3.12 --version 2>&1)
-  # PYTHON_VERSION=$(python3 --version 2>&1)
-  echo "Detected Python version: ${PYTHON_VERSION}" | tee -a "${LOGFILE}"
-  if [[ $PYTHON_VERSION =~ Python\ 3\.12\.* ]]; then
-    echo -e "[i]\tPython 3.12 is installed (using 'python3')." | tee -a "${LOGFILE}"
-  else
-    echo -e "[!]\tCompatible Python version is not installed." | tee -a "${LOGFILE}"
-    echo -e "[!]\tDetected version: ${PYTHON_VERSION}" | tee -a "${LOGFILE}"
-    echo -e "[!]\tPlease install Python 3.12 and try again." | tee -a "${LOGFILE}"
-    exit 1
-  fi
-}
-
 # Function to check for OpenSSL and generate a certificate if found
 check_openssl_and_generate_cert() {
   if ! command -v openssl &>/dev/null; then
@@ -47,10 +31,6 @@ sudo apt-get install authbind -y
 sudo touch /etc/authbind/byport/443
 sudo chown $(whoami) /etc/authbind/byport/443
 sudo chmod 500 /etc/authbind/byport/443
-
-
-# Check for Python 3.12
-check_python_version
 
 echo -e "[i]\tCreating virtual environment..." | tee -a "${LOGFILE}"
 python3.12 -m venv "${VENV_PATH}"
