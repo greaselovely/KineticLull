@@ -15,6 +15,10 @@ KineticLull is a powerful web application designed to streamline the management 
 - **Security Analyst Empowerment**: Allows security analysts to update EDLs swiftly in response to emerging threats.
 - **Documentation and Notes**: Detailed documentation and note-keeping for each EDL.
 
+## Currently Tested and Supported OS:
+
+- Ubuntu 20 and 22
+
 ## Getting Started
 
 To set up KineticLull, ensure Python 3.12 is installed on your system. Follow the setup instructions below to prepare KineticLull for your organization.  
