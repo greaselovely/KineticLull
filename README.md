@@ -17,7 +17,9 @@ KineticLull is a powerful web application designed to streamline the management 
 
 ## Getting Started
 
-To set up KineticLull, ensure Python 3.12 or higher is installed on your system. Follow the setup instructions below to prepare KineticLull for your organization.
+To set up KineticLull, ensure Python 3.12 is installed on your system. Follow the setup instructions below to prepare KineticLull for your organization.  
+
+Once you have installed Python 3.12, make sure you install `pip`, as well as Python 3.12 venv ( `python3.12-venv` ) otherwise it will break.  Our setup script currently looks for Python 3.12 at `/usr/bin/python3.12`, so if it's not in there, update that script.
 
 ## Setup Instructions
 
