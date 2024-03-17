@@ -77,8 +77,6 @@ check_openssl_and_generate_cert
 SERVICE_FILE="/etc/systemd/system/${PROJECT_NAME}.service"
 echo -e "[i]\tCreating systemd service file at ${SERVICE_FILE}..." | tee -a "${LOGFILE}"
 
-# ExecStart=${VENV_PATH}/bin/gunicorn --workers ${GUNICORN_WORKERS} --bind ${GUNICORN_BIND} --certfile ${PROJECT_DIR}/cert.pem --keyfile ${PROJECT_DIR}/key.pem ${PROJECT_NAME}.wsgi:application
-
 sudo tee "${SERVICE_FILE}" > /dev/null <<EOF &>> "${LOGFILE}"
 [Unit]
 Description=Gunicorn instance to serve ${PROJECT_NAME}
