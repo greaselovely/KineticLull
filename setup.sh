@@ -44,6 +44,12 @@ check_openssl_and_generate_cert() {
   fi
 }
 
+sudo apt-get install authbind -y
+sudo touch /etc/authbind/byport/443
+sudo chown $(whoami) /etc/authbind/byport/443
+sudo chmod 500 /etc/authbind/byport/443
+
+
 # Check for Python 3.12
 check_python_version
 
@@ -51,10 +57,17 @@ echo -e "[i]\tCreating virtual environment..." | tee -a "${LOGFILE}"
 python3.12 -m venv "${VENV_PATH}"
 source "${VENV_PATH}/bin/activate"
 
+echo -e "[i]\tUpgrade PIP..." | tee -a "${LOGFILE}"
+pip install --upgrade pip
+
 echo -e "[i]\tInstalling dependencies..." | tee -a "${LOGFILE}"
 pip install -r requirements.txt
 
-echo -e "[i]\tCollecting static files..." | tee -a "${LOGFILE}"
+echo -e "[i]\tAllow binding to 443..." | tee -a "${LOGFILE}"
+sudo setcap 'cap_net_bind_service=+ep' "${VENV_PATH}/bin/gunicorn"
+
+
+echo -e "[i]\tCollecting static files...\n\n" | tee -a "${LOGFILE}"
 python manage.py collectstatic --noinput
 
 # Check for OpenSSL and generate a certificate
@@ -63,6 +76,8 @@ check_openssl_and_generate_cert
 # Create a systemd service file for the project
 SERVICE_FILE="/etc/systemd/system/${PROJECT_NAME}.service"
 echo -e "[i]\tCreating systemd service file at ${SERVICE_FILE}..." | tee -a "${LOGFILE}"
+
+# ExecStart=${VENV_PATH}/bin/gunicorn --workers ${GUNICORN_WORKERS} --bind ${GUNICORN_BIND} --certfile ${PROJECT_DIR}/cert.pem --keyfile ${PROJECT_DIR}/key.pem ${PROJECT_NAME}.wsgi:application
 
 sudo tee "${SERVICE_FILE}" > /dev/null <<EOF &>> "${LOGFILE}"
 [Unit]
@@ -73,7 +88,8 @@ After=network.target
 User=$(whoami)
 Group=$(whoami)
 WorkingDirectory=${PROJECT_DIR}
-ExecStart=${VENV_PATH}/bin/gunicorn --workers ${GUNICORN_WORKERS} --bind ${GUNICORN_BIND} --certfile ${PROJECT_DIR}/cert.pem --keyfile ${PROJECT_DIR}/key.pem ${PROJECT_NAME}.wsgi:application
+ExecStart=/usr/bin/authbind --deep ${VENV_PATH}/bin/gunicorn --workers ${GUNICORN_WORKERS} --bind 0.0.0.0:443 --certfile ${PROJECT_DIR}/cert.pem --keyfile ${PROJECT_DIR}/key.pem project.wsgi:application
+
 
 [Install]
 WantedBy=multi-user.target
@@ -82,5 +98,8 @@ EOF
 echo -e "[i]\tEnabling and starting ${PROJECT_NAME} service..." | tee -a "${LOGFILE}"
 sudo systemctl enable "${PROJECT_NAME}" &>> "${LOGFILE}"
 sudo systemctl start "${PROJECT_NAME}" &>> "${LOGFILE}"
+sudo systemctl daemon-reload
+sudo systemctl restart "${PROJECT_NAME}"
+sudo systemctl status "${PROJECT_NAME}" | cat
 
 echo -e "[i]\tSetup completed.\n" | tee -a "${LOGFILE}"
