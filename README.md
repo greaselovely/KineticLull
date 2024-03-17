@@ -77,6 +77,18 @@ For complementary tools, check out GhostHunter for Firefox and Chrome.
 
 Contributions are welcome! Please see our contributing guidelines for details on how to contribute to KineticLull.
 
+
+## TL;DR
+
+```
+git clone https://github.com/greaselovely/KineticLull
+cd KineticLull
+bash install_python.sh
+bash setup.sh
+```
+
+
+
 ## Testing the API
 
 Test the API using the following curl command (adjust IP and port as needed):
