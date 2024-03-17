@@ -4,6 +4,7 @@ staticfiles/
 config.json
 MM.jpeg
 *.pem
+*.bak
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
