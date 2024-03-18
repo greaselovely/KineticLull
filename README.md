@@ -17,20 +17,22 @@ KineticLull is a powerful web application designed to streamline the management 
 
 ## Currently Tested and Supported OS:
 
-- Ubuntu 20 and 22
+- Ubuntu Desktop and Server 20 & 22
+- Fedora Workstation and Server 39
 
-## Getting Started
+## Initial Setup
 
-To set up KineticLull, ensure Python 3.12 is installed on your system. Follow the setup instructions below to prepare KineticLull for your organization.  
+To initiate KineticLull, it's essential that your system is equipped with Python 3.12. Below are detailed instructions to get KineticLull ready for your organization.
 
-Once you have installed Python 3.12, make sure you install `pip`, as well as Python 3.12 venv ( `python3.12-venv` ) otherwise it will break.  Our setup script currently looks for Python 3.12 at `/usr/bin/python3.12`, so if it's not in there, update that path in the script.
+After securing Python 3.12, it's crucial to install `pip` and the Python 3.12 virtual environment package (`python3.12-venv`). Skipping these installations will cause operational issues. Our setup script specifically searches for Python 3.12 in `/usr/bin/python3.12`. Should your Python installation reside elsewhere, you'll need to adjust the script's path accordingly.
 
-There is a script we have provided to help automate the installation of Python 3.12, pip, and venv.  Run `bash install_python.sh` and follow the prompts to install.  Once it's complete you can move on to the rest of the steps.
+We've provided a script to streamline the installation of Python 3.12, pip, and venv. Execute `bash install_python.sh` and adhere to the on-screen instructions. With the completion of this step, you're all set to proceed with the subsequent setup stages.
 
 ## Setup Instructions
 
 ### 1. Clone the Repository
 
+TL;DR at the bottom.
 Clone the KineticLull repository to your local system or server making sure you are in the desired installation path:
 
 ```
@@ -75,7 +77,7 @@ For complementary tools, check out GhostHunter for Firefox and Chrome.
 
 ## Contributing
 
-Contributions are welcome! Please see our contributing guidelines for details on how to contribute to KineticLull.
+Contributions are welcome! Submit applicable PRs to contribute to KineticLull.
 
 
 ## TL;DR
@@ -94,8 +96,12 @@ bash setup.sh
 Test the API using the following curl command (adjust IP and port as needed):
 
 ```
-curl -X POST http://<<your ip address>>:<<your port number>>/api/submit_fqdn/
+curl -X POST https://<<your ip address>>:<<your port number>>/api/submit_fqdn/
     -H "Content-Type: application/json" 
     -H "Authorization: Bearer <<your api key here>>"
     -d '{"fqdn_list": ["example1.com", "example2.net", "example3.org", "example4.io", "example5.co"]}'
 ```
+
+## API Limitations
+
+Currently, we enforce a limit of 50 objects for any submissions made through scripts or via the GhostHunter tool. Should you try to submit more than this limit, KineticLull will issue a 405 response, and GhostHunter will indicate a thumbs-down symbol. To change this restriction, you have the option to modify the `submit_fqdn` setting in the `views.py` file. It's important to proceed with caution when making such adjustments, as we have not performed testing beyond this threshold. Any complications that occur as a result of these changes will be solely your responsibility to address.
