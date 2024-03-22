@@ -1,16 +1,11 @@
-
 document.addEventListener('DOMContentLoaded', (event) => {
     document.querySelectorAll('.copy-url-btn').forEach(button => {
         button.addEventListener('click', function() {
-            const urlToCopy = this.getAttribute('data-url');
-            navigator.clipboard.writeText(urlToCopy).then(() => {
-                showCopyConfirmation(this.nextElementSibling);
-            }).catch(err => {
-                console.error('Could not copy text: ', err);
-            });
+            copyItem(this); // Pass the clicked button to the function
         });
     });
 });
+
 
 function showCopyConfirmation(confirmationElement) {
     confirmationElement.style.display = 'inline';
@@ -24,43 +19,25 @@ function showCopyConfirmation(confirmationElement) {
     }, 2000); // Display time before fading
 }
 
-
-
-
 function editItem(itemId) {
     console.log('Edit item ID:', itemId);
 }
 
-function copyItem(url, event) {
-    const fullURL = url + '/';
+function copyItem(clickedElement) {
+    const urlToCopy = clickedElement.getAttribute('data-url');
+    const fullURL = urlToCopy.endsWith('/') ? urlToCopy : urlToCopy + '/'; // Ensure trailing slash
 
     if (navigator.clipboard) {
         navigator.clipboard.writeText(fullURL)
             .then(() => {
                 console.log('URL copied:', fullURL);
-                showCopiedMessage(event);
+                showCopyConfirmation(clickedElement.nextElementSibling);
             })
             .catch((error) => {
                 console.error('Copy failed:', error);
             });
     } else {
-        // Fallback method for non-secure contexts
-        const textArea = document.createElement('textarea');
-        textArea.value = fullURL;
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-
-        try {
-            const successful = document.execCommand('copy');
-            const msg = successful ? 'successful' : 'unsuccessful';
-            console.log('Fallback: Copying text command was ' + msg);
-            showCopiedMessage(event);
-        } catch (err) {
-            console.error('Fallback: Oops, unable to copy', err);
-        }
-
-        document.body.removeChild(textArea);
+        console.error('Clipboard API not available.');
     }
 }
 
