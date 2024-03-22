@@ -63,12 +63,25 @@ def index_view(request):
     return render(request, 'index.html', context)
 
 @login_required
-def item_detail_view(request, item_id):
+def item_detail_view(request, item_id: int):
+    """
+    Retrieves and displays details for a specific External Dynamic List (EDL) item identified by its item_id.
+    
+    This view fetches an EDL instance from the database using the provided item_id. If the item exists, its 'ip_fqdn'
+    field, which is a string containing network addresses separated by carriage returns and new lines, is split into a
+    list for easier display. The item details, including its friendly name, are then passed to the template for rendering.
+
+    Parameters:
+    - request: HttpRequest object representing the current request.
+    - item_id: The ID of the EDL item whose details are to be displayed.
+
+    Returns:
+    - HttpResponse object with the rendered page displaying the details of the specified EDL item.
+    """
     item = get_object_or_404(ExtDynLists, id=item_id)
     item.ip_fqdn = item.ip_fqdn.split('\r\n')
     context = {'item': item, 'friendly_name': item.friendly_name }
     return render(request, 'item_detail.html', context)
-
 
 def generate_hash():
     """
@@ -119,6 +132,22 @@ def show_ip_fqdn(request, auto_url):
 
 @login_required
 def create_new_edl(request):
+    """
+    Handles the creation of a new External Dynamic List (EDL) entry through a form. If the request is POST and the form is valid,
+    a new EDL instance is created, populated with the form data, and saved to the database with additional processing for the 'acl'
+    field. If the request is GET, an empty form is presented to the user.
+
+    Upon a successful POST request, the 'acl' field is processed to filter out blank lines and correct each network address
+    before saving. The function redirects to the home page after successful EDL creation or re-renders the form with errors
+    on validation failure.
+
+    Parameters:
+    - request: HttpRequest object representing the current request.
+
+    Returns:
+    - HttpResponse object with the rendered form for creating a new EDL on GET requests, or a redirect to the home page
+      after successfully creating an EDL on POST requests. In case of form validation failure, re-renders the form with errors.
+    """
     if request.method == 'POST':
         form = ExtDynListsForm(request.POST)
         if form.is_valid():
@@ -128,7 +157,8 @@ def create_new_edl(request):
             # Process each line in acl, filtering out only blank lines
             acl_lines = (line.strip() for line in edl_instance.acl.splitlines())
             corrected_acl = [get_corrected_network_address(line) for line in acl_lines if line]
-
+            
+            edl_instance.ip_fqdn = "\r\n".join([fqdn.replace("http://", "").replace("https://", "") for fqdn in edl_instance.ip_fqdn.split('\r\n')])
             edl_instance.acl = "\n".join(corrected_acl)
             edl_instance.save()
             return redirect('/')
@@ -172,7 +202,7 @@ def edit_ext_dyn_list_view(request, id=None):
                 # Process each line in acl, filtering out only blank lines
                 acl_lines = (line.strip() for line in edl_instance.acl.splitlines())
                 corrected_acl = [get_corrected_network_address(line) for line in acl_lines if line]
-
+                edl_instance.ip_fqdn = "\r\n".join([fqdn.replace("http://", "").replace("https://", "") for fqdn in edl_instance.ip_fqdn.split('\r\n')])
                 edl_instance.acl = "\n".join(corrected_acl)
                 edl_instance.save()
                 return redirect("/", pk=id)
@@ -284,7 +314,6 @@ def delete_item(request, item_id):
     item.delete()
     return redirect('/')
 
-
 def check_acl(ip, networks: list):
     """
     Check if a given IP address is part of any of the specified networks.
@@ -317,7 +346,6 @@ def check_acl(ip, networks: list):
         if ip_addr in network:
             return True
     return False
-
 
 def get_corrected_network_address(value):
     """
@@ -353,6 +381,20 @@ def get_corrected_network_address(value):
 
 @login_required
 def edit_profile_view(request):
+    """
+    Allows the user to edit their profile, including generating a new API key
+    and updating user information through a form. If the request method is POST
+    and contains 'generate_api_key', the existing API key for the user is deleted,
+    and a new one is generated. If the form is submitted and valid, the user's profile
+    is updated. Otherwise, the edit profile form is displayed.
+
+    Args:
+        request: HttpRequest object.
+
+    Returns:
+        HttpResponse object rendering the edit profile page with the context
+        containing the form, title, and API key if present.
+    """
     user = request.user
     if request.method == 'POST':
         if 'generate_api_key' in request.POST:
@@ -377,28 +419,74 @@ def edit_profile_view(request):
     }
     return render(request, 'edit_profile.html', context)
 
-
-
 @login_required
 def profile_view(request):
+    """
+    Renders the profile page for the logged-in user.
+
+    This view displays the user's profile information, including their API key if it exists. It's a straightforward
+    view that primarily deals with presenting information to the user without handling any form submissions or
+    data modifications.
+
+    Parameters:
+    - request: HttpRequest object containing metadata about the request.
+
+    Returns:
+    - HttpResponse object with the rendered profile page.
+    """
     context = {"title": "Profile"}
     return render(request, 'profile.html', context)
 
-# @login_required
 def generate_api_key(user):
+    """
+    Generates a new API key for a given user. If an API key already exists for the user, it updates the existing key.
+
+    This function uses `secrets.token_urlsafe()` to generate a secure, random API key. It ensures that each user has only
+    one API key by checking for an existing key and updating it if found. If no key exists, it creates a new APIKey instance.
+
+    Parameters:
+    - user: User instance for whom the API key is being generated or updated.
+
+    Returns:
+    - A tuple containing the new API key string and a boolean indicating whether the API key was created (True) or updated (False).
+    """
     api_key, created = APIKey.objects.get_or_create(user=user)
-    new_key = get_random_string(50)  # Or use secrets.token_urlsafe()
+    new_key = secrets.token_urlsafe(50)  # Generates a secure URL-safe text string
     api_key.key = new_key
     api_key.save()
     return new_key, created
 
+def validate_api_key(key: str) -> bool:
+    """
+    Validates an API key by checking if it exists in the database.
 
-def validate_api_key(key):
+    This function queries the database to see if the provided API key exists within the APIKey model. It's used
+    to verify that an API key is valid and has been issued, as part of authentication or permission checks in
+    API or system operations that require key-based access control.
+
+    Parameters:
+    - key: A string representing the API key to be validated.
+
+    Returns:
+    - A boolean value: True if the API key exists in the database, False otherwise.
+    """
     return APIKey.objects.filter(key=key).exists()
 
 def authenticate_user(api_key_header):
-    # Expecting api_key_header to be "Bearer YOUR_API_KEY_HERE"
-    # Split the header on whitespace and attempt to get the token part
+    """
+    Authenticates a user based on an API key provided in the header.
+
+    This function expects the `api_key_header` to be in the format "Bearer YOUR_API_KEY_HERE". It attempts to
+    extract the API key from the header and then checks if this key corresponds to an existing APIKey instance
+    in the database. If a matching APIKey instance is found, the associated user is returned, otherwise, None
+    is returned, indicating that authentication has failed.
+
+    Parameters:
+    - api_key_header: The API key header string, expected to start with "Bearer " followed by the API key.
+
+    Returns:
+    - The user associated with the provided API key if authentication is successful; otherwise, None.
+    """
     try:
         _, api_key = api_key_header.split()  # This unpacks the header into two parts: "Bearer" and the actual key
         print(api_key)
@@ -412,19 +500,45 @@ def authenticate_user(api_key_header):
     except APIKey.DoesNotExist:
         return None
 
-
-
 def logout_view(request):
+    """
+    Logs out the user and redirects them to the homepage.
+
+    This view handles the process of logging out a user by deleting the sessionid and csrftoken cookies,
+    effectively invalidating the user's session. It then calls Django's logout function to officially
+    log the user out before redirecting the user to the homepage.
+
+    Parameters:
+    - request: HttpRequest object representing the current request.
+
+    Returns:
+    - An HttpResponseRedirect to the homepage, with session and CSRF cookies removed.
+    """
     response = redirect('/')
     response.delete_cookie('sessionid')
     response.delete_cookie('csrftoken')
     logout(request)
     return response
 
-
 @csrf_exempt
 @require_http_methods(["POST"])
 def submit_fqdn_list(request):
+    """
+    Receives a list of FQDNs (Fully Qualified Domain Names) via a POST request, cleanses it by removing
+    any protocol prefixes (http://, https://), and stores it in the database associated with the authenticated user.
+
+    This view is CSRF exempt and only accepts POST requests. It expects the request to contain a JSON body
+    with a key 'fqdn_list' that maps to a list of FQDN strings. The function authenticates the user based on
+    an API key provided in the 'Authorization' header, validates the FQDN list, and then creates a new InboxEntry
+    with the cleansed FQDN list.
+
+    Parameters:
+    - request: HttpRequest object representing the current request.
+
+    Returns:
+    - JsonResponse indicating success or failure. On success, returns HTTP 201 with a message
+      'Submission successful'. On failure, returns HTTP 400/401/500 with an error message.
+    """
     # print(request)
     try:
         data = json.loads(request.body)
@@ -437,6 +551,8 @@ def submit_fqdn_list(request):
             return JsonResponse({'error': 'Unauthorized'}, status=401)
 
         fqdn_list = data.get('fqdn_list', [])
+        fqdn_list = [domain.replace("http://", "").replace("https://", "") for domain in fqdn_list]
+
         if not fqdn_list or len(fqdn_list) > 50:
             return JsonResponse({'error': 'Invalid FQDN list'}, status=400)
 
@@ -451,9 +567,23 @@ def submit_fqdn_list(request):
         # Catch-all for any other error, ensuring an HttpResponse is always returned
         return JsonResponse({'error': 'An error occurred', 'details': str(e)}, status=500)
 
-
 @method_decorator(csrf_exempt, name='dispatch')
 class SubmitFQDNView(View):
+    """
+    A class-based view that handles the submission of FQDN (Fully Qualified Domain Names) lists via a POST request.
+    It authenticates the user using an API key provided in the 'Authorization' header, validates the FQDN list,
+    and then stores it in the database associated with the user's email.
+
+    The view is CSRF exempt to facilitate API access. It ensures that the FQDN list is not empty, does not exceed
+    50 entries, and sanitizes the list by removing any protocol prefixes before storing.
+
+    Methods:
+    - post: Handles POST requests, expecting a JSON body with a 'fqdn_list' key mapping to a list of FQDN strings.
+    
+    Returns:
+    - JsonResponse indicating success with HTTP 201 status code, or an error with appropriate HTTP status codes
+      (401 for invalid API key, 400 for invalid FQDN list, etc.) and error messages.
+    """
     def post(self, request, *args, **kwargs):
         api_key = request.headers.get('Authorization')
         user = authenticate_user(api_key)
@@ -471,16 +601,35 @@ class SubmitFQDNView(View):
 
         return JsonResponse({'message': 'Submission successful'}, status=201)
 
-
 @csrf_exempt
 @require_http_methods(["POST"])
 def update_edl_fqdn(request):
+    """
+    Updates an External Dynamic List (EDL) with new Fully Qualified Domain Names (FQDNs) based on the provided command.
+    It supports adding new FQDNs or overwriting the existing list with a new set of FQDNs. The function performs
+    user authentication using an API key, validates the request data, and applies the specified changes to the EDL.
+
+    The request must include 'auto_url' to identify the EDL, 'fqdn_list' containing the domains to add or overwrite,
+    and 'command' indicating the update operation mode ('update' or 'overwrite'). FQDNs are cleansed of protocols
+    (http://, https://) before processing.
+
+    Parameters:
+    - request: HttpRequest object containing metadata about the request including 'Authorization' header with the API key,
+               and a JSON body with 'auto_url', 'fqdn_list', and 'command'.
+
+    Returns:
+    - JsonResponse indicating the outcome of the operation. Returns HTTP 201 with a success message if the update
+      is successful, HTTP 401 for unauthorized requests, HTTP 400 for requests with missing or invalid data,
+      or HTTP 500 for server errors.
+    """
     try:
         current_date_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
         data = json.loads(request.body)
         auth_header = request.headers.get('Authorization')
         api_key = auth_header.split(' ')[-1] if auth_header else None
         user = authenticate_user(api_key)
+        user = str(user)
+        user, _ = user.split("@")
 
         if user is None:
             return JsonResponse({'error': 'Unauthorized'}, status=401)
@@ -488,6 +637,7 @@ def update_edl_fqdn(request):
         # Extract the auto_url from the request data
         full_auto_url = data.get('auto_url', '')
         fqdn_list = data.get('fqdn_list', [])
+        fqdn_list = [domain.replace("http://", "").replace("https://", "") for domain in fqdn_list]
         command = data.get('command', 'update')  # Default to 'update'
 
         # Obtain the base URL from settings or .env
@@ -512,7 +662,7 @@ def update_edl_fqdn(request):
 
         if command == 'overwrite':
             # For 'overwrite', treat all provided domains as new
-            edl.ip_fqdn = "\r\n".join([f"{domain} {current_date_time} - {user}" for domain in set(fqdn_list)])
+            edl.ip_fqdn = "\r\n".join([f"{domain} # {current_date_time} by {user}" for domain in set(fqdn_list)])
         elif command == 'update':
             existing_fqdns = edl.ip_fqdn.split("\r\n")
             
@@ -523,7 +673,7 @@ def update_edl_fqdn(request):
             new_domains = [domain for domain in fqdn_list if domain not in existing_domains]
             
             # Append additional info only to new domains
-            new_fqdn_entries = [f"{domain} {current_date_time} - {user}" for domain in new_domains]
+            new_fqdn_entries = [f"{domain} # {current_date_time} by {user}" for domain in new_domains]
             
             # Combine new entries with existing ones, no need to deduplicate here as existing entries are preserved as is
             updated_fqdns = existing_fqdns + new_fqdn_entries
@@ -540,9 +690,24 @@ def update_edl_fqdn(request):
     except Exception as e:
         return JsonResponse({'error': 'An error occurred', 'details': str(e)}, status=500)
 
-
 @login_required
-def review_submission(request, submission_id):
+def review_submission(request, submission_id: int):
+    """
+    Presents a form for reviewing and processing a submission entry. Upon a POST request, if the form is valid,
+    a new External Dynamic List (EDL) is created using the data from the submission, and the submission is then deleted.
+
+    The function handles both GET and POST requests. For GET requests, it pre-populates a form with information
+    from the submission, including a policy reference constructed from the submission's timestamp and user email.
+    For POST requests, it processes the form data, creates a new EDL entry, deletes the processed submission,
+    and redirects to the submission list view.
+
+    Parameters:
+    - request: HttpRequest object representing the current request.
+    - submission_id: The ID of the submission entry to review and process.
+
+    Returns:
+    - HttpResponse object with the rendered review page on GET requests or a redirect on successful form processing.
+    """
     date_time_format = "%m/%d/%Y @ %H:%M:%S UTC"
     submission = get_object_or_404(InboxEntry, id=submission_id)
 
@@ -571,53 +736,80 @@ def review_submission(request, submission_id):
     })
 
 @login_required
-def delete_submission(request, submission_id):
+def delete_submission(request, submission_id: int):
+    """
+    Deletes a specified submission entry and redirects to the submission list view.
+
+    This view retrieves an InboxEntry object by its `submission_id` and deletes it from the database.
+    After deletion, the user is redirected to the list of submissions, typically to update the UI and
+    show the list without the deleted entry.
+
+    Parameters:
+    - request: HttpRequest object representing the current request.
+    - submission_id: The ID of the submission entry to be deleted.
+
+    Returns:
+    - An HttpResponseRedirect to the submission list view after the deletion.
+    """
     submission = get_object_or_404(InboxEntry, id=submission_id)
     submission.delete()
     return redirect('app:submission_list')
 
 @login_required
 def submission_list(request):
+    """
+    Retrieves and displays a list of all submission entries.
+
+    This view fetches all instances of InboxEntry from the database, splits the 'fqdn_list' field of each
+    submission into a list of FQDNs (for display purposes), and passes the submissions to the template for rendering.
+    It's designed to provide an overview of all submissions, allowing users to review, edit, or delete them as needed.
+
+    Parameters:
+    - request: HttpRequest object representing the current request.
+
+    Returns:
+    - HttpResponse object with the rendered page displaying the list of submissions.
+    """
     submissions = InboxEntry.objects.all()
     for submission in submissions:
         submission.fqdn_list = submission.fqdn_list.split('\r\n')
     return render(request, 'submission_list.html', {'submissions' : submissions},)
 
-@login_required
-def script_list(request):
-    script_list = Script.objects.all()
-    # print(script_list.name)
-    return render(request, 'script_list.html', {'script_list' : script_list},)
+# @login_required
+# def script_list(request):
+#     script_list = Script.objects.all()
+#     # print(script_list.name)
+#     return render(request, 'script_list.html', {'script_list' : script_list},)
 
-@login_required
-def review_script(request, script_id):
-    script = get_object_or_404(Script, id=script_id)
-    is_creator = request.user == script.creator
+# @login_required
+# def review_script(request, script_id):
+#     script = get_object_or_404(Script, id=script_id)
+#     is_creator = request.user == script.creator
     
-    if request.method == "POST":
-        form = ScriptForm(request.POST, instance=script)
-        if form.is_valid():
-            form.save()
-            return redirect('app:script_list')
-    else:
-        form = ScriptForm(instance=script)
-        if is_creator:
-            # Exclude the 'is_approved' field for the creator of the script
-            # Can't self-approve your own scripts
-            form.fields.pop('is_approved')
+#     if request.method == "POST":
+#         form = ScriptForm(request.POST, instance=script)
+#         if form.is_valid():
+#             form.save()
+#             return redirect('app:script_list')
+#     else:
+#         form = ScriptForm(instance=script)
+#         if is_creator:
+#             # Exclude the 'is_approved' field for the creator of the script
+#             # Can't self-approve your own scripts
+#             form.fields.pop('is_approved')
 
-    context = {
-        'form': form
-        }
-    return render(request, 'review_script.html', context)
+#     context = {
+#         'form': form
+#         }
+#     return render(request, 'review_script.html', context)
 
-@login_required
-def approve_script(request, script_id):
-    script = get_object_or_404(Script, id=script_id)
-    if request.user != script.creator and request.user.has_perm('app.can_approve_script'):
-        script.is_approved = True
-        script.save()
-        # Redirect to the review page or display success message
-        return redirect('script_review')
-    else:
-        raise PermissionDenied
+# @login_required
+# def approve_script(request, script_id):
+#     script = get_object_or_404(Script, id=script_id)
+#     if request.user != script.creator and request.user.has_perm('app.can_approve_script'):
+#         script.is_approved = True
+#         script.save()
+#         # Redirect to the review page or display success message
+#         return redirect('script_review')
+#     else:
+#         raise PermissionDenied
