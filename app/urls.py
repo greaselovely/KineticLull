@@ -6,7 +6,7 @@ from django.conf.urls.static import static
 from django.contrib.auth.views import LoginView
 
 from . import views
-from .views import SubmitFQDNView
+from .views import SubmitFQDNView, update_edl_fqdn
 
 app_name = "app"
 
@@ -25,6 +25,7 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('item-detail/<int:item_id>/', views.item_detail_view, name='item_detail'),
     path('api/submit_fqdn/', SubmitFQDNView.as_view(), name='submit_fqdn'),
+    path('api/update_edl/', update_edl_fqdn, name='update_edl'),
     path('submission_list/', views.submission_list, name='submission_list'),
     # path('script_list/', views.script_list, name='script_list'),
     path('review_submission/<int:submission_id>/', views.review_submission, name='review_submission'),

@@ -401,9 +401,10 @@ def authenticate_user(api_key_header):
     # Split the header on whitespace and attempt to get the token part
     try:
         _, api_key = api_key_header.split()  # This unpacks the header into two parts: "Bearer" and the actual key
+        print(api_key)
     except ValueError:
-        # If split() fails or doesn't produce exactly two items, return None
-        return None
+        # If split() fails or doesn't produce exactly two items, then we have only received the key already and just assign it for user lookup.
+        api_key = api_key_header
 
     try:
         api_key_instance = APIKey.objects.get(key=api_key)
@@ -451,7 +452,6 @@ def submit_fqdn_list(request):
         return JsonResponse({'error': 'An error occurred', 'details': str(e)}, status=500)
 
 
-
 @method_decorator(csrf_exempt, name='dispatch')
 class SubmitFQDNView(View):
     def post(self, request, *args, **kwargs):
@@ -470,6 +470,86 @@ class SubmitFQDNView(View):
         InboxEntry.objects.create(user_email=user.email, fqdn_list="\r\n".join(fqdn_list))
 
         return JsonResponse({'message': 'Submission successful'}, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_edl_fqdn(request):
+    
+    try:
+        current_date_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        data = json.loads(request.body)
+        auth_header = request.headers.get('Authorization')
+        api_key = auth_header.split(' ')[-1] if auth_header else None
+        user = authenticate_user(api_key)
+
+        if user is None:
+            return JsonResponse({'error': 'Unauthorized'}, status=401)
+
+        # Extract the auto_url from the request data
+        full_auto_url = data.get('auto_url', '')
+        fqdn_list = data.get('fqdn_list', [])
+        command = data.get('command', 'update')  # Default to 'update'
+
+        # Obtain the base URL from settings or .env
+        base_url = getattr(settings, 'KINETICLULL_URL', os.getenv('KINETICLULL_URL', ''))
+
+        # Remove the base URL part from the full_auto_url
+        if base_url and full_auto_url.startswith(base_url):
+            auto_url = full_auto_url.replace(base_url, '', 1).lstrip('/')
+        else:
+            auto_url = full_auto_url
+
+        if not auto_url:
+            return JsonResponse({'error': 'Missing auto_url'}, status=400)
+
+        if not fqdn_list or len(fqdn_list) > 50:
+            return JsonResponse({'error': 'Empty or Too Long FQDN list'}, status=400)
+
+        try:
+            edl = ExtDynLists.objects.get(auto_url=auto_url)
+        except ExtDynLists.DoesNotExist:
+            return JsonResponse({'error': 'EDL not found'}, status=404)
+
+        if command == 'overwrite':
+            # For 'overwrite', treat all provided domains as new
+            edl.ip_fqdn = "\r\n".join([f"{domain} {current_date_time} - {user}" for domain in set(fqdn_list)])
+        elif command == 'update':
+            existing_fqdns = edl.ip_fqdn.split("\r\n")
+            
+            # Extract just the domain names from existing entries to identify new domains
+            existing_domains = set(entry.split(' ')[0] for entry in existing_fqdns if ' ' in entry)  # Assumes space-delimited
+            
+            # Determine which domains from the provided list are new
+            new_domains = [domain for domain in fqdn_list if domain not in existing_domains]
+            
+            # Append additional info only to new domains
+            new_fqdn_entries = [f"{domain} {current_date_time} - {user}" for domain in new_domains]
+            
+            # Combine new entries with existing ones, no need to deduplicate here as existing entries are preserved as is
+            updated_fqdns = existing_fqdns + new_fqdn_entries
+            updated_fqdns.sort()
+            edl.ip_fqdn = "\r\n".join(updated_fqdns)
+        
+
+        # if command == 'overwrite':
+        #     edl.ip_fqdn = "\r\n".join(fqdn_list)
+        # elif command == 'update':
+        #     existing_fqdns = edl.ip_fqdn.split("\r\n")
+        #     # Combine lists, remove duplicates, and sort
+        #     updated_fqdns = list(dict.fromkeys(existing_fqdns + fqdn_list))
+        #     updated_fqdns.sort()
+        #     edl.ip_fqdn = "\r\n".join(updated_fqdns)
+
+        else:
+            return JsonResponse({'error': 'Invalid command'}, status=400)
+
+        edl.save()
+        return JsonResponse({'message': 'EDL updated successfully'}, status=200)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': 'An error occurred', 'details': str(e)}, status=500)
 
 
 @login_required
