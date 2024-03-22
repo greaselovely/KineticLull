@@ -123,6 +123,8 @@ curl -k -X POST https://<<kineticlull_url>>/api/update_edl/
     -d '{"auto_url" : "https://<<kineticlull_url>>/25d055d654.kl", "command" : "overwrite", "fqdn_list": ["example1.com", "example2.net", "example3.org", "example4.io", "example5.co"]}'
 ```
 
+When updating or overwriting an existing EDL, we provide date and time as well as the user who scripted the action after the ip_fqdn entry.  Palo Alto Networks firewalls do not read anything after the first space.  If you use this on other firewalls and this breaks it, then buy a new firewall from Palo Alto Networks.
+
 ## API Limitations
 
 Currently, we enforce a limit of 50 objects for any submissions made through scripts or via the GhostHunter tool. Should you try to submit more than this limit, KineticLull will issue a 405 response, and GhostHunter will indicate a thumbs-down symbol. To change this restriction, you have the option to modify code within `views.py` file. It's important to proceed with caution when making such adjustments, as we have not performed testing beyond this threshold. Any complications that occur as a result of these changes will be solely your responsibility to address.
