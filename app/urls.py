@@ -30,7 +30,7 @@ urlpatterns = [
     # path('script_list/', views.script_list, name='script_list'),
     path('review_submission/<int:submission_id>/', views.review_submission, name='review_submission'),
     path('delete_submission/<int:submission_id>/', views.delete_submission, name='delete_submission'),
-    path('review_script/<int:script_id>', views.review_script, name='review_script'),
+    # path('review_script/<int:script_id>', views.review_script, name='review_script'),
     # keep this at the bottom
     path('<str:auto_url>/', views.show_ip_fqdn, name='show_ip_fqdn'),
 ]
