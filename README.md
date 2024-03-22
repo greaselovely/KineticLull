@@ -89,19 +89,40 @@ bash install_python.sh
 bash setup.sh
 ```
 
-
-
 ## Testing the API
 
 Test the API using the following curl command (adjust IP and port as needed):
+This will create a new entry for admin review to create a new EDL
 
 ```
-curl -X POST https://<<your ip address>>:<<your port number>>/api/submit_fqdn/
+curl -k -X POST https://<<kineticlull_url>>:<<your port number>>/api/submit_fqdn/
     -H "Content-Type: application/json" 
     -H "Authorization: Bearer <<your api key here>>"
     -d '{"fqdn_list": ["example1.com", "example2.net", "example3.org", "example4.io", "example5.co"]}'
 ```
 
+This example will allow you to update an existing EDL programmatically.
+You will need your API key and the EDL URL.
+An EDL URL will look something like this:  https://edl.kineticlull.com/25d055d654.kl
+
+```
+curl -k -X POST https://<<kineticlull_url>>:<<your port number>>/api/update_edl/
+    -H "Content-Type: application/json" 
+    -H "Authorization: Bearer <<your api key here>>"
+    -d '{"auto_url" : "https://<<kineticlull_url>>/25d055d654.kl", "fqdn_list": ["example1.com", "example2.net", "example3.org", "example4.io", "example5.co"]}'
+```
+
+This example will allow you to -OVERWRITE- an existing EDL programmatically.
+You will need your API key and the EDL URL.
+An EDL URL will look something like this:  https://edl.kineticlull.com/25d055d654.kl
+
+```
+curl -k -X POST https://<<kineticlull_url>>:<<your port number>>/api/update_edl/
+    -H "Content-Type: application/json" 
+    -H "Authorization: Bearer <<your api key here>>"
+    -d '{"auto_url" : "https://<<kineticlull_url>>/25d055d654.kl", "command" : "overwrite", "fqdn_list": ["example1.com", "example2.net", "example3.org", "example4.io", "example5.co"]}'
+```
+
 ## API Limitations
 
-Currently, we enforce a limit of 50 objects for any submissions made through scripts or via the GhostHunter tool. Should you try to submit more than this limit, KineticLull will issue a 405 response, and GhostHunter will indicate a thumbs-down symbol. To change this restriction, you have the option to modify the `submit_fqdn` function in the `views.py` file. It's important to proceed with caution when making such adjustments, as we have not performed testing beyond this threshold. Any complications that occur as a result of these changes will be solely your responsibility to address.
+Currently, we enforce a limit of 50 objects for any submissions made through scripts or via the GhostHunter tool. Should you try to submit more than this limit, KineticLull will issue a 405 response, and GhostHunter will indicate a thumbs-down symbol. To change this restriction, you have the option to modify code within `views.py` file. It's important to proceed with caution when making such adjustments, as we have not performed testing beyond this threshold. Any complications that occur as a result of these changes will be solely your responsibility to address.

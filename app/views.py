@@ -475,7 +475,6 @@ class SubmitFQDNView(View):
 @csrf_exempt
 @require_http_methods(["POST"])
 def update_edl_fqdn(request):
-    
     try:
         current_date_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
         data = json.loads(request.body)
@@ -531,21 +530,11 @@ def update_edl_fqdn(request):
             updated_fqdns.sort()
             edl.ip_fqdn = "\r\n".join(updated_fqdns)
         
-
-        # if command == 'overwrite':
-        #     edl.ip_fqdn = "\r\n".join(fqdn_list)
-        # elif command == 'update':
-        #     existing_fqdns = edl.ip_fqdn.split("\r\n")
-        #     # Combine lists, remove duplicates, and sort
-        #     updated_fqdns = list(dict.fromkeys(existing_fqdns + fqdn_list))
-        #     updated_fqdns.sort()
-        #     edl.ip_fqdn = "\r\n".join(updated_fqdns)
-
         else:
-            return JsonResponse({'error': 'Invalid command'}, status=400)
+            return JsonResponse({'error': 'Invalid Command'}, status=400)
 
         edl.save()
-        return JsonResponse({'message': 'EDL updated successfully'}, status=200)
+        return JsonResponse({'message': 'Command Successful'}, status=200)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
