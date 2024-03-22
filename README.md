@@ -95,7 +95,7 @@ Test the API using the following curl command (adjust IP and port as needed):
 This will create a new entry for admin review to create a new EDL
 
 ```
-curl -k -X POST https://<<kineticlull_url>>:<<your port number>>/api/submit_fqdn/
+curl -k -X POST https://<<kineticlull_url>>/api/submit_fqdn/
     -H "Content-Type: application/json" 
     -H "Authorization: Bearer <<your api key here>>"
     -d '{"fqdn_list": ["example1.com", "example2.net", "example3.org", "example4.io", "example5.co"]}'
@@ -106,7 +106,7 @@ You will need your API key and the EDL URL.
 An EDL URL will look something like this:  https://edl.kineticlull.com/25d055d654.kl
 
 ```
-curl -k -X POST https://<<kineticlull_url>>:<<your port number>>/api/update_edl/
+curl -k -X POST https://<<kineticlull_url>>/api/update_edl/
     -H "Content-Type: application/json" 
     -H "Authorization: Bearer <<your api key here>>"
     -d '{"auto_url" : "https://<<kineticlull_url>>/25d055d654.kl", "fqdn_list": ["example1.com", "example2.net", "example3.org", "example4.io", "example5.co"]}'
@@ -117,7 +117,7 @@ You will need your API key and the EDL URL.
 An EDL URL will look something like this:  https://edl.kineticlull.com/25d055d654.kl
 
 ```
-curl -k -X POST https://<<kineticlull_url>>:<<your port number>>/api/update_edl/
+curl -k -X POST https://<<kineticlull_url>>/api/update_edl/
     -H "Content-Type: application/json" 
     -H "Authorization: Bearer <<your api key here>>"
     -d '{"auto_url" : "https://<<kineticlull_url>>/25d055d654.kl", "command" : "overwrite", "fqdn_list": ["example1.com", "example2.net", "example3.org", "example4.io", "example5.co"]}'
