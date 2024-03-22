@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.core.paginator import Paginator
+from django.http import HttpResponseRedirect
 from django.utils.crypto import get_random_string
 from django.http import HttpResponse, JsonResponse
 from django.core.exceptions import PermissionDenied
@@ -298,21 +299,31 @@ def download_ip_fqdn(request, item_id):
 @login_required
 def delete_item(request, item_id):
     """
-    Delete a specific item from the database based on its ID.
+    Delete a specific item from the database based on its ID and redirects back to the original page.
 
-    This function retrieves an item using its unique ID from the ExtDynLists model. 
-    If the item exists, it is deleted. Otherwise, a 404 error is raised. After 
-    deletion, the function redirects to the home page.
+    This function retrieves an item using its unique ID from the ExtDynLists model.
+    If the item exists, it is deleted. Otherwise, a 404 error is raised. After
+    deletion, the function attempts to redirect back to the original page using the
+    'HTTP_REFERER' header from the request. If this header is not available, it redirects
+    to a fallback URL (e.g., the home page).
 
     Parameters:
-    item_id (int): The unique identifier of the item to be deleted.
+    - request: HttpRequest object representing the current request.
+    - item_id (int): The unique identifier of the item to be deleted.
 
     Returns:
-    HttpResponseRedirect: Redirects to the home page after the item is deleted.
+    - HttpResponseRedirect: Redirects to the referring page or to a fallback URL after the item is deleted.
     """
     item = get_object_or_404(ExtDynLists, id=item_id)
     item.delete()
-    return redirect('/')
+
+    # Attempt to redirect back to the original page using 'HTTP_REFERER'
+    referer_url = request.META.get('HTTP_REFERER')
+    if referer_url:
+        return HttpResponseRedirect(referer_url)
+    else:
+        # Fallback URL if 'HTTP_REFERER' is not available
+        return redirect(reverse('app:index'))  # Adjust 'app:submission_list' to your named URL for the list view
 
 def check_acl(ip, networks: list):
     """
@@ -489,7 +500,6 @@ def authenticate_user(api_key_header):
     """
     try:
         _, api_key = api_key_header.split()  # This unpacks the header into two parts: "Bearer" and the actual key
-        print(api_key)
     except ValueError:
         # If split() fails or doesn't produce exactly two items, then we have only received the key already and just assign it for user lookup.
         api_key = api_key_header
@@ -593,6 +603,7 @@ class SubmitFQDNView(View):
         
         data = json.loads(request.body)
         fqdn_list = data.get('fqdn_list', [])
+        fqdn_list = [domain.replace("http://", "").replace("https://", "") for domain in fqdn_list]
         
         if not fqdn_list or len(fqdn_list) > 50:
             return JsonResponse({'error': f'Invalid FQDN list {data} {type(data)}'}, status=400)
@@ -677,7 +688,6 @@ def update_edl_fqdn(request):
             
             # Combine new entries with existing ones, no need to deduplicate here as existing entries are preserved as is
             updated_fqdns = existing_fqdns + new_fqdn_entries
-            updated_fqdns.sort()
             edl.ip_fqdn = "\r\n".join(updated_fqdns)
         
         else:
