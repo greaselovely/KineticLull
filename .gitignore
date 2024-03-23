@@ -1,6 +1,6 @@
 logs/
 staticfiles/
-config.json
+*.json
 MM.jpeg
 *.pem
 *.bak

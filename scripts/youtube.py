@@ -2,14 +2,19 @@ from googleapiclient.discovery import build
 import sys
 import json
 import requests
+from pathlib import Path
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-def get_api_key_from_config(config_file_path='config.json'):
+config_file='youtube.json'
+
+def get_api_key_from_config():
     """
     Reads the API keys, urls, channel ID from a config.json file.
     """
+    file_path = Path(__file__).parent
+    config_file_path = Path.joinpath(file_path, config_file)
     try:
         with open(config_file_path, 'r') as file:
             config = json.load(file)
@@ -19,6 +24,9 @@ def get_api_key_from_config(config_file_path='config.json'):
             edl_url = config.get('urls', {}).get('edl_url', None)
             yt_ch_id = config.get('urls', {}).get('youtube_channel_id', None)
             command = config.get('command', 'update') # default to update if we don't have a value
+            if not yt_api_key:
+                print(f"\n\n[!]\tNo API Key found.")
+                sys.exit()
             return yt_api_key, kl_api_key, kl_url, edl_url, yt_ch_id, command
         
     except FileNotFoundError:
@@ -33,10 +41,11 @@ def get_api_key_from_config(config_file_path='config.json'):
         }
         with open(config_file_path, 'w') as file:
             json.dump(config, file, indent=4)
-        return None, None, None, None
+        print(f"\n\n[i]\tUpdate {config_file_path} and then re-run\n\n")
+        sys.exit()
     except json.JSONDecodeError:
-        print("Error decoding JSON from the config file.")
-        return None, None, None, None
+        print("[!]\tError decoding JSON from the config file.")
+        sys.exit()
 
 def get_channel_videos(channel_id):
     """
