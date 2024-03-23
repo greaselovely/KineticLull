@@ -59,7 +59,7 @@ def get_api_key_from_config():
         print("[!]\tError decoding JSON from the config file.")
         sys.exit()
 
-def get_channel_videos(channel_id):
+def get_channel_videos(youtube, channel_id):
     """
     Fetches all videos from a specified YouTube channel's upload playlist.
 
@@ -155,12 +155,8 @@ def main():
 
     edl_url = edl_url.rstrip('/')
 
-    if not yt_api_key or not kl_api_key:
-        print("[!]\tAPI Key(s) not found.")
-        sys.exit()
-
     youtube = build('youtube', 'v3', developerKey=yt_api_key)
-    videos = get_channel_videos(yt_ch_id)
+    videos = get_channel_videos(youtube,yt_ch_id)
 
     fqdn_list = []
     for video in videos:
