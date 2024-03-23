@@ -1,4 +1,5 @@
 #!/bin/bash
+# install_python.sh
 
 install_debian() {
     echo -e "[i]\tUpdating system package list..."
