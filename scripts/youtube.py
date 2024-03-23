@@ -138,7 +138,7 @@ def main():
     The main execution function for a script that integrates YouTube and KineticLull APIs.
 
     This script performs several key operations:
-    1. It reads configuration settings from a 'config.json' file, including API keys for YouTube and KineticLull, the base URL for KineticLull, an external dynamic list (EDL) URL, a YouTube channel ID, and a command directive.
+    1. It reads configuration settings from a json file, including API keys for YouTube and KineticLull, the base URL for KineticLull, an external dynamic list (EDL) URL, a YouTube channel ID, and a command directive.
     2. Validates the presence of necessary API keys.
     3. Initializes a YouTube API client and retrieves all videos from the specified YouTube channel.
     4. Constructs a list of fully qualified domain names (FQDNs) for each video in the channel.
