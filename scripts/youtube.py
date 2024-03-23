@@ -1,8 +1,8 @@
-from googleapiclient.discovery import build
 import sys
 import json
 import requests
 from pathlib import Path
+from googleapiclient.discovery import build
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -133,7 +133,6 @@ def kineticlull_upload(kl_url, kl_api_key, fqdn_list, edl_url, command):
     except requests.exceptions.JSONDecodeError as e:
         print(f"[!]\tError: {response.status_code} - JSON Decode Error: {e}\n[!]\tBecause there was no message back from the server")
 
-
 def main():
     """
     The main execution function for a script that integrates YouTube and KineticLull APIs.
@@ -169,9 +168,6 @@ def main():
 
 
     kineticlull_upload(kl_url, kl_api_key, fqdn_list, edl_url, command)
-
-
-
 
 if __name__ == "__main__":
     main()
