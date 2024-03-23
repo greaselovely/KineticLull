@@ -11,16 +11,16 @@ config_file='youtube.json'
 
 def get_api_key_from_config():
     """
-    Retrieves API keys, URLs, and a YouTube channel ID from a configuration file named 'config.json'.
+    Retrieves API keys, URLs, and a YouTube channel ID from a configuration file named json.
 
-    This function attempts to open and read the 'config.json' file located in the same directory as the script. It extracts the YouTube (YT) API key, the KineticLull API key, the URLs for KineticLull and another service (EDL), the YouTube channel ID, and a command directive from the configuration file.
+    This function attempts to open and read the json file located in the same directory as the script. It extracts the YouTube (YT) API key, the KineticLull API key, the URLs for KineticLull and another service (EDL), the YouTube channel ID, and a command directive from the configuration file.
 
     Returns:
         tuple: A tuple containing the YouTube API key, KineticLull API key, KineticLull URL, EDL URL, YouTube channel ID, and command directive. If any API key is not found, the script exits with a message indicating the absence.
 
     Raises:
-        FileNotFoundError: If 'config.json' does not exist, it creates a new one with empty values for the necessary keys and exits, prompting the user to fill it in and rerun the script.
-        json.JSONDecodeError: If there's an error decoding the JSON from 'config.json', it exits with an error message.
+        FileNotFoundError: If json does not exist, it creates a new one with empty values for the necessary keys and exits, prompting the user to fill it in and rerun the script.
+        json.JSONDecodeError: If there's an error decoding the JSON from json, it exits with an error message.
 
     Note:
         The 'command' can be 'new', 'update', or 'overwrite', with 'update' being the default value if not specified. This functionality allows for different operational modes based on the command provided in the configuration file.
@@ -147,7 +147,7 @@ def main():
     The script ensures that necessary data is available and correctly formatted before proceeding with each step, gracefully handling missing data or errors by printing informative messages and exiting if necessary.
 
     Note:
-        - The script requires a 'config.json' file in the same directory, structured to include all necessary API keys and URLs.
+        - The script requires a json file in the same directory, structured to include all necessary API keys and URLs.
         - It uses the Google API Client Library for Python to interact with the YouTube API and the 'requests' library for HTTP requests to the KineticLull API.
         - Proper execution of this script depends on the availability and correctness of the API keys and other configuration settings.
     """
