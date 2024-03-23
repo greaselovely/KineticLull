@@ -156,7 +156,7 @@ def main():
     edl_url = edl_url.rstrip('/')
 
     youtube = build('youtube', 'v3', developerKey=yt_api_key)
-    videos = get_channel_videos(youtube,yt_ch_id)
+    videos = get_channel_videos(youtube, yt_ch_id)
 
     fqdn_list = []
     for video in videos:
