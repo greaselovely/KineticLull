@@ -3,7 +3,7 @@
 
 ## Overview
 
-KineticLull is a powerful web application designed to streamline the management and deployment of External Dynamic Lists (EDLs). These lists are indispensable for network security, enabling dynamic updates to firewall policies based on real-time changes. KineticLull offers a user-friendly interface for the effortless creation, management, and deployment of EDLs without requiring direct firewall access.
+KineticLull (http://kineticlull.com) is a powerful web application designed to streamline the management and deployment of External Dynamic Lists (EDLs). These lists are indispensable for network security, enabling dynamic updates to firewall policies based on real-time changes. KineticLull offers a user-friendly interface for the effortless creation, management, and deployment of EDLs without requiring direct firewall access.
 
 ## Key Features
 
