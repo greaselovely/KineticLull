@@ -785,6 +785,27 @@ def submission_list(request):
         submission.fqdn_list = submission.fqdn_list.split('\r\n')
     return render(request, 'submission_list.html', {'submissions' : submissions},)
 
+
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from .models import InboxEntry
+
+@login_required
+def inbox_count(request):
+    user_email = request.user.email
+    
+    # Filter InboxEntry instances by the user's email
+    message_count = InboxEntry.objects.filter(user_email=user_email).count()
+
+    # Pass the count to your template
+    context = {
+        'message_count': message_count,
+        # Include other context variables here as needed
+    }
+    return render(request, 'navbar.html', context)
+
+
+
 # @login_required
 # def script_list(request):
 #     script_list = Script.objects.all()
