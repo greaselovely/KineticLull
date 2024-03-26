@@ -104,8 +104,7 @@ body.dark-mode {
 }
 
 .badge.bg-danger.icon-circle {
-    display: inline-block; /* Or 'block', depending on your layout */
-
+    display: inline-block;
     border-radius: 50%;
     text-align: center;
     line-height: 10px;
