@@ -102,3 +102,14 @@ body.dark-mode {
 .form-group label {
     font-weight: bold;
 }
+
+.badge.bg-danger.icon-circle {
+    display: inline-block; /* Or 'block', depending on your layout */
+
+    border-radius: 50%;
+    text-align: center;
+    line-height: 10px;
+    background-color: red;
+    color: white;
+  }
+  

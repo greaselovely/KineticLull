@@ -21,7 +21,8 @@
               </li>
             {% endif %}
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'app:submission_list' %}">Inbox</a>
+                    <a class="nav-link" href="{% url 'app:submission_list' %}">Inbox {% if message_count > 0 %}<span class="badge bg-danger icon-circle">{{ message_count }}</span>{% endif %}</a>
+                    
                 </li>
                 {% comment %} <li class="nav-item">
                     <a class="nav-link" href="{% url 'app:script_list' %}">Scripts</a>
