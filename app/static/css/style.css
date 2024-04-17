@@ -1,8 +1,8 @@
 /* style.css */
 
 .actions-column {
-    width: 250px; /* Adjust this width as needed */
-    position: relative; /* For positioning the confirmation icon */
+    width: 250px; 
+    position: relative;
 }
 
 .blur-text {

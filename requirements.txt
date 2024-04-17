@@ -19,7 +19,7 @@ packaging==24.0
     # via gunicorn
 python-dotenv==1.0.1
     # via -r requirements.in
-sqlparse==0.4.4
+sqlparse==0.5.0
     # via
     #   django
     #   django-debug-toolbar
