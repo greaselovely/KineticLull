@@ -18,7 +18,7 @@ class ExtDynListsForm(forms.ModelForm):
                                               'required' : 'required'}),
             'ip_fqdn' : forms.Textarea(attrs={'class' : 'form-control mb-3',
                                               'id' : 'ipFqdnInput', 
-                                              'placeholder' : 'Example:\n127.0.0.1 Comments Can Be Used\nexample.com Another Comment\nhttp://localhost Text After The First Space Is Ignored By The Firewall', 
+                                              'placeholder' : 'Example:\n127.0.0.1 Comments Can Be Used\nexample.com Another Comment\ndomain.com Text After The First Space Is Ignored By The Firewall', 
                                               'required' : 'required',
                                               'rows' : '4'}),
             'acl' : forms.Textarea(attrs={'class' : 'form-control mb-3',
