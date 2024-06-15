@@ -32,5 +32,5 @@ urlpatterns = [
     path('delete_submission/<int:submission_id>/', views.delete_submission, name='delete_submission'),
     # path('review_script/<int:script_id>', views.review_script, name='review_script'),
     # keep this at the bottom
-    path('<str:auto_url>/', views.show_ip_fqdn, name='show_ip_fqdn'),
+    re_path(r'^(?P<auto_url>[\w.-]+)/?$', views.show_ip_fqdn, name='show_ip_fqdn'),
 ]
