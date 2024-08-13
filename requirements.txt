@@ -6,8 +6,9 @@
 #
 asgiref==3.7.2
     # via django
-django==5.0.3
+django==5.0.7
     # 5.0.3 addresses CVE-2024-27351
+    # 5.0.7 addresses CVE-2024-42005, CVE-2024-39330, CVE-2024-38875, CVE-2024-39614, CVE-2024-39329
     # via
     #   -r requirements.in
     #   django-debug-toolbar
