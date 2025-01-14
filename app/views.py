@@ -785,11 +785,6 @@ def submission_list(request):
         submission.fqdn_list = submission.fqdn_list.split('\r\n')
     return render(request, 'submission_list.html', {'submissions' : submissions},)
 
-
-from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
-from .models import InboxEntry
-
 @login_required
 def inbox_count(request):
     user_email = request.user.email
