@@ -57,7 +57,7 @@
                         <span class="nav-text">Profile</span>
                     </a>
                 </li>
-                {% if user.is_staff or user.is_superuser %}
+                {% if user.is_superuser or perms.app.view_activitylog %}
                 <li>
                     <a href="{% url 'app:activity_log' %}" title="Logs">
                         <i class="bi bi-journal-text"></i>

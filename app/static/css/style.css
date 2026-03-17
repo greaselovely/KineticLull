@@ -205,6 +205,35 @@
     margin-left: var(--sidebar-collapsed);
 }
 
+/* Instant state from <html> class — prevents flash on page load */
+html.sidebar-is-collapsed .sidebar {
+    width: var(--sidebar-collapsed);
+}
+html.sidebar-is-collapsed .sidebar .brand-full { display: none; }
+html.sidebar-is-collapsed .sidebar .brand-mini { display: inline; }
+html.sidebar-is-collapsed .sidebar .nav-text { display: none; }
+html.sidebar-is-collapsed .sidebar .sidebar-nav li a,
+html.sidebar-is-collapsed .sidebar .sidebar-footer a {
+    justify-content: center;
+    padding: 10px 0;
+}
+html.sidebar-is-collapsed .sidebar .sidebar-header {
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 8px;
+}
+html.sidebar-is-collapsed .sidebar .sidebar-toggle-btn { margin: 0 auto; }
+html.sidebar-is-collapsed .main-content {
+    margin-left: var(--sidebar-collapsed);
+}
+
+html.admin-menu-is-open .submenu#admin-submenu {
+    max-height: 400px;
+}
+html.admin-menu-is-open .submenu-toggle#admin-menu-toggle .submenu-arrow {
+    transform: rotate(180deg);
+}
+
 .content-wrapper {
     padding: 24px;
 }

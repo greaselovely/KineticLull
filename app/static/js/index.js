@@ -1,12 +1,13 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Sidebar toggle
-    const sidebar = document.getElementById('sidebar');
-    const mainContent = document.getElementById('main-content');
-    const toggleBtn = document.getElementById('sidebar-toggle');
+    var sidebar = document.getElementById('sidebar');
+    var mainContent = document.getElementById('main-content');
+    var toggleBtn = document.getElementById('sidebar-toggle');
+    var html = document.documentElement;
 
     if (toggleBtn) {
-        // Restore collapsed state from localStorage
-        if (localStorage.getItem('sidebar-collapsed') === 'true') {
+        // Sync element classes with the <html> state set in <head>
+        if (html.classList.contains('sidebar-is-collapsed')) {
             sidebar.classList.add('collapsed');
             mainContent.classList.add('expanded');
         }
@@ -14,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleBtn.addEventListener('click', function() {
             sidebar.classList.toggle('collapsed');
             mainContent.classList.toggle('expanded');
+            html.classList.toggle('sidebar-is-collapsed');
             localStorage.setItem('sidebar-collapsed', sidebar.classList.contains('collapsed'));
         });
     }
@@ -32,7 +34,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var adminToggle = document.getElementById('admin-menu-toggle');
     var adminSubmenu = document.getElementById('admin-submenu');
     if (adminToggle && adminSubmenu) {
-        if (localStorage.getItem('admin-menu-open') === 'true') {
+        // Sync with <html> state
+        if (html.classList.contains('admin-menu-is-open')) {
             adminSubmenu.classList.add('open');
             adminToggle.classList.add('open');
         }
@@ -40,6 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             adminSubmenu.classList.toggle('open');
             adminToggle.classList.toggle('open');
+            html.classList.toggle('admin-menu-is-open');
             localStorage.setItem('admin-menu-open', adminSubmenu.classList.contains('open'));
         });
     }

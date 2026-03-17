@@ -41,6 +41,7 @@ urlpatterns = [
     path('users/create/', views.user_create_view, name='user_create'),
     path('users/<int:user_id>/edit/', views.user_edit_view, name='user_edit'),
     path('groups/', views.group_list_view, name='group_list'),
+    path('groups/<int:group_id>/edit/', views.group_edit_view, name='group_edit'),
     # keep this at the bottom
     re_path(r'^(?P<auto_url>[\w.-]+)/?$', views.show_ip_fqdn, name='show_ip_fqdn'),
 ]

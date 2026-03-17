@@ -37,7 +37,8 @@ from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings
 from .forms import ExtDynListsForm, ProfileChangeForm
 
 from users.models import CustomUser
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
+from django.contrib.contenttypes.models import ContentType
 
 
 def safe_referer_or_index(request):
@@ -211,6 +212,7 @@ def show_ip_fqdn(request, auto_url):
         edl = ExtDynLists.objects.get(auto_url=auto_url)
     except ExtDynLists.DoesNotExist:
         log_activity(request, 'edl_not_found', auto_url, detail)
+        request._kl_logged_404 = True
         raise Http404
 
     acl_list = edl.acl.split('\n')
@@ -223,10 +225,10 @@ def show_ip_fqdn(request, auto_url):
 
 
 def custom_404(request, exception):
-    user_ip = request.META.get('REMOTE_ADDR')
-    user_agent = request.META.get('HTTP_USER_AGENT', '') or 'No User-Agent'
     path = request.get_full_path()
-    log_activity(request, 'not_found', path, f'Agent: {user_agent}')
+    if not getattr(request, '_kl_logged_404', False):
+        user_agent = request.META.get('HTTP_USER_AGENT', '') or 'No User-Agent'
+        log_activity(request, 'not_found', path, f'Agent: {user_agent}')
     return render(request, '404.html', {'request_path': path}, status=404)
 
 
@@ -923,7 +925,7 @@ def favorites_view(request):
 
 @login_required
 def activity_log_view(request):
-    if not (request.user.is_staff or request.user.is_superuser):
+    if not (request.user.is_superuser or request.user.has_perm('app.view_activitylog')):
         raise PermissionDenied
     logs = ActivityLog.objects.all()
     search = request.GET.get("q", "").strip()
@@ -974,7 +976,7 @@ def activity_log_export(request):
     import csv
     import zoneinfo
     from django.utils.dateformat import format as date_format
-    if not (request.user.is_staff or request.user.is_superuser):
+    if not (request.user.is_superuser or request.user.has_perm('app.view_activitylog')):
         raise PermissionDenied
     logs = ActivityLog.objects.all()
     search = request.GET.get("q", "").strip()
@@ -1116,12 +1118,19 @@ def user_edit_view(request, user_id):
         edit_user.first_name = request.POST.get('first_name', '').strip()
         edit_user.last_name = request.POST.get('last_name', '').strip()
         edit_user.is_staff = request.POST.get('is_staff') == 'on'
-        edit_user.is_active = request.POST.get('is_active') == 'on'
+        new_is_active = request.POST.get('is_active') == 'on'
+        new_is_superuser = request.POST.get('is_superuser') == 'on'
         selected_groups = request.POST.getlist('groups')
 
-        # Only superusers can grant/revoke superuser
+        # Protect last superuser
+        is_last_superuser = edit_user.is_superuser and CustomUser.objects.filter(is_superuser=True).count() == 1
+        if is_last_superuser and (not new_is_superuser or not new_is_active):
+            messages.error(request, 'Cannot remove superuser status or deactivate the last superuser.')
+            return redirect('app:user_edit', user_id=user_id)
+
+        edit_user.is_active = new_is_active
         if request.user.is_superuser:
-            edit_user.is_superuser = request.POST.get('is_superuser') == 'on'
+            edit_user.is_superuser = new_is_superuser
 
         # Password change (optional)
         changes = []
@@ -1181,7 +1190,9 @@ def group_list_view(request):
         elif action == 'delete':
             group_id = request.POST.get('group_id')
             group = get_object_or_404(Group, id=group_id)
-            if group.user_set.exists():
+            if group.name == 'Superuser':
+                messages.error(request, 'The Superuser group cannot be deleted.')
+            elif group.user_set.exists():
                 messages.error(request, f'Cannot delete "{group.name}" — it still has members.')
             else:
                 log_activity(request, 'delete_group', group.name)
@@ -1190,6 +1201,83 @@ def group_list_view(request):
         return redirect('app:group_list')
 
     return render(request, 'group_list.html', {'groups': groups})
+
+
+@login_required
+def group_edit_view(request, group_id):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    group = get_object_or_404(Group, id=group_id)
+
+    # Get app-relevant permissions only
+    app_content_types = ContentType.objects.filter(app_label__in=['app', 'users'])
+    available_permissions = Permission.objects.filter(content_type__in=app_content_types).order_by('content_type__app_label', 'codename')
+
+    # Also get all users for member management
+    all_users = CustomUser.objects.filter(is_active=True).order_by('email')
+
+    if request.method == 'POST':
+        before_name = group.name
+        before_perms = set(group.permissions.values_list('codename', flat=True))
+        before_members = set(group.user_set.values_list('email', flat=True))
+
+        # Update name (Superuser group cannot be renamed)
+        new_name = request.POST.get('name', '').strip()
+        if new_name and new_name != group.name:
+            if group.name == 'Superuser':
+                messages.error(request, 'The Superuser group cannot be renamed.')
+                return redirect('app:group_edit', group_id=group.id)
+            if Group.objects.filter(name=new_name).exclude(id=group.id).exists():
+                messages.error(request, f'Group "{new_name}" already exists.')
+                return redirect('app:group_edit', group_id=group.id)
+            group.name = new_name
+
+        # Update permissions
+        selected_perms = request.POST.getlist('permissions')
+        group.permissions.set(Permission.objects.filter(id__in=selected_perms))
+
+        # Update members
+        selected_members = request.POST.getlist('members')
+        current_members = set(group.user_set.values_list('id', flat=True))
+        new_member_ids = set(int(m) for m in selected_members)
+        # Add new members
+        for user in CustomUser.objects.filter(id__in=new_member_ids - current_members):
+            user.groups.add(group)
+        # Remove old members
+        for user in CustomUser.objects.filter(id__in=current_members - new_member_ids):
+            user.groups.remove(group)
+
+        group.save()
+
+        # Log changes
+        changes = []
+        if group.name != before_name:
+            changes.append(f'Renamed: {before_name} -> {group.name}')
+        after_perms = set(group.permissions.values_list('codename', flat=True))
+        added_perms = after_perms - before_perms
+        removed_perms = before_perms - after_perms
+        if added_perms:
+            changes.append(f'Added perms: {", ".join(sorted(added_perms))}')
+        if removed_perms:
+            changes.append(f'Removed perms: {", ".join(sorted(removed_perms))}')
+        after_members = set(group.user_set.values_list('email', flat=True))
+        added_members = after_members - before_members
+        removed_members = before_members - after_members
+        if added_members:
+            changes.append(f'Added members: {", ".join(sorted(added_members))}')
+        if removed_members:
+            changes.append(f'Removed members: {", ".join(sorted(removed_members))}')
+
+        detail = '; '.join(changes) if changes else 'No changes'
+        log_activity(request, 'edit_group', group.name, detail)
+        messages.success(request, f'Group "{group.name}" updated.')
+        return redirect('app:group_list')
+
+    return render(request, 'group_edit.html', {
+        'group': group,
+        'available_permissions': available_permissions,
+        'all_users': all_users,
+    })
 
 
 def get_current_version():
