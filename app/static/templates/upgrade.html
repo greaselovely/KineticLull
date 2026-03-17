@@ -3,42 +3,25 @@
 {% block content %}
 <div class="container mt-4">
     <h3>System Upgrade</h3>
+
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} mt-3">{{ message }}</div>
+    {% endfor %}
+
     <p>Current version: <strong>{{ current_version }}</strong></p>
 
-    {% if steps %}
-        {% if new_version and new_version != current_version %}
-            <p>New version: <strong>{{ new_version }}</strong></p>
-        {% endif %}
-
-        <h5 class="mt-4">Upgrade Results</h5>
-        {% for step in steps %}
-            <div class="card mb-2">
-                <div class="card-body p-3">
-                    <strong>{{ step.name }}</strong>
-                    {% if step.success %}
-                        <span class="badge bg-success ms-2">OK</span>
-                    {% else %}
-                        <span class="badge bg-danger ms-2">Failed</span>
-                    {% endif %}
-                    {% if step.output %}
-                        <pre class="mt-2 mb-0 p-2 bg-dark text-light" style="font-size: 0.85em; border-radius: 4px; white-space: pre-wrap;">{{ step.output }}</pre>
-                    {% endif %}
-                </div>
-            </div>
-        {% endfor %}
-
-        {% if error %}
-            <div class="alert alert-danger mt-3">{{ error }}</div>
-        {% endif %}
-    {% else %}
-        <p class="text-muted mt-3">This will pull the latest code from GitHub, run database migrations, collect static files, and reload the application.</p>
-
+    {% if upgrade_available %}
+        <p>Available version: <strong>{{ latest_version }}</strong></p>
         <form method="post">
             {% csrf_token %}
             <button type="submit" class="btn btn-warning" onclick="this.disabled=true; this.innerText='Upgrading...'; this.form.submit();">
                 Upgrade Now
             </button>
         </form>
+    {% elif latest_version %}
+        <p class="text-muted">You are running the latest version.</p>
+    {% else %}
+        <p class="text-muted">Could not check for updates.</p>
     {% endif %}
 
     <a href="{% url 'app:index' %}" class="btn btn-outline-secondary mt-3">Back to Home</a>

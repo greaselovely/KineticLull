@@ -836,7 +836,6 @@ def inbox_count(request):
 
 logger = logging.getLogger(__name__)
 
-
 def get_current_version():
     version_file = Path(settings.BASE_DIR) / 'VERSION'
     try:
@@ -845,88 +844,94 @@ def get_current_version():
         return 'unknown'
 
 
+def get_remote_version():
+    """Check the remote branch's VERSION file via git. Returns None on failure."""
+    base_dir = str(settings.BASE_DIR)
+    try:
+        subprocess.run(
+            ['git', 'fetch'], cwd=base_dir, capture_output=True, text=True, timeout=10,
+        )
+        result = subprocess.run(
+            ['git', 'show', 'origin/main:VERSION'], cwd=base_dir, capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
 @login_required
 def upgrade_view(request):
     if not request.user.is_superuser:
         raise PermissionDenied
 
     current_version = get_current_version()
+    latest_version = get_remote_version()
+    upgrade_available = (
+        latest_version is not None
+        and current_version != 'unknown'
+        and latest_version != current_version
+    )
+
     context = {
         'current_version': current_version,
+        'latest_version': latest_version,
+        'upgrade_available': upgrade_available,
         'title': 'System Upgrade',
     }
 
     if request.method == 'POST':
+        if not upgrade_available:
+            messages.info(request, 'Already up to date.')
+            return redirect('app:upgrade')
+
         base_dir = str(settings.BASE_DIR)
         python = sys.executable
         manage_py = os.path.join(base_dir, 'manage.py')
-        steps = []
+        success = True
 
         # Step 1: git pull
         result = subprocess.run(
-            ['git', 'pull'],
-            cwd=base_dir,
-            capture_output=True,
-            text=True,
+            ['git', 'pull'], cwd=base_dir, capture_output=True, text=True,
         )
-        steps.append({
-            'name': 'git pull',
-            'success': result.returncode == 0,
-            'output': result.stdout.strip() or result.stderr.strip(),
-        })
-
         if result.returncode != 0:
-            context['steps'] = steps
-            context['error'] = 'git pull failed. Upgrade aborted.'
-            return render(request, 'upgrade.html', context)
-
-        # Re-read version after pull
-        context['new_version'] = get_current_version()
+            messages.error(request, 'Upgrade failed. Please try again or upgrade manually.')
+            logger.error(f"Upgrade git pull failed for {request.user.email}: {result.stderr.strip()}")
+            return redirect('app:upgrade')
 
         # Step 2: migrate
         result = subprocess.run(
-            [python, manage_py, 'migrate', '--noinput'],
-            cwd=base_dir,
-            capture_output=True,
-            text=True,
+            [python, manage_py, 'migrate', '--noinput'], cwd=base_dir, capture_output=True, text=True,
         )
-        steps.append({
-            'name': 'migrate',
-            'success': result.returncode == 0,
-            'output': result.stdout.strip() or result.stderr.strip(),
-        })
+        if result.returncode != 0:
+            success = False
+            logger.error(f"Upgrade migrate failed for {request.user.email}: {result.stderr.strip()}")
 
         # Step 3: collectstatic
         result = subprocess.run(
-            [python, manage_py, 'collectstatic', '--noinput'],
-            cwd=base_dir,
-            capture_output=True,
-            text=True,
+            [python, manage_py, 'collectstatic', '--noinput'], cwd=base_dir, capture_output=True, text=True,
         )
-        steps.append({
-            'name': 'collectstatic',
-            'success': result.returncode == 0,
-            'output': result.stdout.strip() or result.stderr.strip(),
-        })
+        if result.returncode != 0:
+            success = False
+            logger.error(f"Upgrade collectstatic failed for {request.user.email}: {result.stderr.strip()}")
 
         # Step 4: graceful reload via SIGHUP to Gunicorn master
         try:
             os.kill(os.getppid(), signal.SIGHUP)
-            steps.append({
-                'name': 'reload',
-                'success': True,
-                'output': 'Sent SIGHUP to Gunicorn master. Workers are reloading.',
-            })
-        except (ProcessLookupError, PermissionError) as e:
-            steps.append({
-                'name': 'reload',
-                'success': False,
-                'output': f'Could not signal Gunicorn master. You may need to restart the service manually.',
-            })
+        except (ProcessLookupError, PermissionError):
+            success = False
+            logger.error(f"Upgrade reload failed for {request.user.email}: could not signal Gunicorn master")
 
-        logger.info(f"Upgrade performed by {request.user.email}: {' -> '.join(s['name'] + ('(ok)' if s['success'] else '(fail)') for s in steps)}")
-        context['steps'] = steps
-        return render(request, 'upgrade.html', context)
+        if success:
+            new_version = get_current_version()
+            messages.success(request, f'Upgraded to {new_version}. Application is reloading.')
+            logger.info(f"Upgrade to {new_version} completed by {request.user.email}")
+        else:
+            messages.warning(request, 'Upgrade completed with errors. Check the logs or restart the service manually.')
+            logger.warning(f"Upgrade completed with errors for {request.user.email}")
+
+        return redirect('app:upgrade')
 
     return render(request, 'upgrade.html', context)
 
