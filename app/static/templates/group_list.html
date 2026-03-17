@@ -6,11 +6,19 @@
         <h3 class="mb-0">Groups</h3>
         <a href="{% url 'app:user_list' %}" class="btn btn-sm btn-outline-secondary">Back to Users</a>
     </div>
+
+    <form method="post" class="d-flex mt-3" style="gap: 8px;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create">
+        <input type="text" name="name" class="form-control form-control-sm" placeholder="New group name" required style="width: 250px;">
+        <button type="submit" class="btn btn-sm btn-primary">Create Group</button>
+    </form>
+
     <table class="table table-hover mt-3">
         <thead>
             <tr>
-                <th style="width: 40%;">Group Name</th>
-                <th style="width: 40%;">Members</th>
+                <th style="width: 30%;">Group Name</th>
+                <th style="width: 50%;">Members</th>
                 <th style="width: 20%;">Actions</th>
             </tr>
         </thead>
@@ -18,14 +26,24 @@
             {% for group in groups %}
             <tr>
                 <td>{{ group.name }}</td>
-                <td>{{ group.user_set.count }}</td>
                 <td>
-                    <form method="post" style="display:inline;" onsubmit="return confirm('Delete group {{ group.name }}?')">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="delete">
-                        <input type="hidden" name="group_id" value="{{ group.id }}">
-                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                    </form>
+                    {% for member in group.user_set.all %}
+                        <a href="{% url 'app:user_edit' member.id %}">{{ member.email }}</a>{% if not forloop.last %}, {% endif %}
+                    {% empty %}
+                        <span class="text-muted">No members</span>
+                    {% endfor %}
+                </td>
+                <td>
+                    {% if group.user_set.exists %}
+                        <button class="btn btn-sm btn-outline-secondary" disabled title="Remove all members first">Delete</button>
+                    {% else %}
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete group {{ group.name }}?')">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="group_id" value="{{ group.id }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                    {% endif %}
                 </td>
             </tr>
             {% empty %}
@@ -35,14 +53,5 @@
             {% endfor %}
         </tbody>
     </table>
-
-    <hr>
-    <h5>Create Group</h5>
-    <form method="post" class="d-flex mt-2" style="gap: 8px;">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="create">
-        <input type="text" name="name" class="form-control form-control-sm" placeholder="Group name" required style="width: 250px;">
-        <button type="submit" class="btn btn-sm btn-primary">Create</button>
-    </form>
 </div>
 {% endblock %}

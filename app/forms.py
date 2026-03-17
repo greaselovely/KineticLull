@@ -38,14 +38,11 @@ class ProfileChangeForm(UserChangeForm):
 
     class Meta:
         model = CustomUser
-        fields = [ 'first_name', 'last_name', 'email', 'is_active', 'is_staff',]
+        fields = ['first_name', 'last_name', 'email']
         widgets = {
             'first_name': forms.TextInput(attrs={'class': 'form-control mb-3', 'placeholder': 'First Name', 'required': 'required'}),
-            'last_name': forms.TextInput(attrs={'class': 'form-control mb-3', 'placeholder': 'Last Name', 'required' : 'required'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control mb-3', 'placeholder': 'Last Name', 'required': 'required'}),
             'email': forms.EmailInput(attrs={'class': 'form-control mb-3'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input mb-3'}),
-            'is_staff': forms.CheckboxInput(attrs={'class': 'form-check-input mb-3'}),
-            # 'is_superuser': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
     def __init__(self, *args, **kwargs):

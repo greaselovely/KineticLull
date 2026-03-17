@@ -1125,9 +1125,12 @@ def group_list_view(request):
         elif action == 'delete':
             group_id = request.POST.get('group_id')
             group = get_object_or_404(Group, id=group_id)
-            log_activity(request, 'delete_group', group.name)
-            group.delete()
-            messages.success(request, f'Group deleted.')
+            if group.user_set.exists():
+                messages.error(request, f'Cannot delete "{group.name}" — it still has members.')
+            else:
+                log_activity(request, 'delete_group', group.name)
+                group.delete()
+                messages.success(request, 'Group deleted.')
         return redirect('app:group_list')
 
     return render(request, 'group_list.html', {'groups': groups})
