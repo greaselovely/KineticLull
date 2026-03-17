@@ -167,6 +167,23 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
+.edl-card {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 72px);
+}
+
+.edl-card .table-responsive,
+.edl-card > table {
+    flex: 1;
+}
+
+.edl-footer {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid #e0e2e8;
+}
+
 /* Tables */
 .table-resizable {
     table-layout: fixed;
@@ -202,16 +219,19 @@
 .col-resize-handle {
     position: absolute;
     right: 0;
-    top: 0;
-    bottom: 0;
-    width: 5px;
+    top: 25%;
+    height: 50%;
+    width: 3px;
     cursor: col-resize;
-    background: transparent;
+    background-color: rgba(0, 0, 0, 0.12);
+    border-radius: 2px;
+    transition: background-color 0.15s, width 0.15s;
 }
 
 .col-resize-handle:hover,
 .col-resize-handle.active {
-    background-color: rgba(0, 0, 0, 0.15);
+    width: 4px;
+    background-color: rgba(0, 0, 0, 0.35);
 }
 
 /* Action icons */

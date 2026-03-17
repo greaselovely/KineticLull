@@ -3,7 +3,7 @@
 {% block title %}- Home{% endblock %}
 {% block content %}
 
-<div class="content-card">
+<div class="content-card edl-card">
     <table id="edl-table" class="table table-hover table-resizable">
         <thead>
             <tr>
@@ -49,7 +49,7 @@
     </table>
 
     {% if page_obj.paginator.count > 0 %}
-    <div class="d-flex justify-content-between align-items-center mt-3">
+    <div class="edl-footer d-flex justify-content-between align-items-center">
         <div>
             {% if page_obj.paginator.num_pages > 1 %}
             <nav>
