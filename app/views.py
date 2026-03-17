@@ -20,6 +20,7 @@ import re
 import sys
 import json
 import signal
+import hashlib
 import secrets
 import logging
 import ipaddress
@@ -47,8 +48,43 @@ def safe_referer_or_index(request):
     return reverse('app:index')
 
 
+def compute_db_checksum():
+    """Compute a checksum of critical table row counts and latest IDs."""
+    from users.models import CustomUser
+    data = '|'.join([
+        str(ExtDynLists.objects.count()),
+        str(ExtDynLists.objects.order_by('-id').values_list('id', flat=True).first() or 0),
+        str(CustomUser.objects.count()),
+        str(CustomUser.objects.order_by('-id').values_list('id', flat=True).first() or 0),
+        str(ActivityLog.objects.count()),
+        str(ActivityLog.objects.order_by('-id').values_list('id', flat=True).first() or 0),
+    ])
+    return hashlib.sha256(data.encode()).hexdigest()
+
+
+def check_db_integrity():
+    """Compare stored checksum against current state. Returns (checksum_ok, chain_ok, chain_break_id)."""
+    import hashlib
+    app_settings = AppSettings.load()
+    current_checksum = compute_db_checksum()
+
+    checksum_ok = True
+    if app_settings.db_checksum and app_settings.db_checksum != current_checksum:
+        checksum_ok = False
+
+    chain_ok, chain_break_id = ActivityLog.verify_chain()
+    return checksum_ok, chain_ok, chain_break_id
+
+
+def update_db_checksum():
+    """Update the stored checksum to reflect current DB state."""
+    app_settings = AppSettings.load()
+    app_settings.db_checksum = compute_db_checksum()
+    app_settings.save()
+
+
 def log_activity(request, action, target='', detail='', user=None):
-    """Log a user activity to the database."""
+    """Log a user activity to the database and update the integrity checksum."""
     ActivityLog.objects.create(
         user=user or (request.user if request.user.is_authenticated else None),
         action=action,
@@ -56,6 +92,7 @@ def log_activity(request, action, target='', detail='', user=None):
         detail=detail,
         ip_address=request.META.get('REMOTE_ADDR'),
     )
+    update_db_checksum()
 
 
 def get_visible_edls(user):
@@ -241,8 +278,8 @@ def edit_ext_dyn_list_view(request, id=None):
         # Snapshot before values for diff
         before = {
             'friendly_name': edl.friendly_name,
-            'ip_fqdn': set(edl.ip_fqdn.split('\r\n')),
-            'acl': set(edl.acl.split('\n')),
+            'ip_fqdn': set(e.strip() for e in edl.ip_fqdn.split('\r\n') if e.strip()),
+            'acl': set(e.strip() for e in edl.acl.split('\n') if e.strip()),
             'policy_reference': edl.policy_reference,
         }
         if request.method == 'POST':
@@ -262,14 +299,14 @@ def edit_ext_dyn_list_view(request, id=None):
                 changes = []
                 if edl_instance.friendly_name != before['friendly_name']:
                     changes.append(f'Renamed: {before["friendly_name"]} -> {edl_instance.friendly_name}')
-                after_fqdns = set(edl_instance.ip_fqdn.split('\r\n'))
+                after_fqdns = set(e.strip() for e in edl_instance.ip_fqdn.split('\r\n') if e.strip())
                 added_fqdns = after_fqdns - before['ip_fqdn']
                 removed_fqdns = before['ip_fqdn'] - after_fqdns
                 if added_fqdns:
                     changes.append(f'Added entries: {", ".join(sorted(added_fqdns))}')
                 if removed_fqdns:
                     changes.append(f'Removed entries: {", ".join(sorted(removed_fqdns))}')
-                after_acl = set(edl_instance.acl.split('\n'))
+                after_acl = set(e.strip() for e in edl_instance.acl.split('\n') if e.strip())
                 added_acl = after_acl - before['acl']
                 removed_acl = before['acl'] - after_acl
                 if added_acl:
@@ -895,6 +932,25 @@ def activity_log_view(request):
 
 
 @login_required
+def integrity_check_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    checksum_ok, chain_ok, chain_break_id = check_db_integrity()
+
+    if request.method == 'POST' and request.POST.get('action') == 'reset_checksum':
+        update_db_checksum()
+        log_activity(request, 'reset_checksum', 'DB checksum reset by admin')
+        messages.success(request, 'Checksum reset to current state.')
+        return redirect('app:integrity_check')
+
+    return render(request, 'integrity_check.html', {
+        'checksum_ok': checksum_ok,
+        'chain_ok': chain_ok,
+        'chain_break_id': chain_break_id,
+    })
+
+
+@login_required
 def activity_log_export(request):
     import csv
     import zoneinfo
@@ -1066,10 +1122,10 @@ def upgrade_view(request):
         if success:
             new_version = get_current_version()
             messages.success(request, f'Upgraded to {new_version}. Application is reloading.')
-            logger.info(f"Upgrade to {new_version} completed by {request.user.email}")
+            log_activity(request, 'upgrade', f'v{current_version} -> v{new_version}')
         else:
             messages.warning(request, 'Upgrade completed with errors. Check the logs or restart the service manually.')
-            logger.warning(f"Upgrade completed with errors for {request.user.email}")
+            log_activity(request, 'upgrade', f'v{current_version}', 'Completed with errors')
 
         return redirect('app:upgrade')
 

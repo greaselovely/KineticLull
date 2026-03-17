@@ -1,5 +1,6 @@
 # context_processors.py
-from .models import InboxEntry, AppSettings
+import hashlib
+from .models import InboxEntry, AppSettings, ActivityLog, ExtDynLists
 
 
 def inbox_count(request):
@@ -12,9 +13,15 @@ def inbox_count(request):
 def app_settings(request):
     try:
         settings = AppSettings.load()
-        return {
+        result = {
             'app_timezone': settings.timezone,
             'app_timestamp_format': settings.timestamp_format,
         }
+        # Lightweight integrity check for superusers
+        if request.user.is_authenticated and request.user.is_superuser and settings.db_checksum:
+            from .views import compute_db_checksum
+            if settings.db_checksum != compute_db_checksum():
+                result['integrity_warning'] = True
+        return result
     except Exception:
         return {'app_timezone': 'UTC', 'app_timestamp_format': 'Y-m-d H:i:s'}

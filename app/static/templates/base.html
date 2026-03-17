@@ -16,6 +16,15 @@
     {% include "sidebar.html" %}
 
     <div id="main-content" class="main-content">
+        {% if integrity_warning %}
+        <div class="container-fluid pt-3">
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Integrity Alert:</strong> Database may have been modified outside of KineticLull.
+                <a href="{% url 'app:integrity_check' %}" class="alert-link">Review</a>
+            </div>
+        </div>
+        {% endif %}
         {% if messages %}
         <div class="container-fluid pt-3">
             {% for message in messages %}

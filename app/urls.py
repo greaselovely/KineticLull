@@ -36,6 +36,7 @@ urlpatterns = [
     path('logs/', views.activity_log_view, name='activity_log'),
     path('logs/export/', views.activity_log_export, name='activity_log_export'),
     path('settings/', views.app_settings_view, name='app_settings'),
+    path('integrity/', views.integrity_check_view, name='integrity_check'),
     # keep this at the bottom
     re_path(r'^(?P<auto_url>[\w.-]+)/?$', views.show_ip_fqdn, name='show_ip_fqdn'),
 ]

@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}- Integrity Check{% endblock %}
+{% block content %}
+<div class="content-card">
+    <h3>Database Integrity</h3>
+
+    <div class="mt-4">
+        <h5>Table Checksum</h5>
+        <p>Detects if database rows were added, modified, or deleted outside of the application.</p>
+        {% if checksum_ok %}
+            <div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Checksum is valid. No external modifications detected.</div>
+        {% else %}
+            <div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>Checksum mismatch. The database may have been modified outside of KineticLull.</div>
+            <form method="post" class="mt-2">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reset_checksum">
+                <button type="submit" class="btn btn-sm btn-outline-warning">Acknowledge and Reset Checksum</button>
+                <small class="text-muted ms-2">This updates the stored checksum to match the current database state.</small>
+            </form>
+        {% endif %}
+    </div>
+
+    <div class="mt-4">
+        <h5>Activity Log Chain</h5>
+        <p>Verifies that no log entries have been tampered with, deleted, or inserted out of order.</p>
+        {% if chain_ok %}
+            <div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Log chain is intact. All entries verified.</div>
+        {% else %}
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle me-2"></i>Log chain broken at entry ID {{ chain_break_id }}.
+                One or more log entries may have been tampered with or deleted.
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 
 from django.db import models
@@ -54,11 +55,34 @@ class ActivityLog(models.Model):
     detail = models.TextField(blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    chain_hash = models.CharField(max_length=64, blank=True)
 
     class Meta:
         verbose_name = "Activity Log"
         verbose_name_plural = "Activity Logs"
         ordering = ["-created_at"]
+
+    def _compute_hash(self, prev_hash=''):
+        data = f"{prev_hash}|{self.user_id}|{self.action}|{self.target}|{self.detail}|{self.ip_address}"
+        return hashlib.sha256(data.encode()).hexdigest()
+
+    def save(self, *args, **kwargs):
+        if not self.chain_hash:
+            last = ActivityLog.objects.order_by('-id').first()
+            prev_hash = last.chain_hash if last else ''
+            self.chain_hash = self._compute_hash(prev_hash)
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def verify_chain(cls):
+        """Verify the integrity of the log chain. Returns (valid, first_broken_id)."""
+        prev_hash = ''
+        for entry in cls.objects.order_by('id'):
+            expected = entry._compute_hash(prev_hash)
+            if entry.chain_hash != expected:
+                return False, entry.id
+            prev_hash = entry.chain_hash
+        return True, None
 
     def __str__(self):
         return f"{self.created_at} {self.user} {self.action} {self.target}"
@@ -76,6 +100,7 @@ class AppSettings(models.Model):
     ]
     timezone = models.CharField(max_length=50, default='UTC', verbose_name='Display Timezone')
     timestamp_format = models.CharField(max_length=50, default='Y-m-d H:i:s', choices=TIMESTAMP_CHOICES, verbose_name='Timestamp Format')
+    db_checksum = models.CharField(max_length=64, blank=True, verbose_name='DB Integrity Checksum')
 
     class Meta:
         verbose_name = "App Settings"
