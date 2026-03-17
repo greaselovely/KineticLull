@@ -36,6 +36,17 @@ from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings
 from .forms import ExtDynListsForm, ProfileChangeForm
 
 
+def safe_referer_or_index(request):
+    """Return the referer URL if it's on the same host, otherwise the index."""
+    referer = request.META.get('HTTP_REFERER')
+    if referer:
+        parsed = urlparse(referer)
+        allowed_host = request.get_host().split(':')[0]
+        if parsed.hostname == allowed_host:
+            return referer
+    return reverse('app:index')
+
+
 def log_activity(request, action, target='', detail='', user=None):
     """Log a user activity to the database."""
     ActivityLog.objects.create(
@@ -195,7 +206,7 @@ def create_new_edl(request):
             edl_instance.save()
             edl_instance.groups.set(request.user.groups.all())
             log_activity(request, 'create_edl', edl_instance.friendly_name)
-            return redirect('/')
+            return redirect(safe_referer_or_index(request))
         else:
             logger.warning("EDL creation form errors: %s", form.errors)
     else:
@@ -240,7 +251,7 @@ def edit_ext_dyn_list_view(request, id=None):
                 edl_instance.acl = "\n".join(corrected_acl)
                 edl_instance.save()
                 log_activity(request, 'edit_edl', edl_instance.friendly_name)
-                return redirect("/")
+                return redirect(safe_referer_or_index(request))
         else:
             form = ExtDynListsForm(instance=edl)
     else:
@@ -248,7 +259,7 @@ def edit_ext_dyn_list_view(request, id=None):
             form = ExtDynListsForm(request.POST)
             if form.is_valid():
                 form.save()
-                return redirect("/")
+                return redirect(safe_referer_or_index(request))
         else:
             form = ExtDynListsForm()
 
@@ -289,7 +300,7 @@ def clone_ext_dyn_list_view(request, item_id):
             cloned_item.save()
             cloned_item.groups.set(request.user.groups.all())
             log_activity(request, 'clone_edl', cloned_item.friendly_name, f'Cloned from {original_item.friendly_name}')
-            return redirect('/')
+            return redirect(safe_referer_or_index(request))
         else:
             logger.warning("EDL clone form errors: %s", form.errors)
     else:
@@ -857,6 +868,8 @@ def activity_log_view(request):
 @login_required
 def activity_log_export(request):
     import csv
+    import zoneinfo
+    from django.utils.dateformat import format as date_format
     if not (request.user.is_staff or request.user.is_superuser):
         raise PermissionDenied
     logs = ActivityLog.objects.all()
@@ -869,13 +882,18 @@ def activity_log_export(request):
             models.Q(ip_address__icontains=search) |
             models.Q(user__email__icontains=search)
         )
+    app_settings = AppSettings.load()
+    tz = zoneinfo.ZoneInfo(app_settings.timezone)
+    ts_format = app_settings.timestamp_format
+
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="activity_log.csv"'
     writer = csv.writer(response)
     writer.writerow(['Timestamp', 'User', 'Action', 'Target', 'Detail', 'IP Address'])
     for log in logs:
+        local_time = log.created_at.astimezone(tz)
         writer.writerow([
-            log.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            date_format(local_time, ts_format),
             log.user.email if log.user else 'System',
             log.action,
             log.target,
