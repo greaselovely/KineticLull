@@ -36,6 +36,9 @@ from users.models import APIKey
 from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings
 from .forms import ExtDynListsForm, ProfileChangeForm
 
+from users.models import CustomUser
+from django.contrib.auth.models import Group
+
 
 def safe_referer_or_index(request):
     """Return the referer URL if it's on the same host, otherwise the index."""
@@ -1021,6 +1024,113 @@ def app_settings_view(request):
         'app_settings': app_settings,
         'timezones': available_timezones,
     })
+
+
+@login_required
+def user_list_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    users = CustomUser.objects.all().order_by('email')
+    groups = Group.objects.all().order_by('name')
+    return render(request, 'user_list.html', {'users': users, 'groups': groups})
+
+
+@login_required
+def user_create_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    groups = Group.objects.all().order_by('name')
+    if request.method == 'POST':
+        email = request.POST.get('email', '').strip()
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        password = request.POST.get('password', '')
+        is_staff = request.POST.get('is_staff') == 'on'
+        is_superuser = request.POST.get('is_superuser') == 'on'
+        selected_groups = request.POST.getlist('groups')
+
+        if not email or not password:
+            messages.error(request, 'Email and password are required.')
+            return render(request, 'user_form.html', {'groups': groups, 'mode': 'create'})
+
+        if CustomUser.objects.filter(email=email).exists():
+            messages.error(request, 'A user with that email already exists.')
+            return render(request, 'user_form.html', {'groups': groups, 'mode': 'create'})
+
+        user = CustomUser.objects.create_user(
+            email=email, password=password,
+            first_name=first_name, last_name=last_name,
+            is_staff=is_staff, is_superuser=is_superuser,
+        )
+        user.groups.set(Group.objects.filter(id__in=selected_groups))
+        log_activity(request, 'create_user', email)
+        messages.success(request, f'User {email} created.')
+        return redirect('app:user_list')
+
+    return render(request, 'user_form.html', {'groups': groups, 'mode': 'create'})
+
+
+@login_required
+def user_edit_view(request, user_id):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    edit_user = get_object_or_404(CustomUser, id=user_id)
+    groups = Group.objects.all().order_by('name')
+
+    if request.method == 'POST':
+        edit_user.first_name = request.POST.get('first_name', '').strip()
+        edit_user.last_name = request.POST.get('last_name', '').strip()
+        edit_user.is_staff = request.POST.get('is_staff') == 'on'
+        edit_user.is_active = request.POST.get('is_active') == 'on'
+        selected_groups = request.POST.getlist('groups')
+
+        # Only superusers can grant/revoke superuser
+        if request.user.is_superuser:
+            edit_user.is_superuser = request.POST.get('is_superuser') == 'on'
+
+        # Password change (optional)
+        new_password = request.POST.get('password', '').strip()
+        if new_password:
+            edit_user.set_password(new_password)
+
+        edit_user.save()
+        edit_user.groups.set(Group.objects.filter(id__in=selected_groups))
+        log_activity(request, 'edit_user', edit_user.email)
+        messages.success(request, f'User {edit_user.email} updated.')
+        return redirect('app:user_list')
+
+    return render(request, 'user_form.html', {
+        'edit_user': edit_user,
+        'groups': groups,
+        'mode': 'edit',
+    })
+
+
+@login_required
+def group_list_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    groups = Group.objects.all().order_by('name')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'create':
+            name = request.POST.get('name', '').strip()
+            if name and not Group.objects.filter(name=name).exists():
+                Group.objects.create(name=name)
+                log_activity(request, 'create_group', name)
+                messages.success(request, f'Group "{name}" created.')
+            else:
+                messages.error(request, 'Group name is required and must be unique.')
+        elif action == 'delete':
+            group_id = request.POST.get('group_id')
+            group = get_object_or_404(Group, id=group_id)
+            log_activity(request, 'delete_group', group.name)
+            group.delete()
+            messages.success(request, f'Group deleted.')
+        return redirect('app:group_list')
+
+    return render(request, 'group_list.html', {'groups': groups})
 
 
 def get_current_version():

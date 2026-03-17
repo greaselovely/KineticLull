@@ -37,6 +37,10 @@ urlpatterns = [
     path('logs/export/', views.activity_log_export, name='activity_log_export'),
     path('settings/', views.app_settings_view, name='app_settings'),
     path('integrity/', views.integrity_check_view, name='integrity_check'),
+    path('users/', views.user_list_view, name='user_list'),
+    path('users/create/', views.user_create_view, name='user_create'),
+    path('users/<int:user_id>/edit/', views.user_edit_view, name='user_edit'),
+    path('groups/', views.group_list_view, name='group_list'),
     # keep this at the bottom
     re_path(r'^(?P<auto_url>[\w.-]+)/?$', views.show_ip_fqdn, name='show_ip_fqdn'),
 ]

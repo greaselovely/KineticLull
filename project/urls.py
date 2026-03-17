@@ -4,7 +4,7 @@ from django.conf import settings
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    # path('admin/', admin.site.urls),  # Disabled — use in-app user management instead
     path('', include('app.urls')),
 ]
 

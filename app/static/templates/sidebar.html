@@ -67,6 +67,18 @@
                 {% endif %}
                 {% if user.is_superuser %}
                 <li>
+                    <a href="{% url 'app:user_list' %}" title="Users">
+                        <i class="bi bi-people"></i>
+                        <span class="nav-text">Users</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'app:group_list' %}" title="Groups">
+                        <i class="bi bi-diagram-3"></i>
+                        <span class="nav-text">Groups</span>
+                    </a>
+                </li>
+                <li>
                     <a href="{% url 'app:app_settings' %}" title="Settings">
                         <i class="bi bi-sliders"></i>
                         <span class="nav-text">Settings</span>
