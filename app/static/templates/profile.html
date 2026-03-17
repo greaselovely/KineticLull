@@ -1,18 +1,14 @@
 {% extends 'base.html' %}
 {% load static %}
-{% block title %}- {{title}}{% endblock %}
+{% block title %}- Profile{% endblock %}
 {% block content %}
-    <div class="container mt-4">
-        <h3>My Profile</h3>
-        {% if user.first_name %}
-            <h5><br>Welcome {{ user.first_name }}! {% endif %}</h5>
-        
-    </div>
-    <div class="container mt-4">
-        {% if user.is_authenticated %}
-            <a href="{% url 'app:edit_profile' %}" class="btn btn-outline-primary">Edit</a>
-        {% endif %}
-    </div>
+<div class="content-card">
+    <h3>My Profile</h3>
+    {% if user.first_name %}
+        <p class="mt-3">Welcome, {{ user.first_name }}.</p>
+    {% endif %}
+    {% if user.is_authenticated %}
+        <a href="{% url 'app:edit_profile' %}" class="btn btn-primary mt-2">Edit Profile</a>
+    {% endif %}
+</div>
 {% endblock %}
-
-

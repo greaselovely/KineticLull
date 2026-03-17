@@ -1,0 +1,57 @@
+{% load static %}
+<nav id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+        <a href="{% url 'app:index' %}" class="sidebar-brand">
+            <span class="brand-full">KineticLull</span>
+            <span class="brand-mini">KL</span>
+        </a>
+        <button id="sidebar-toggle" class="sidebar-toggle-btn" title="Toggle sidebar">
+            <i class="bi bi-list"></i>
+        </button>
+    </div>
+
+    <ul class="sidebar-nav">
+        {% if user.is_authenticated %}
+        <li>
+            <a href="{% url 'app:new_edl' %}" title="New EDL">
+                <i class="bi bi-plus-circle"></i>
+                <span class="nav-text">New EDL</span>
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'app:submission_list' %}" title="Inbox">
+                <i class="bi bi-inbox"></i>
+                <span class="nav-text">
+                    Inbox
+                    {% if message_count > 0 %}
+                    <span class="badge bg-danger rounded-pill ms-1">{{ message_count }}</span>
+                    {% endif %}
+                </span>
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'app:profile' %}" title="Profile">
+                <i class="bi bi-person"></i>
+                <span class="nav-text">Profile</span>
+            </a>
+        </li>
+        {% if user.is_superuser %}
+        <li>
+            <a href="{% url 'app:upgrade' %}" title="Upgrade">
+                <i class="bi bi-arrow-up-circle"></i>
+                <span class="nav-text">Upgrade</span>
+            </a>
+        </li>
+        {% endif %}
+        {% endif %}
+    </ul>
+
+    {% if user.is_authenticated %}
+    <div class="sidebar-footer">
+        <a href="{% url 'app:logout' %}" title="Logout">
+            <i class="bi bi-box-arrow-left"></i>
+            <span class="nav-text">Logout</span>
+        </a>
+    </div>
+    {% endif %}
+</nav>

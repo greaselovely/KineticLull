@@ -1,168 +1,78 @@
-document.addEventListener('DOMContentLoaded', (event) => {
-    document.querySelectorAll('.copy-url-btn').forEach(button => {
+document.addEventListener('DOMContentLoaded', function() {
+    // Sidebar toggle
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.getElementById('main-content');
+    const toggleBtn = document.getElementById('sidebar-toggle');
+
+    if (toggleBtn) {
+        // Restore collapsed state from localStorage
+        if (localStorage.getItem('sidebar-collapsed') === 'true') {
+            sidebar.classList.add('collapsed');
+            mainContent.classList.add('expanded');
+        }
+
+        toggleBtn.addEventListener('click', function() {
+            sidebar.classList.toggle('collapsed');
+            mainContent.classList.toggle('expanded');
+            localStorage.setItem('sidebar-collapsed', sidebar.classList.contains('collapsed'));
+        });
+    }
+
+    // Copy URL buttons
+    document.querySelectorAll('.copy-url-btn').forEach(function(button) {
         button.addEventListener('click', function() {
-            copyItem(this); // Pass the clicked button to the function
+            copyToClipboard(this);
         });
     });
 });
 
-
-function showCopyConfirmation(confirmationElement) {
-    confirmationElement.style.display = 'inline';
-    confirmationElement.style.opacity = '1';
-
-    setTimeout(() => {
-        confirmationElement.style.opacity = '0'; 
-        setTimeout(() => {
-            confirmationElement.style.display = 'none';
-        }, 600); // Duration of fade-out
-    }, 2000); // Display time before fading
-}
-
-function editItem(itemId) {
-    console.log('Edit item ID:', itemId);
-}
-
-function copyItem(clickedElement) {
+function copyToClipboard(clickedElement) {
     const urlToCopy = clickedElement.getAttribute('data-url');
-    const fullURL = urlToCopy.endsWith('/') ? urlToCopy : urlToCopy + '/'; // Ensure trailing slash
+    const fullURL = urlToCopy.endsWith('/') ? urlToCopy : urlToCopy + '/';
 
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(fullURL)
-            .then(() => {
-                console.log('URL copied:', fullURL);
-                showCopyConfirmation(clickedElement.nextElementSibling);
-            })
-            .catch((error) => {
-                console.error('Copy failed:', error);
-            });
-    } else {
-        console.error('Clipboard API not available.');
+        navigator.clipboard.writeText(fullURL).then(function() {
+            showConfirmation(clickedElement.nextElementSibling);
+        }).catch(function(error) {
+            console.error('Copy failed:', error);
+        });
     }
 }
 
-function showCopiedMessage(event) {
-    let message = document.createElement('div');
-    message.innerText = 'Copied!';
-    message.style.position = 'absolute';
-    message.style.left = (event.clientX + 20) + 'px';
-    message.style.top = (event.clientY + 20) + 'px';
-    message.style.backgroundColor = '#000';
-    message.style.color = '#fff';
-    message.style.padding = '5px 10px';
-    message.style.borderRadius = '5px';
-    message.style.fontSize = '12px';
-    message.style.fontFamily = 'Arial, sans-serif';
-    message.style.zIndex = '1000';
-    message.style.pointerEvents = 'none';
-
-    document.body.appendChild(message);
-
-    setTimeout(() => {
-        if (message.parentNode) {
-            message.parentNode.removeChild(message);
-        }
+function showConfirmation(element) {
+    if (!element) return;
+    element.style.display = 'inline';
+    element.style.opacity = '1';
+    setTimeout(function() {
+        element.style.opacity = '0';
+        setTimeout(function() {
+            element.style.display = 'none';
+        }, 600);
     }, 2000);
 }
 
-function download_edl(friendlyName, ipFqdnStr) {
-    const ipFqdnArray = ipFqdnStr.split('\r\n');
-    const textContent = ipFqdnArray.join('\n');
-    const blob = new Blob([textContent], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const filename = `${friendlyName}.txt`;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
-}
-
 function deleteRecord(itemId, event) {
     const confirmBox = document.createElement('div');
-    confirmBox.innerHTML = `
-        <p>Are you sure you want to delete this item?</p>
-        <button onclick="sendDeleteRequest(${itemId})">Yes, delete it</button>
-        <button onclick="this.parentNode.remove()">Cancel</button>
-    `;
-    confirmBox.style.position = 'absolute';
-    confirmBox.style.left = `${event.clientX}px`;
-    confirmBox.style.top = `${event.clientY}px`;
-    confirmBox.style.backgroundColor = '#fff';
-    confirmBox.style.border = '1px solid #ccc';
-    confirmBox.style.padding = '10px';
-    confirmBox.style.borderRadius = '5px';
-    confirmBox.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
     confirmBox.id = 'confirmBox';
-    document.body.appendChild(confirmBox);
-}
-
-function sendDeleteRequest(itemId) {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    fetch('delete/' + itemId + '/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken
-        },
-        body: JSON.stringify({ 'id': itemId })
-    }).then(response => {
-        if (response.ok) {
-            document.getElementById('confirmBox')?.remove();
-            location.reload();
-        }
-    });
-}
-
-function deleteRecord(itemId, event) {
-    const confirmBox = document.createElement('div');
-    confirmBox.innerHTML = `
-        <p>Are you sure?</p>
-        <button id="confirmYes" onclick="sendDeleteRequest(${itemId})">Yes</button>
-        <button id="confirmNo" onclick="this.parentNode.remove()">No</button>
-    `;
+    confirmBox.className = 'confirm-dialog';
+    confirmBox.innerHTML =
+        '<p style="margin-bottom:8px">Are you sure?</p>' +
+        '<button class="btn btn-sm btn-outline-danger me-1" onclick="sendDeleteRequest(' + itemId + ')">Yes</button>' +
+        '<button class="btn btn-sm btn-outline-secondary" onclick="this.parentNode.remove()">No</button>';
     confirmBox.style.position = 'absolute';
-    confirmBox.style.left = `${event.clientX}px`;
-    confirmBox.style.top = `${event.clientY}px`;
+    confirmBox.style.left = event.clientX + 'px';
+    confirmBox.style.top = event.clientY + 'px';
     confirmBox.style.backgroundColor = '#fff';
-    confirmBox.style.border = '1px solid #ccc';
-    confirmBox.style.padding = '10px';
-    confirmBox.style.borderRadius = '5px';
-    confirmBox.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+    confirmBox.style.border = '1px solid #e0e2e8';
+    confirmBox.style.padding = '12px';
+    confirmBox.style.borderRadius = '8px';
+    confirmBox.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
     confirmBox.style.textAlign = 'center';
-    confirmBox.id = 'confirmBox';
+    confirmBox.style.zIndex = '9999';
 
-    // Styling for the buttons
-    const buttons = confirmBox.querySelectorAll('button');
-    buttons.forEach(button => {
-        button.style.border = 'none';
-        button.style.padding = '1px 1px';
-        button.style.margin = '1px';
-        button.style.borderRadius = '2px';
-        button.style.cursor = 'pointer';
-        button.style.backgroundColor = '#f0f0f0';
-        button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-        button.addEventListener('mouseover', () => button.style.backgroundColor = '#e0e0e0');
-        button.addEventListener('mouseout', () => button.style.backgroundColor = '#f0f0f0');
-    });
-
-    // Specific styling for Yes button
-    const yesButton = confirmBox.querySelector('#confirmYes');
-    yesButton.style.backgroundColor = '#fff';
-    yesButton.style.color = '#000';
-    yesButton.addEventListener('mouseover', () => yesButton.style.backgroundColor = '#000');
-    yesButton.addEventListener('mouseover', () => yesButton.style.color = '#fff');
-    yesButton.addEventListener('mouseout', () => yesButton.style.backgroundColor = '#fff');
-    yesButton.addEventListener('mouseout', () => yesButton.style.color = '#000');
-
-    // Specific styling for No button
-    const noButton = confirmBox.querySelector('#confirmNo');
-    noButton.style.backgroundColor = '#fff';
-    noButton.style.color = '#000';
-    noButton.addEventListener('mouseover', () => noButton.style.backgroundColor = '#000');
-    noButton.addEventListener('mouseover', () => noButton.style.color = '#fff');
-    noButton.addEventListener('mouseout', () => noButton.style.backgroundColor = '#fff');
-    noButton.addEventListener('mouseout', () => noButton.style.color = '#000');
+    // Remove existing confirm box
+    var existing = document.getElementById('confirmBox');
+    if (existing) existing.remove();
 
     document.body.appendChild(confirmBox);
 }
@@ -176,22 +86,13 @@ function sendDeleteRequest(itemId) {
             'X-CSRFToken': csrfToken
         },
         body: JSON.stringify({ 'id': itemId })
-    }).then(response => {
-        console.log('Server response:', response);
+    }).then(function(response) {
         if (response.ok) {
-            document.getElementById('confirmBox')?.remove();
-            reloadPage();
-        } else {
-            console.log("Something is b0rk3n")
-            // reloadPage();
+            var box = document.getElementById('confirmBox');
+            if (box) box.remove();
+            window.location.reload(true);
         }
-    }).catch(error => {
-        // Handle network errors
+    }).catch(function(error) {
         console.error('Network error:', error);
-        alert('Network error, please try again.');
     });
-}
-
-function reloadPage() {
-    window.location.reload(true);
 }

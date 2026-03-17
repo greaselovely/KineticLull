@@ -751,19 +751,6 @@ def submission_list(request):
         submission.fqdn_list = submission.fqdn_list.split('\r\n')
     return render(request, 'submission_list.html', {'submissions' : submissions},)
 
-@login_required
-def inbox_count(request):
-    # Filter InboxEntry instances by the user
-    message_count = InboxEntry.objects.filter(submitted_by=request.user).count()
-
-    # Pass the count to your template
-    context = {
-        'message_count': message_count,
-        # Include other context variables here as needed
-    }
-    return render(request, 'navbar.html', context)
-
-
 def get_current_version():
     version_file = Path(settings.BASE_DIR) / 'VERSION'
     try:

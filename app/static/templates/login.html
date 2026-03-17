@@ -1,20 +1,29 @@
-
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}- Login{% endblock %}
 {% block content %}
 
-{% if form.errors %}
-  <p>Your username and password didn't match. Please try again.</p>
-{% endif %}
+<div class="login-container">
+    <div class="content-card">
+        <h3 class="mb-4">Login</h3>
 
-<form style="form-control mb-3" method="post" action="{% url 'app:login' %}">
-  {% csrf_token %}
-  Email Address <br>
-  {{form.username}}<br>
-  Password <br>
-  {{form.password}}<br><br>
-  <button type="submit" class="btn btn-outline-primary">Login</button>
-</form>
+        {% if form.errors %}
+        <div class="alert alert-danger">Your email and password didn't match. Please try again.</div>
+        {% endif %}
+
+        <form method="post" action="{% url 'app:login' %}">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="id_username" class="form-label">Email Address</label>
+                <input type="text" name="username" id="id_username" class="form-control" autofocus required>
+            </div>
+            <div class="mb-3">
+                <label for="id_password" class="form-label">Password</label>
+                <input type="password" name="password" id="id_password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Login</button>
+        </form>
+    </div>
+</div>
 
 {% endblock %}
