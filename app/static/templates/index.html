@@ -23,7 +23,7 @@
                     {% for ip in item.ip_fqdn %}
                         {% if forloop.counter == 3 %}
                             {% if item.display_ellipsis %}
-                                {{ ip }}<br><a href="{% url 'app:item_detail' item_id=item.id %}" target="_blank">more</a>
+                                {{ ip }}<br><a href="{% url 'app:item_detail' item_id=item.id %}">more</a>
                             {% else %}
                                 {{ ip }}
                             {% endif %}
