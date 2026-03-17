@@ -2,6 +2,7 @@ import os
 import random
 import string
 from pathlib import Path
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 def clear():
@@ -42,7 +43,8 @@ DEBUG = os.getenv('DEBUG') == 'True'
 # DEBUG = True
 
 
-ALLOWED_HOSTS = ['*']
+_kl_host = urlparse(KINETICLULL_URL).hostname if KINETICLULL_URL else None
+ALLOWED_HOSTS = [_kl_host, 'localhost', '127.0.0.1'] if _kl_host else ['localhost', '127.0.0.1']
 
 INSTALLED_APPS = [
     'django.contrib.admin',

@@ -7,6 +7,7 @@ from django.core.paginator import Paginator
 from django.http import HttpResponseRedirect
 from django.utils.crypto import get_random_string
 from django.http import HttpResponse, JsonResponse
+from django.db import models
 from django.core.exceptions import PermissionDenied
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -15,17 +16,45 @@ from django.views.decorators.http import require_http_methods
 from django.shortcuts import render, redirect, get_object_or_404
 
 import os
+import re
+import sys
 import json
+import signal
 import secrets
 import hashlib
+import logging
 import ipaddress
+import subprocess
 from datetime import datetime, timezone
+from urllib.parse import urlparse
+from pathlib import Path
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
 from .models import InboxEntry, ExtDynLists
 # from .forms import ExtDynListsForm, CustomUserChangeForm, ScriptForm
 from .forms import ExtDynListsForm, CustomUserChangeForm
+
+
+def get_visible_edls(user):
+    """Return EDLs visible to the user based on group membership. Superusers see all."""
+    if user.is_superuser:
+        return ExtDynLists.objects.all()
+    user_groups = user.groups.all()
+    return ExtDynLists.objects.filter(
+        models.Q(groups__in=user_groups) | models.Q(groups__isnull=True)
+    ).distinct()
+
+
+def get_edl_for_user(user, **kwargs):
+    """Get a single EDL if the user has access, or raise 404."""
+    edl = get_object_or_404(ExtDynLists, **kwargs)
+    if user.is_superuser:
+        return edl
+    user_groups = user.groups.all()
+    if edl.groups.exists() and not edl.groups.filter(id__in=user_groups).exists():
+        raise PermissionDenied
+    return edl
 
 
 @login_required
@@ -48,7 +77,7 @@ def index_view(request):
                 ExtDynLists items and their processed data.
     """
 
-    items = ExtDynLists.objects.all()
+    items = get_visible_edls(request.user)
     paginator = Paginator(items, 5)
     base_url = settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
     # print(base_url)
@@ -79,7 +108,7 @@ def item_detail_view(request, item_id: int):
     Returns:
     - HttpResponse object with the rendered page displaying the details of the specified EDL item.
     """
-    item = get_object_or_404(ExtDynLists, id=item_id)
+    item = get_edl_for_user(request.user, id=item_id)
     item.ip_fqdn = item.ip_fqdn.split('\r\n')
     context = {'item': item, 'friendly_name': item.friendly_name }
     return render(request, 'item_detail.html', context)
@@ -162,6 +191,7 @@ def create_new_edl(request):
             edl_instance.ip_fqdn = "\r\n".join([fqdn.replace("http://", "").replace("https://", "") for fqdn in edl_instance.ip_fqdn.split('\r\n')])
             edl_instance.acl = "\n".join(corrected_acl)
             edl_instance.save()
+            edl_instance.groups.set(request.user.groups.all())
             return redirect('/')
         else:
             print(form.errors)
@@ -193,7 +223,7 @@ def edit_ext_dyn_list_view(request, id=None):
                 renders the 'edit_edl.html' template with the form.
     """
     if id:
-        edl = get_object_or_404(ExtDynLists, id=id)
+        edl = get_edl_for_user(request.user, id=id)
         if request.method == 'POST':
             form = ExtDynListsForm(request.POST, instance=edl)
             if form.is_valid():
@@ -244,8 +274,8 @@ def clone_ext_dyn_list_view(request, item_id):
                 the 'edit_edl.html' template with the form.
     """
 
-    original_item = get_object_or_404(ExtDynLists, id=item_id)
-    
+    original_item = get_edl_for_user(request.user, id=item_id)
+
     if request.method == 'POST':
         form = ExtDynListsForm(request.POST)
         if form.is_valid():
@@ -253,6 +283,7 @@ def clone_ext_dyn_list_view(request, item_id):
             cloned_item.id = None
             cloned_item.auto_url = generate_hash()
             cloned_item.save()
+            cloned_item.groups.set(request.user.groups.all())
             return redirect('/')
         else:
             print(form.errors)
@@ -289,10 +320,11 @@ def download_ip_fqdn(request, item_id):
                 'ip_fqdn' data and set up to prompt a file download.
     """
 
-    item = get_object_or_404(ExtDynLists, id=item_id)
+    item = get_edl_for_user(request.user, id=item_id)
     text_content = item.ip_fqdn
     response = HttpResponse(text_content, content_type='text/plain')
-    response['Content-Disposition'] = f'attachment; filename="{item.friendly_name}.txt"'
+    safe_name = re.sub(r'[^\w\s\-.]', '', item.friendly_name).strip() or 'download'
+    response['Content-Disposition'] = f'attachment; filename="{safe_name}.txt"'
     return response
 
 @login_required
@@ -313,16 +345,17 @@ def delete_item(request, item_id):
     Returns:
     - HttpResponseRedirect: Redirects to the referring page or to a fallback URL after the item is deleted.
     """
-    item = get_object_or_404(ExtDynLists, id=item_id)
+    item = get_edl_for_user(request.user, id=item_id)
     item.delete()
 
-    # Attempt to redirect back to the original page using 'HTTP_REFERER'
+    # Redirect back to the referring page if it's on the same host
     referer_url = request.META.get('HTTP_REFERER')
     if referer_url:
-        return HttpResponseRedirect(referer_url)
-    else:
-        # Fallback URL if 'HTTP_REFERER' is not available
-        return redirect(reverse('app:index'))  # Adjust 'app:submission_list' to your named URL for the list view
+        parsed = urlparse(referer_url)
+        allowed_host = request.get_host().split(':')[0]
+        if parsed.hostname == allowed_host:
+            return HttpResponseRedirect(referer_url)
+    return redirect(reverse('app:index'))
 
 def check_acl(ip, networks: list):
     """
@@ -574,7 +607,7 @@ def submit_fqdn_list(request):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         # Catch-all for any other error, ensuring an HttpResponse is always returned
-        return JsonResponse({'error': 'An error occurred', 'details': str(e)}, status=500)
+        return JsonResponse({'error': 'An error occurred'}, status=500)
 
 @method_decorator(csrf_exempt, name='dispatch')
 class SubmitFQDNView(View):
@@ -605,7 +638,7 @@ class SubmitFQDNView(View):
         fqdn_list = [domain.replace("http://", "").replace("https://", "") for domain in fqdn_list]
         
         if not fqdn_list or len(fqdn_list) > 50:
-            return JsonResponse({'error': f'Invalid FQDN list {data} {type(data)}'}, status=400)
+            return JsonResponse({'error': 'Invalid FQDN list'}, status=400)
         
         InboxEntry.objects.create(user_email=user.email, fqdn_list="\r\n".join(fqdn_list))
 
@@ -697,7 +730,7 @@ def update_edl_fqdn(request):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': 'An error occurred', 'details': str(e)}, status=500)
+        return JsonResponse({'error': 'An error occurred'}, status=500)
 
 @login_required
 def review_submission(request, submission_id: int):
@@ -727,6 +760,7 @@ def review_submission(request, submission_id: int):
             new_edl.auto_url = generate_hash()
             new_edl.fqdn_list = submission.fqdn_list
             new_edl.save()
+            new_edl.groups.set(request.user.groups.all())
             submission.delete()
             return redirect('app:submission_list')
     else:
@@ -798,6 +832,103 @@ def inbox_count(request):
     }
     return render(request, 'navbar.html', context)
 
+
+
+logger = logging.getLogger(__name__)
+
+
+def get_current_version():
+    version_file = Path(settings.BASE_DIR) / 'VERSION'
+    try:
+        return version_file.read_text().strip()
+    except FileNotFoundError:
+        return 'unknown'
+
+
+@login_required
+def upgrade_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    current_version = get_current_version()
+    context = {
+        'current_version': current_version,
+        'title': 'System Upgrade',
+    }
+
+    if request.method == 'POST':
+        base_dir = str(settings.BASE_DIR)
+        python = sys.executable
+        manage_py = os.path.join(base_dir, 'manage.py')
+        steps = []
+
+        # Step 1: git pull
+        result = subprocess.run(
+            ['git', 'pull'],
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+        )
+        steps.append({
+            'name': 'git pull',
+            'success': result.returncode == 0,
+            'output': result.stdout.strip() or result.stderr.strip(),
+        })
+
+        if result.returncode != 0:
+            context['steps'] = steps
+            context['error'] = 'git pull failed. Upgrade aborted.'
+            return render(request, 'upgrade.html', context)
+
+        # Re-read version after pull
+        context['new_version'] = get_current_version()
+
+        # Step 2: migrate
+        result = subprocess.run(
+            [python, manage_py, 'migrate', '--noinput'],
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+        )
+        steps.append({
+            'name': 'migrate',
+            'success': result.returncode == 0,
+            'output': result.stdout.strip() or result.stderr.strip(),
+        })
+
+        # Step 3: collectstatic
+        result = subprocess.run(
+            [python, manage_py, 'collectstatic', '--noinput'],
+            cwd=base_dir,
+            capture_output=True,
+            text=True,
+        )
+        steps.append({
+            'name': 'collectstatic',
+            'success': result.returncode == 0,
+            'output': result.stdout.strip() or result.stderr.strip(),
+        })
+
+        # Step 4: graceful reload via SIGHUP to Gunicorn master
+        try:
+            os.kill(os.getppid(), signal.SIGHUP)
+            steps.append({
+                'name': 'reload',
+                'success': True,
+                'output': 'Sent SIGHUP to Gunicorn master. Workers are reloading.',
+            })
+        except (ProcessLookupError, PermissionError) as e:
+            steps.append({
+                'name': 'reload',
+                'success': False,
+                'output': f'Could not signal Gunicorn master. You may need to restart the service manually.',
+            })
+
+        logger.info(f"Upgrade performed by {request.user.email}: {' -> '.join(s['name'] + ('(ok)' if s['success'] else '(fail)') for s in steps)}")
+        context['steps'] = steps
+        return render(request, 'upgrade.html', context)
+
+    return render(request, 'upgrade.html', context)
 
 
 # @login_required

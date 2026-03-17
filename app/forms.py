@@ -9,7 +9,7 @@ class ExtDynListsForm(forms.ModelForm):
 
     class Meta:
         model = ExtDynLists
-        exclude = ('auto_url',)
+        exclude = ('auto_url', 'groups',)
         widgets = {
             'friendly_name' : forms.TextInput(attrs={'class' : 'form-control mb-3', 
                                               'id' : 'friendlyNameInput', 
