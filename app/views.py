@@ -93,17 +93,20 @@ def send_syslog(app_settings, user_email, action, target, detail, ip_address):
         return
     try:
         import socket
-        msg = f'KineticLull: user="{user_email}" action="{action}" target="{target}" detail="{detail}" src={ip_address}'
-        # CEF-light format, truncate to max syslog message size
-        msg = msg[:1024]
+        hostname = socket.gethostname()
+        timestamp = datetime.now(timezone.utc).strftime('%b %d %H:%M:%S')
+        body = f'user="{user_email}" action="{action}" target="{target}" detail="{detail}" src={ip_address}'
+        # RFC 3164: <priority>TIMESTAMP HOSTNAME APP: MSG
+        syslog_msg = f'<14>{timestamp} {hostname} KineticLull: {body}'
+        syslog_msg = syslog_msg[:1024]
         sock_type = socket.SOCK_DGRAM if app_settings.syslog_protocol == 'udp' else socket.SOCK_STREAM
         sock = socket.socket(socket.AF_INET, sock_type)
         sock.settimeout(2)
         if app_settings.syslog_protocol == 'tcp':
             sock.connect((app_settings.syslog_host, app_settings.syslog_port))
-            sock.send(f'<14>{msg}\n'.encode())
+            sock.send((syslog_msg + '\n').encode())
         else:
-            sock.sendto(f'<14>{msg}'.encode(), (app_settings.syslog_host, app_settings.syslog_port))
+            sock.sendto(syslog_msg.encode(), (app_settings.syslog_host, app_settings.syslog_port))
         sock.close()
     except Exception:
         pass  # Syslog failure should never break the app
