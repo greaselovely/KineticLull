@@ -224,9 +224,13 @@
     min-height: calc(100vh - 72px);
 }
 
+.edl-card > h3 {
+    flex-shrink: 0;
+}
+
 .edl-card .table-responsive,
 .edl-card > table {
-    flex: 1;
+    flex: 0 1 auto;
 }
 
 .edl-footer {

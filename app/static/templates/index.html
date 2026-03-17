@@ -44,7 +44,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="4" class="text-muted">No EDLs in database. Create one!</td>
+                <td colspan="4" class="text-muted">{% if favorites_view %}No favorites yet. Star an EDL from the home page.{% else %}No EDLs in database. Create one!{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>
