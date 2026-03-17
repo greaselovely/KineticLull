@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.contrib.auth.models import Group
 
 class ExtDynLists(models.Model):
     friendly_name = models.CharField(max_length=255, verbose_name='EDL Name')
@@ -7,6 +8,7 @@ class ExtDynLists(models.Model):
     ip_fqdn = models.TextField(verbose_name='IP/FQDN')
     acl = models.TextField(verbose_name='ACL')
     policy_reference = models.TextField(verbose_name='Notes')
+    groups = models.ManyToManyField(Group, blank=True, verbose_name='Groups')
     # use_script = models.ForeignKey('Script', on_delete=models.CASCADE, verbose_name='Script', null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True)
 

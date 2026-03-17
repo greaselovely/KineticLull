@@ -30,6 +30,11 @@
                 <li class="nav-item">
                     <a class="nav-link" href="{% url 'app:profile' %}">Profile</a>
                 </li>
+                {% if user.is_superuser %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'app:upgrade' %}">Upgrade</a>
+                </li>
+                {% endif %}
                 <li class="nav-item">
                     <a class="nav-link" href="{% url 'app:logout' %}">Logout</a>
                 </li>
