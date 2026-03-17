@@ -241,6 +241,7 @@ def edit_ext_dyn_list_view(request, id=None):
         if request.method == 'POST':
             form = ExtDynListsForm(request.POST, instance=edl)
             if form.is_valid():
+                changed_fields = form.changed_data
                 # Apply corrections to the acl field
                 edl_instance = form.save(commit=False)
 
@@ -250,7 +251,8 @@ def edit_ext_dyn_list_view(request, id=None):
                 edl_instance.ip_fqdn = "\r\n".join([fqdn.replace("http://", "").replace("https://", "") for fqdn in edl_instance.ip_fqdn.split('\r\n')])
                 edl_instance.acl = "\n".join(corrected_acl)
                 edl_instance.save()
-                log_activity(request, 'edit_edl', edl_instance.friendly_name)
+                detail = f'Changed: {", ".join(changed_fields)}' if changed_fields else 'No changes'
+                log_activity(request, 'edit_edl', edl_instance.friendly_name, detail)
                 return redirect(safe_referer_or_index(request))
         else:
             form = ExtDynListsForm(instance=edl)
