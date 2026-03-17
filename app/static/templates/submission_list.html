@@ -2,31 +2,78 @@
 {% load static %}
 {% block title %}API Submissions{% endblock %}
 {% block content %}
-<div class="content-card">
+<div class="content-card edl-card">
     <h3>API Submissions</h3>
-    {% if submissions %}
     <table class="table table-hover mt-3">
         <thead>
             <tr>
-                <th>Edit</th>
-                <th>IP / FQDN</th>
-                <th>Submitted By</th>
-                <th>Date (UTC)</th>
+                <th style="width: 5%;">Edit</th>
+                <th style="width: 45%;">IP / FQDN</th>
+                <th style="width: 25%;">Submitted By</th>
+                <th style="width: 25%;">Date (UTC)</th>
             </tr>
         </thead>
-        <tbody>
-            {% for submission in submissions %}
+        <tbody class="align-top">
+            {% for submission in page_obj %}
             <tr>
                 <td><a href="{% url 'app:review_submission' submission.id %}"><img class="icon action-items" src="{% static 'images/edit.svg' %}" alt="Edit"></a></td>
-                <td>{% for ip_fq in submission.fqdn_list %} {{ ip_fq }}<br> {% endfor %}</td>
+                <td class="cell-wrap">
+                    {% for ip_fq in submission.fqdn_display %}
+                        {{ ip_fq }}<br>
+                    {% endfor %}
+                    {% if submission.display_ellipsis %}
+                        <a href="{% url 'app:review_submission' submission.id %}">more</a>
+                    {% endif %}
+                </td>
                 <td>{{ submission.submitted_by.email|default:"Unknown" }}</td>
                 <td>{{ submission.submitted_at }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" class="text-muted">No submissions.</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
-    {% else %}
-    <p class="text-muted mt-3">No submissions.</p>
+
+    {% if page_obj.paginator.count > 0 %}
+    <div class="edl-footer d-flex justify-content-between align-items-center">
+        <div>
+            {% if page_obj.paginator.num_pages > 1 %}
+            <nav>
+                <ul class="pagination mb-0">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?page=1&per_page={{ per_page }}">&laquo;</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&per_page={{ per_page }}">&lsaquo;</a></li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+                        <li class="page-item disabled"><span class="page-link">&lsaquo;</span></li>
+                    {% endif %}
+
+                    <li class="page-item disabled">
+                        <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                    </li>
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&per_page={{ per_page }}">&rsaquo;</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&per_page={{ per_page }}">&raquo;</a></li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">&rsaquo;</span></li>
+                        <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+        <div>
+            <select class="form-select form-select-sm" style="width: auto;" onchange="window.location.href='?per_page=' + this.value">
+                <option value="5" {% if per_page == 5 %}selected{% endif %}>5 per page</option>
+                <option value="10" {% if per_page == 10 %}selected{% endif %}>10 per page</option>
+                <option value="25" {% if per_page == 25 %}selected{% endif %}>25 per page</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50 per page</option>
+            </select>
+        </div>
+    </div>
     {% endif %}
 </div>
 {% endblock %}

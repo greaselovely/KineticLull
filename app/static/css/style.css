@@ -209,10 +209,18 @@
 }
 
 .table td {
-    vertical-align: middle;
+    vertical-align: top;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.table tbody.align-top td {
+    vertical-align: top;
+}
+
+td.cell-wrap {
+    white-space: normal;
 }
 
 /* Column resize handle */

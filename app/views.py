@@ -752,9 +752,23 @@ def submission_list(request):
     - HttpResponse object with the rendered page displaying the list of submissions.
     """
     submissions = InboxEntry.objects.all()
-    for submission in submissions:
-        submission.fqdn_list = submission.fqdn_list.split('\r\n')
-    return render(request, 'submission_list.html', {'submissions' : submissions},)
+    per_page = request.GET.get("per_page", "5")
+    try:
+        per_page = max(1, min(int(per_page), 100))
+    except (ValueError, TypeError):
+        per_page = 5
+    paginator = Paginator(submissions, per_page)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+    for submission in page_obj:
+        fqdn_items = submission.fqdn_list.split('\r\n')
+        submission.fqdn_display = fqdn_items[:5]
+        submission.fqdn_count = len(fqdn_items)
+        submission.display_ellipsis = submission.fqdn_count > 5
+    return render(request, 'submission_list.html', {
+        'page_obj': page_obj,
+        'per_page': per_page,
+    })
 
 def get_current_version():
     version_file = Path(settings.BASE_DIR) / 'VERSION'
