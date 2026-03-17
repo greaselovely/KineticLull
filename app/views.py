@@ -32,9 +32,19 @@ logger = logging.getLogger(__name__)
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
-from .models import InboxEntry, ExtDynLists
-# from .forms import ExtDynListsForm, ProfileChangeForm, ScriptForm
+from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog
 from .forms import ExtDynListsForm, ProfileChangeForm
+
+
+def log_activity(request, action, target='', detail='', user=None):
+    """Log a user activity to the database."""
+    ActivityLog.objects.create(
+        user=user or (request.user if request.user.is_authenticated else None),
+        action=action,
+        target=target,
+        detail=detail,
+        ip_address=request.META.get('REMOTE_ADDR'),
+    )
 
 
 def get_visible_edls(user):
@@ -92,6 +102,9 @@ def index_view(request):
         item.ip_fqdn_count = len(item.ip_fqdn)
         item.display_ellipsis = item.ip_fqdn_count >= 4
         item.ip_fqdn = item.ip_fqdn[:3]
+    favorite_ids = set(Favorite.objects.filter(user=request.user).values_list('edl_id', flat=True))
+    for item in items:
+        item.is_favorited = item.id in favorite_ids
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
     context = {'items': items, 'page_obj': page_obj, 'per_page': per_page}
@@ -143,8 +156,10 @@ def show_ip_fqdn(request, auto_url):
     acl_list = edl.acl.split('\n')
     user_ip = request.META.get('REMOTE_ADDR')
     if '*' in acl_list or check_acl(user_ip, acl_list):
+        log_activity(request, 'edl_access', edl.friendly_name, f'Served to {user_ip}')
         return HttpResponse(edl.ip_fqdn, content_type="text/plain")
     else:
+        log_activity(request, 'edl_denied', edl.friendly_name, f'Denied {user_ip}')
         raise PermissionDenied
 
 @login_required
@@ -178,6 +193,7 @@ def create_new_edl(request):
             edl_instance.acl = "\n".join(corrected_acl)
             edl_instance.save()
             edl_instance.groups.set(request.user.groups.all())
+            log_activity(request, 'create_edl', edl_instance.friendly_name)
             return redirect('/')
         else:
             logger.warning("EDL creation form errors: %s", form.errors)
@@ -222,6 +238,7 @@ def edit_ext_dyn_list_view(request, id=None):
                 edl_instance.ip_fqdn = "\r\n".join([fqdn.replace("http://", "").replace("https://", "") for fqdn in edl_instance.ip_fqdn.split('\r\n')])
                 edl_instance.acl = "\n".join(corrected_acl)
                 edl_instance.save()
+                log_activity(request, 'edit_edl', edl_instance.friendly_name)
                 return redirect("/")
         else:
             form = ExtDynListsForm(instance=edl)
@@ -270,6 +287,7 @@ def clone_ext_dyn_list_view(request, item_id):
             cloned_item.auto_url = ''
             cloned_item.save()
             cloned_item.groups.set(request.user.groups.all())
+            log_activity(request, 'clone_edl', cloned_item.friendly_name, f'Cloned from {original_item.friendly_name}')
             return redirect('/')
         else:
             logger.warning("EDL clone form errors: %s", form.errors)
@@ -332,6 +350,7 @@ def delete_item(request, item_id):
     - HttpResponseRedirect: Redirects to the referring page or to a fallback URL after the item is deleted.
     """
     item = get_edl_for_user(request.user, id=item_id)
+    log_activity(request, 'delete_edl', item.friendly_name)
     item.delete()
 
     # Redirect back to the referring page if it's on the same host
@@ -580,7 +599,7 @@ class SubmitFQDNView(View):
             return JsonResponse({'error': 'Invalid FQDN list'}, status=400)
         
         InboxEntry.objects.create(submitted_by=user, fqdn_list="\r\n".join(fqdn_list))
-
+        log_activity(request, 'api_submit', f'{len(fqdn_list)} FQDNs', user=user)
         return JsonResponse({'message': 'Submission successful'}, status=201)
 
 @csrf_exempt
@@ -665,6 +684,7 @@ def update_edl_fqdn(request):
             return JsonResponse({'error': 'Invalid Command'}, status=400)
 
         edl.save()
+        log_activity(request, f'api_{command}', edl.friendly_name, f'{len(fqdn_list)} FQDNs')
         return JsonResponse({'message': 'Command Successful'}, status=200)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
@@ -770,6 +790,56 @@ def submission_list(request):
         'per_page': per_page,
     })
 
+@login_required
+@require_http_methods(["POST"])
+def toggle_favorite(request, item_id):
+    edl = get_edl_for_user(request.user, id=item_id)
+    favorite, created = Favorite.objects.get_or_create(user=request.user, edl=edl)
+    if not created:
+        favorite.delete()
+    return JsonResponse({'favorited': created})
+
+
+@login_required
+def favorites_view(request):
+    favorite_edl_ids = Favorite.objects.filter(user=request.user).values_list('edl_id', flat=True)
+    items = get_visible_edls(request.user).filter(id__in=favorite_edl_ids)
+    per_page = request.GET.get("per_page", "5")
+    try:
+        per_page = max(1, min(int(per_page), 100))
+    except (ValueError, TypeError):
+        per_page = 5
+    paginator = Paginator(items, per_page)
+    base_url = settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
+    for item in items:
+        item.full_url = base_url + ('/' if item.auto_url[0] != '/' else '') + item.auto_url
+        item.ip_fqdn = item.ip_fqdn.split('\r\n')
+        item.ip_fqdn_count = len(item.ip_fqdn)
+        item.display_ellipsis = item.ip_fqdn_count >= 4
+        item.ip_fqdn = item.ip_fqdn[:3]
+        item.is_favorited = True
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+    context = {'items': items, 'page_obj': page_obj, 'per_page': per_page, 'favorites_view': True}
+    return render(request, 'index.html', context)
+
+
+@login_required
+def activity_log_view(request):
+    if not (request.user.is_staff or request.user.is_superuser):
+        raise PermissionDenied
+    logs = ActivityLog.objects.all()
+    per_page = request.GET.get("per_page", "25")
+    try:
+        per_page = max(1, min(int(per_page), 100))
+    except (ValueError, TypeError):
+        per_page = 25
+    paginator = Paginator(logs, per_page)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+    return render(request, 'activity_log.html', {'page_obj': page_obj, 'per_page': per_page})
+
+
 def get_current_version():
     version_file = Path(settings.BASE_DIR) / 'VERSION'
     try:
@@ -834,7 +904,17 @@ def upgrade_view(request):
             logger.error(f"Upgrade git pull failed for {request.user.email}: {result.stderr.strip()}")
             return redirect('app:upgrade')
 
-        # Step 2: migrate
+        # Step 2: pip install
+        pip = os.path.join(os.path.dirname(python), 'pip')
+        result = subprocess.run(
+            [pip, 'install', '-r', os.path.join(base_dir, 'requirements.txt')],
+            cwd=base_dir, capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            success = False
+            logger.error(f"Upgrade pip install failed for {request.user.email}: {result.stderr.strip()}")
+
+        # Step 3: migrate
         result = subprocess.run(
             [python, manage_py, 'migrate', '--noinput'], cwd=base_dir, capture_output=True, text=True,
         )
@@ -842,7 +922,7 @@ def upgrade_view(request):
             success = False
             logger.error(f"Upgrade migrate failed for {request.user.email}: {result.stderr.strip()}")
 
-        # Step 3: collectstatic
+        # Step 4: collectstatic
         result = subprocess.run(
             [python, manage_py, 'collectstatic', '--noinput'], cwd=base_dir, capture_output=True, text=True,
         )
@@ -850,7 +930,7 @@ def upgrade_view(request):
             success = False
             logger.error(f"Upgrade collectstatic failed for {request.user.email}: {result.stderr.strip()}")
 
-        # Step 4: graceful reload via SIGHUP to Gunicorn master
+        # Step 5: graceful reload via SIGHUP to Gunicorn master
         try:
             os.kill(os.getppid(), signal.SIGHUP)
         except (ProcessLookupError, PermissionError):

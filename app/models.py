@@ -34,6 +34,36 @@ class ExtDynLists(models.Model):
     #         print(f"Script for {self.friendly_name} is not approved or found.")
 
 
+class Favorite(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='favorites')
+    edl = models.ForeignKey(ExtDynLists, on_delete=models.CASCADE, related_name='favorited_by')
+
+    class Meta:
+        unique_together = ('user', 'edl')
+        verbose_name = "Favorite"
+        verbose_name_plural = "Favorites"
+
+    def __str__(self):
+        return f"{self.user.email} -> {self.edl.friendly_name}"
+
+
+class ActivityLog(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    action = models.CharField(max_length=50)
+    target = models.CharField(max_length=255, blank=True)
+    detail = models.TextField(blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Activity Log"
+        verbose_name_plural = "Activity Logs"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.created_at} {self.user} {self.action} {self.target}"
+
+
 class InboxEntry(models.Model):
     submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='Submitted By', null=True)
     fqdn_list = models.TextField(verbose_name='IP/FQDN')

@@ -4,6 +4,7 @@
 {% block content %}
 
 <div class="content-card edl-card">
+    <h3>{% if favorites_view %}Favorites{% else %}EDLs{% endif %}</h3>
     <table id="edl-table" class="table table-hover table-resizable">
         <thead>
             <tr>
@@ -32,6 +33,7 @@
                     {% endfor %}
                 </td>
                 <td>
+                    <i class="bi {% if item.is_favorited %}bi-star-fill text-warning{% else %}bi-star{% endif %} action-items favorite-btn" data-id="{{ item.id }}" title="Favorite" style="cursor:pointer;"></i>
                     <a href="{% url 'app:edit' id=item.id %}" title="Edit"><img class="icon action-items" src="{% static 'images/edit.svg' %}" alt="Edit"></a>
                     <a href="{% url 'app:clone' item.id %}" title="Clone"><img class="icon action-items" src="{% static 'images/clone.svg' %}" alt="Clone"></a>
                     <a href="{% url 'app:download_ip_fqdn' item.id %}" title="Download"><img class="icon action-items" src="{% static 'images/download.svg' %}" alt="Download"></a>

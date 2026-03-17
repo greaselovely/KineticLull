@@ -19,6 +19,12 @@
             </a>
         </li>
         <li>
+            <a href="{% url 'app:favorites' %}" title="Favorites">
+                <i class="bi bi-star"></i>
+                <span class="nav-text">Favorites</span>
+            </a>
+        </li>
+        <li>
             <a href="{% url 'app:submission_list' %}" title="Inbox">
                 <i class="bi bi-inbox"></i>
                 <span class="nav-text">
@@ -29,20 +35,40 @@
                 </span>
             </a>
         </li>
-        <li>
-            <a href="{% url 'app:profile' %}" title="Profile">
-                <i class="bi bi-person"></i>
-                <span class="nav-text">Profile</span>
+
+        <li class="sidebar-divider"></li>
+
+        <li class="sidebar-submenu">
+            <a href="#" id="admin-menu-toggle" class="submenu-toggle" title="Admin">
+                <i class="bi bi-gear"></i>
+                <span class="nav-text">Admin</span>
+                <i class="bi bi-chevron-down submenu-arrow nav-text"></i>
             </a>
+            <ul id="admin-submenu" class="submenu">
+                <li>
+                    <a href="{% url 'app:profile' %}" title="Profile">
+                        <i class="bi bi-person"></i>
+                        <span class="nav-text">Profile</span>
+                    </a>
+                </li>
+                {% if user.is_staff or user.is_superuser %}
+                <li>
+                    <a href="{% url 'app:activity_log' %}" title="Logs">
+                        <i class="bi bi-journal-text"></i>
+                        <span class="nav-text">Logs</span>
+                    </a>
+                </li>
+                {% endif %}
+                {% if user.is_superuser %}
+                <li>
+                    <a href="{% url 'app:upgrade' %}" title="Upgrade">
+                        <i class="bi bi-arrow-up-circle"></i>
+                        <span class="nav-text">Upgrade</span>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
         </li>
-        {% if user.is_superuser %}
-        <li>
-            <a href="{% url 'app:upgrade' %}" title="Upgrade">
-                <i class="bi bi-arrow-up-circle"></i>
-                <span class="nav-text">Upgrade</span>
-            </a>
-        </li>
-        {% endif %}
         {% endif %}
     </ul>
 

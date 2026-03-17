@@ -31,7 +31,9 @@ urlpatterns = [
     path('review_submission/<int:submission_id>/', views.review_submission, name='review_submission'),
     path('delete_submission/<int:submission_id>/', views.delete_submission, name='delete_submission'),
     path('upgrade/', views.upgrade_view, name='upgrade'),
-    # path('review_script/<int:script_id>', views.review_script, name='review_script'),
+    path('favorites/', views.favorites_view, name='favorites'),
+    path('favorite/<int:item_id>/', views.toggle_favorite, name='toggle_favorite'),
+    path('logs/', views.activity_log_view, name='activity_log'),
     # keep this at the bottom
     re_path(r'^(?P<auto_url>[\w.-]+)/?$', views.show_ip_fqdn, name='show_ip_fqdn'),
 ]
