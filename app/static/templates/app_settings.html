@@ -5,23 +5,110 @@
     <h3>App Settings</h3>
     <form method="post" class="mt-3">
         {% csrf_token %}
-        <div class="mb-3">
-            <label for="timezone" class="form-label">Display Timezone</label>
-            <select name="timezone" id="timezone" class="form-select">
-                {% for tz in timezones %}
-                <option value="{{ tz }}" {% if tz == app_settings.timezone %}selected{% endif %}>{{ tz }}</option>
-                {% endfor %}
-            </select>
+
+        <h5 class="mt-4">Display</h5>
+        <hr class="mt-1">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="timezone" class="form-label">Timezone</label>
+                <select name="timezone" id="timezone" class="form-select">
+                    {% for tz in timezones %}
+                    <option value="{{ tz }}" {% if tz == app_settings.timezone %}selected{% endif %}>{{ tz }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="timestamp_format" class="form-label">Timestamp Format</label>
+                <select name="timestamp_format" id="timestamp_format" class="form-select">
+                    {% for value, label in app_settings.TIMESTAMP_CHOICES %}
+                    <option value="{{ value }}" {% if value == app_settings.timestamp_format %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="edl_preview_entries" class="form-label">EDL Preview Entries</label>
+                <input type="number" name="edl_preview_entries" id="edl_preview_entries" class="form-control" value="{{ app_settings.edl_preview_entries }}" min="1" max="20">
+                <small class="text-muted">Entries shown on index before "more" link</small>
+            </div>
         </div>
-        <div class="mb-3">
-            <label for="timestamp_format" class="form-label">Timestamp Format</label>
-            <select name="timestamp_format" id="timestamp_format" class="form-select">
-                {% for value, label in app_settings.TIMESTAMP_CHOICES %}
-                <option value="{{ value }}" {% if value == app_settings.timestamp_format %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="default_edl_per_page" class="form-label">Default EDLs Per Page</label>
+                <input type="number" name="default_edl_per_page" id="default_edl_per_page" class="form-control" value="{{ app_settings.default_edl_per_page }}" min="1" max="100">
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="default_log_per_page" class="form-label">Default Logs Per Page</label>
+                <input type="number" name="default_log_per_page" id="default_log_per_page" class="form-control" value="{{ app_settings.default_log_per_page }}" min="1" max="100">
+            </div>
         </div>
-        <button type="submit" class="btn btn-primary">Save</button>
+
+        <h5 class="mt-4">API Limits</h5>
+        <hr class="mt-1">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="max_fqdns_per_submission" class="form-label">Max FQDNs Per Submission</label>
+                <input type="number" name="max_fqdns_per_submission" id="max_fqdns_per_submission" class="form-control" value="{{ app_settings.max_fqdns_per_submission }}" min="1" max="1000">
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="max_fqdns_per_update" class="form-label">Max FQDNs Per Update</label>
+                <input type="number" name="max_fqdns_per_update" id="max_fqdns_per_update" class="form-control" value="{{ app_settings.max_fqdns_per_update }}" min="1" max="1000">
+            </div>
+        </div>
+
+        <h5 class="mt-4">Data Limits</h5>
+        <hr class="mt-1">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="max_edls_per_group" class="form-label">Max EDLs Per Group</label>
+                <input type="number" name="max_edls_per_group" id="max_edls_per_group" class="form-control" value="{{ app_settings.max_edls_per_group }}" min="0" max="10000">
+                <small class="text-muted">0 = unlimited</small>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="max_entries_per_edl" class="form-label">Max Entries Per EDL</label>
+                <input type="number" name="max_entries_per_edl" id="max_entries_per_edl" class="form-control" value="{{ app_settings.max_entries_per_edl }}" min="0" max="150000">
+                <small class="text-muted">0 = unlimited (PAN-OS max: 150,000)</small>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="max_inbox_per_user" class="form-label">Max Inbox Entries Per User</label>
+                <input type="number" name="max_inbox_per_user" id="max_inbox_per_user" class="form-control" value="{{ app_settings.max_inbox_per_user }}" min="0" max="1000">
+                <small class="text-muted">0 = unlimited</small>
+            </div>
+        </div>
+
+        <h5 class="mt-4">Retention</h5>
+        <hr class="mt-1">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="log_retention_days" class="form-label">Log Retention</label>
+                <div class="input-group">
+                    <input type="number" name="log_retention_days" id="log_retention_days" class="form-control" value="{{ app_settings.log_retention_days }}" min="1" max="180">
+                    <span class="input-group-text">days</span>
+                </div>
+                <small class="text-muted">Max 180 days. Older logs are purged automatically.</small>
+            </div>
+        </div>
+
+        <h5 class="mt-4">Security</h5>
+        <hr class="mt-1">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="session_timeout_minutes" class="form-label">Session Timeout</label>
+                <div class="input-group">
+                    <input type="number" name="session_timeout_minutes" id="session_timeout_minutes" class="form-control" value="{{ app_settings.session_timeout_minutes }}" min="5" max="1440">
+                    <span class="input-group-text">minutes</span>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="api_key_expiration_days" class="form-label">API Key Expiration</label>
+                <div class="input-group">
+                    <input type="number" name="api_key_expiration_days" id="api_key_expiration_days" class="form-control" value="{{ app_settings.api_key_expiration_days }}" min="14" max="365">
+                    <span class="input-group-text">days</span>
+                </div>
+                <small class="text-muted">Min 14, max 365 days</small>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary mt-3">Save Settings</button>
     </form>
 </div>
 {% endblock %}

@@ -98,8 +98,30 @@ class AppSettings(models.Model):
         ('Y-m-d g:i:s A', '2026-03-17 2:30:00 PM'),
         ('m/d/Y g:i:s A', '03/17/2026 2:30:00 PM'),
     ]
+    # Display
     timezone = models.CharField(max_length=50, default='UTC', verbose_name='Display Timezone')
     timestamp_format = models.CharField(max_length=50, default='Y-m-d H:i:s', choices=TIMESTAMP_CHOICES, verbose_name='Timestamp Format')
+    default_edl_per_page = models.PositiveIntegerField(default=5, verbose_name='Default EDLs per page')
+    default_log_per_page = models.PositiveIntegerField(default=25, verbose_name='Default logs per page')
+    edl_preview_entries = models.PositiveIntegerField(default=3, verbose_name='EDL preview entries on index')
+
+    # API Limits
+    max_fqdns_per_submission = models.PositiveIntegerField(default=50, verbose_name='Max FQDNs per API submission')
+    max_fqdns_per_update = models.PositiveIntegerField(default=50, verbose_name='Max FQDNs per API update')
+
+    # Data Limits
+    max_edls_per_group = models.PositiveIntegerField(default=0, verbose_name='Max EDLs per group (0=unlimited)')
+    max_entries_per_edl = models.PositiveIntegerField(default=0, verbose_name='Max entries per EDL (0=unlimited)')
+    max_inbox_per_user = models.PositiveIntegerField(default=0, verbose_name='Max inbox entries per user (0=unlimited)')
+
+    # Retention
+    log_retention_days = models.PositiveIntegerField(default=90, verbose_name='Log retention (days, max 180)')
+
+    # Security
+    session_timeout_minutes = models.PositiveIntegerField(default=30, verbose_name='Session timeout (minutes)')
+    api_key_expiration_days = models.PositiveIntegerField(default=90, verbose_name='API key expiration (days, 14-365)')
+
+    # Internal
     db_checksum = models.CharField(max_length=64, blank=True, verbose_name='DB Integrity Checksum')
 
     class Meta:

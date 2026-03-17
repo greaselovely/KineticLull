@@ -31,10 +31,17 @@ class APIKey(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='api_keys')
     key = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "API Key"
         verbose_name_plural = "API Keys"
+
+    @property
+    def is_expired(self):
+        if self.expires_at is None:
+            return False
+        return timezone.now() > self.expires_at
 
     def __str__(self):
         return f"{self.user.email} - {self.key}"

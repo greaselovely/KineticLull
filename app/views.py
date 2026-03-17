@@ -25,7 +25,7 @@ import secrets
 import logging
 import ipaddress
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 from pathlib import Path
 
@@ -88,7 +88,7 @@ def update_db_checksum():
 
 
 def log_activity(request, action, target='', detail='', user=None):
-    """Log a user activity to the database and update the integrity checksum."""
+    """Log a user activity to the database, purge old logs, and update the integrity checksum."""
     ActivityLog.objects.create(
         user=user or (request.user if request.user.is_authenticated else None),
         action=action,
@@ -96,6 +96,13 @@ def log_activity(request, action, target='', detail='', user=None):
         detail=detail,
         ip_address=request.META.get('REMOTE_ADDR'),
     )
+    # Purge logs older than retention period
+    try:
+        app_settings = AppSettings.load()
+        cutoff = datetime.now(timezone.utc) - timedelta(days=app_settings.log_retention_days)
+        ActivityLog.objects.filter(created_at__lt=cutoff).delete()
+    except Exception:
+        pass
     update_db_checksum()
 
 
@@ -140,20 +147,23 @@ def index_view(request):
                 ExtDynLists items and their processed data.
     """
 
+    app_settings = AppSettings.load()
     items = get_visible_edls(request.user)
-    per_page = request.GET.get("per_page", "5")
+    default_per_page = str(app_settings.default_edl_per_page)
+    per_page = request.GET.get("per_page", default_per_page)
     try:
         per_page = max(1, min(int(per_page), 100))
     except (ValueError, TypeError):
-        per_page = 5
+        per_page = app_settings.default_edl_per_page
     paginator = Paginator(items, per_page)
+    preview = app_settings.edl_preview_entries
     base_url = settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
     for item in items:
         item.full_url = base_url + ('/' if item.auto_url[0] != '/' else '') + item.auto_url
         item.ip_fqdn = item.ip_fqdn.split('\r\n')
         item.ip_fqdn_count = len(item.ip_fqdn)
-        item.display_ellipsis = item.ip_fqdn_count >= 4
-        item.ip_fqdn = item.ip_fqdn[:3]
+        item.display_ellipsis = item.ip_fqdn_count > preview
+        item.ip_fqdn = item.ip_fqdn[:preview]
     favorite_ids = set(Favorite.objects.filter(user=request.user).values_list('edl_id', flat=True))
     for item in items:
         item.is_favorited = item.id in favorite_ids
@@ -597,9 +607,11 @@ def generate_api_key(user):
     Returns:
     - A tuple containing the new API key string and a boolean indicating whether the API key was created (True) or updated (False).
     """
+    app_settings = AppSettings.load()
     api_key, created = APIKey.objects.get_or_create(user=user)
-    new_key = secrets.token_urlsafe(50)  # Generates a secure URL-safe text string
+    new_key = secrets.token_urlsafe(50)
     api_key.key = new_key
+    api_key.expires_at = datetime.now(timezone.utc) + timedelta(days=app_settings.api_key_expiration_days)
     api_key.save()
     return new_key, created
 
@@ -642,6 +654,8 @@ def authenticate_user(api_key_header):
 
     try:
         api_key_instance = APIKey.objects.get(key=api_key)
+        if api_key_instance.is_expired:
+            return None
         return api_key_instance.user
     except APIKey.DoesNotExist:
         return None
@@ -693,10 +707,11 @@ class SubmitFQDNView(View):
         data = json.loads(request.body)
         fqdn_list = data.get('fqdn_list', [])
         fqdn_list = [domain.replace("http://", "").replace("https://", "") for domain in fqdn_list]
-        
-        if not fqdn_list or len(fqdn_list) > 50:
-            return JsonResponse({'error': 'Invalid FQDN list'}, status=400)
-        
+
+        app_settings = AppSettings.load()
+        if not fqdn_list or len(fqdn_list) > app_settings.max_fqdns_per_submission:
+            return JsonResponse({'error': f'FQDN list must be 1-{app_settings.max_fqdns_per_submission} entries'}, status=400)
+
         InboxEntry.objects.create(submitted_by=user, fqdn_list="\r\n".join(fqdn_list))
         log_activity(request, 'api_submit', f'{len(fqdn_list)} FQDNs', user=user)
         return JsonResponse({'message': 'Submission successful'}, status=201)
@@ -752,8 +767,9 @@ def update_edl_fqdn(request):
         if not auto_url:
             return JsonResponse({'error': 'Missing auto_url'}, status=400)
 
-        if not fqdn_list or len(fqdn_list) > 50:
-            return JsonResponse({'error': 'Empty or Too Long FQDN list'}, status=400)
+        app_settings = AppSettings.load()
+        if not fqdn_list or len(fqdn_list) > app_settings.max_fqdns_per_update:
+            return JsonResponse({'error': f'FQDN list must be 1-{app_settings.max_fqdns_per_update} entries'}, status=400)
 
         try:
             edl = ExtDynLists.objects.get(auto_url=auto_url)
@@ -870,20 +886,23 @@ def submission_list(request):
     Returns:
     - HttpResponse object with the rendered page displaying the list of submissions.
     """
+    app_settings = AppSettings.load()
     submissions = InboxEntry.objects.all()
-    per_page = request.GET.get("per_page", "5")
+    default_per_page = str(app_settings.default_edl_per_page)
+    per_page = request.GET.get("per_page", default_per_page)
     try:
         per_page = max(1, min(int(per_page), 100))
     except (ValueError, TypeError):
-        per_page = 5
+        per_page = app_settings.default_edl_per_page
     paginator = Paginator(submissions, per_page)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
+    preview = app_settings.edl_preview_entries
     for submission in page_obj:
         fqdn_items = submission.fqdn_list.split('\r\n')
-        submission.fqdn_display = fqdn_items[:5]
+        submission.fqdn_display = fqdn_items[:preview]
         submission.fqdn_count = len(fqdn_items)
-        submission.display_ellipsis = submission.fqdn_count > 5
+        submission.display_ellipsis = submission.fqdn_count > preview
     return render(request, 'submission_list.html', {
         'page_obj': page_obj,
         'per_page': per_page,
@@ -901,21 +920,24 @@ def toggle_favorite(request, item_id):
 
 @login_required
 def favorites_view(request):
+    app_settings = AppSettings.load()
     favorite_edl_ids = Favorite.objects.filter(user=request.user).values_list('edl_id', flat=True)
     items = get_visible_edls(request.user).filter(id__in=favorite_edl_ids)
-    per_page = request.GET.get("per_page", "5")
+    default_per_page = str(app_settings.default_edl_per_page)
+    per_page = request.GET.get("per_page", default_per_page)
     try:
         per_page = max(1, min(int(per_page), 100))
     except (ValueError, TypeError):
-        per_page = 5
+        per_page = app_settings.default_edl_per_page
     paginator = Paginator(items, per_page)
+    preview = app_settings.edl_preview_entries
     base_url = settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
     for item in items:
         item.full_url = base_url + ('/' if item.auto_url[0] != '/' else '') + item.auto_url
         item.ip_fqdn = item.ip_fqdn.split('\r\n')
         item.ip_fqdn_count = len(item.ip_fqdn)
-        item.display_ellipsis = item.ip_fqdn_count >= 4
-        item.ip_fqdn = item.ip_fqdn[:3]
+        item.display_ellipsis = item.ip_fqdn_count > preview
+        item.ip_fqdn = item.ip_fqdn[:preview]
         item.is_favorited = True
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
@@ -927,6 +949,7 @@ def favorites_view(request):
 def activity_log_view(request):
     if not (request.user.is_superuser or request.user.has_perm('app.view_activitylog')):
         raise PermissionDenied
+    app_settings = AppSettings.load()
     logs = ActivityLog.objects.all()
     search = request.GET.get("q", "").strip()
     if search:
@@ -937,11 +960,12 @@ def activity_log_view(request):
             models.Q(ip_address__icontains=search) |
             models.Q(user__email__icontains=search)
         )
-    per_page = request.GET.get("per_page", "25")
+    default_per_page = str(app_settings.default_log_per_page)
+    per_page = request.GET.get("per_page", default_per_page)
     try:
         per_page = max(1, min(int(per_page), 100))
     except (ValueError, TypeError):
-        per_page = 25
+        per_page = app_settings.default_log_per_page
     paginator = Paginator(logs, per_page)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
@@ -1019,22 +1043,59 @@ def app_settings_view(request):
 
     valid_ts_formats = [c[0] for c in AppSettings.TIMESTAMP_CHOICES]
 
+    # Field definitions: (POST name, attr name, type, min, max, default)
+    int_fields = [
+        ('default_edl_per_page', 'default_edl_per_page', 1, 100, 5),
+        ('default_log_per_page', 'default_log_per_page', 1, 100, 25),
+        ('edl_preview_entries', 'edl_preview_entries', 1, 20, 3),
+        ('max_fqdns_per_submission', 'max_fqdns_per_submission', 1, 1000, 50),
+        ('max_fqdns_per_update', 'max_fqdns_per_update', 1, 1000, 50),
+        ('max_edls_per_group', 'max_edls_per_group', 0, 10000, 0),
+        ('max_entries_per_edl', 'max_entries_per_edl', 0, 150000, 0),
+        ('max_inbox_per_user', 'max_inbox_per_user', 0, 1000, 0),
+        ('log_retention_days', 'log_retention_days', 1, 180, 90),
+        ('session_timeout_minutes', 'session_timeout_minutes', 5, 1440, 30),
+        ('api_key_expiration_days', 'api_key_expiration_days', 14, 365, 90),
+    ]
+
     if request.method == 'POST':
-        tz = request.POST.get('timezone', 'UTC')
-        ts_format = request.POST.get('timestamp_format', 'Y-m-d H:i:s')
         changes = []
-        if tz in available_timezones:
+
+        # Timezone
+        tz = request.POST.get('timezone', 'UTC')
+        if tz in available_timezones and tz != app_settings.timezone:
             app_settings.timezone = tz
             changes.append(f'timezone={tz}')
-        else:
-            messages.error(request, 'Invalid timezone.')
-        if ts_format in valid_ts_formats:
+
+        # Timestamp format
+        ts_format = request.POST.get('timestamp_format', 'Y-m-d H:i:s')
+        if ts_format in valid_ts_formats and ts_format != app_settings.timestamp_format:
             app_settings.timestamp_format = ts_format
             changes.append(f'timestamp_format={ts_format}')
+
+        # Integer fields
+        for field_name, attr_name, min_val, max_val, default in int_fields:
+            try:
+                val = int(request.POST.get(field_name, default))
+                val = max(min_val, min(val, max_val))
+            except (ValueError, TypeError):
+                val = default
+            old_val = getattr(app_settings, attr_name)
+            if val != old_val:
+                setattr(app_settings, attr_name, val)
+                changes.append(f'{attr_name}={val}')
+
         app_settings.save()
+
+        # Apply session timeout
+        from django.conf import settings as django_settings
+        django_settings.SESSION_COOKIE_AGE = app_settings.session_timeout_minutes * 60
+
         if changes:
-            log_activity(request, 'update_settings', ', '.join(changes))
+            log_activity(request, 'update_settings', '; '.join(changes))
             messages.success(request, 'Settings updated.')
+        else:
+            messages.info(request, 'No changes.')
         return redirect('app:app_settings')
 
     return render(request, 'app_settings.html', {
@@ -1179,15 +1240,7 @@ def group_list_view(request):
 
     if request.method == 'POST':
         action = request.POST.get('action')
-        if action == 'create':
-            name = request.POST.get('name', '').strip()
-            if name and not Group.objects.filter(name=name).exists():
-                Group.objects.create(name=name)
-                log_activity(request, 'create_group', name)
-                messages.success(request, f'Group "{name}" created.')
-            else:
-                messages.error(request, 'Group name is required and must be unique.')
-        elif action == 'delete':
+        if action == 'delete':
             group_id = request.POST.get('group_id')
             group = get_object_or_404(Group, id=group_id)
             if group.name == 'Superuser':
@@ -1204,6 +1257,62 @@ def group_list_view(request):
 
 
 @login_required
+def group_create_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    app_content_types = ContentType.objects.filter(app_label__in=['app', 'users'])
+    available_permissions = Permission.objects.filter(
+        content_type__in=app_content_types
+    ).exclude(
+        content_type__model='activitylog', codename__in=['add_activitylog', 'change_activitylog', 'delete_activitylog']
+    ).order_by('content_type__model', 'codename')
+    all_users = CustomUser.objects.filter(is_active=True).order_by('email')
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        if not name:
+            messages.error(request, 'Group name is required.')
+            return render(request, 'group_edit.html', {
+                'available_permissions': available_permissions,
+                'all_users': all_users,
+                'mode': 'create',
+            })
+        if Group.objects.filter(name=name).exists():
+            messages.error(request, f'Group "{name}" already exists.')
+            return render(request, 'group_edit.html', {
+                'available_permissions': available_permissions,
+                'all_users': all_users,
+                'mode': 'create',
+            })
+
+        group = Group.objects.create(name=name)
+
+        selected_perms = request.POST.getlist('permissions')
+        group.permissions.set(Permission.objects.filter(id__in=selected_perms))
+
+        selected_members = request.POST.getlist('members')
+        for user in CustomUser.objects.filter(id__in=selected_members):
+            user.groups.add(group)
+
+        detail_parts = []
+        if selected_perms:
+            detail_parts.append(f'{len(selected_perms)} permissions')
+        if selected_members:
+            member_emails = list(CustomUser.objects.filter(id__in=selected_members).values_list('email', flat=True))
+            detail_parts.append(f'Members: {", ".join(member_emails)}')
+        log_activity(request, 'create_group', name, '; '.join(detail_parts))
+        messages.success(request, f'Group "{name}" created.')
+        return redirect('app:group_list')
+
+    return render(request, 'group_edit.html', {
+        'available_permissions': available_permissions,
+        'all_users': all_users,
+        'mode': 'create',
+    })
+
+
+@login_required
 def group_edit_view(request, group_id):
     if not request.user.is_superuser:
         raise PermissionDenied
@@ -1211,7 +1320,11 @@ def group_edit_view(request, group_id):
 
     # Get app-relevant permissions only
     app_content_types = ContentType.objects.filter(app_label__in=['app', 'users'])
-    available_permissions = Permission.objects.filter(content_type__in=app_content_types).order_by('content_type__app_label', 'codename')
+    available_permissions = Permission.objects.filter(
+        content_type__in=app_content_types
+    ).exclude(
+        content_type__model='activitylog', codename__in=['add_activitylog', 'change_activitylog', 'delete_activitylog']
+    ).order_by('content_type__model', 'codename')
 
     # Also get all users for member management
     all_users = CustomUser.objects.filter(is_active=True).order_by('email')

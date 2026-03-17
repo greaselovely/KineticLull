@@ -6,7 +6,7 @@
         <h3 class="mb-0">Groups</h3>
         <div class="d-flex" style="gap: 8px;">
             <a href="{% url 'app:user_list' %}" class="btn btn-sm btn-outline-secondary">Back to Users</a>
-            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addGroupModal">Add Group</button>
+            <a href="{% url 'app:group_create' %}" class="btn btn-sm btn-primary">Add Group</a>
         </div>
     </div>
 
@@ -54,31 +54,5 @@
             {% endfor %}
         </tbody>
     </table>
-</div>
-
-<!-- Add Group Modal -->
-<div class="modal fade" id="addGroupModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="create">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add Group</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="group-name" class="form-label">Group Name</label>
-                        <input type="text" name="name" id="group-name" class="form-control" required>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Create</button>
-                </div>
-            </form>
-        </div>
-    </div>
 </div>
 {% endblock %}

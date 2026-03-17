@@ -12,7 +12,12 @@ def inbox_count(request):
 
 def app_settings(request):
     try:
+        from django.conf import settings as django_settings
         settings = AppSettings.load()
+
+        # Apply session timeout from app settings
+        django_settings.SESSION_COOKIE_AGE = settings.session_timeout_minutes * 60
+
         result = {
             'app_timezone': settings.timezone,
             'app_timestamp_format': settings.timestamp_format,
