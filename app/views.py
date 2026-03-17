@@ -96,8 +96,8 @@ def send_syslog(app_settings, user_email, action, target, detail, ip_address):
         hostname = socket.gethostname()
         timestamp = datetime.now(timezone.utc).strftime('%b %d %H:%M:%S')
         body = f'user="{user_email}" action="{action}" target="{target}" detail="{detail}" src={ip_address}'
-        # RFC 3164: <priority>TIMESTAMP HOSTNAME APP: MSG
-        syslog_msg = f'<14>{timestamp} {hostname} KineticLull: {body}'
+        # RFC 3164: <priority>TIMESTAMP HOSTNAME APP: MSG (facility local0, severity info = 134)
+        syslog_msg = f'<134>{timestamp} {hostname} KineticLull: {body}'
         syslog_msg = syslog_msg[:1024]
         sock_type = socket.SOCK_DGRAM if app_settings.syslog_protocol == 'udp' else socket.SOCK_STREAM
         sock = socket.socket(socket.AF_INET, sock_type)
