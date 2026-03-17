@@ -46,14 +46,9 @@
         </div>
         <div class="mb-3">
             <div class="form-check form-check-inline">
-                <input class="form-check-input" type="checkbox" name="is_staff" id="is_staff"
-                    {% if edit_user.is_staff %}checked{% endif %}>
-                <label class="form-check-label" for="is_staff">Staff</label>
-            </div>
-            <div class="form-check form-check-inline">
                 <input class="form-check-input" type="checkbox" name="is_superuser" id="is_superuser"
                     {% if edit_user.is_superuser %}checked{% endif %}>
-                <label class="form-check-label" for="is_superuser">Superuser</label>
+                <label class="form-check-label" for="is_superuser">Administrator</label>
             </div>
             {% if mode == 'edit' %}
             <div class="form-check form-check-inline">

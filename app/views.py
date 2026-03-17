@@ -1181,8 +1181,8 @@ def user_create_view(request):
         first_name = request.POST.get('first_name', '').strip()
         last_name = request.POST.get('last_name', '').strip()
         password = request.POST.get('password', '')
-        is_staff = request.POST.get('is_staff') == 'on'
         is_superuser = request.POST.get('is_superuser') == 'on'
+        is_staff = is_superuser  # Staff follows superuser
         selected_groups = request.POST.getlist('groups')
 
         if not email or not password:
@@ -1236,7 +1236,7 @@ def user_edit_view(request, user_id):
 
         edit_user.first_name = request.POST.get('first_name', '').strip()
         edit_user.last_name = request.POST.get('last_name', '').strip()
-        edit_user.is_staff = request.POST.get('is_staff') == 'on'
+        edit_user.is_staff = request.POST.get('is_superuser') == 'on'  # Staff follows superuser
         new_is_active = request.POST.get('is_active') == 'on'
         new_is_superuser = request.POST.get('is_superuser') == 'on'
         selected_groups = request.POST.getlist('groups')
@@ -1267,7 +1267,7 @@ def user_edit_view(request, user_id):
             new_val = getattr(edit_user, field)
             if before[field] != new_val:
                 changes.append(f'{field}: {before[field]!r} -> {new_val!r}')
-        for flag in ['is_staff', 'is_active', 'is_superuser']:
+        for flag in ['is_active', 'is_superuser']:
             new_val = getattr(edit_user, flag)
             if before[flag] != new_val:
                 changes.append(f'{flag}: {before[flag]} -> {new_val}')

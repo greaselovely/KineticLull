@@ -14,8 +14,7 @@
                 <th style="width: 25%;">Email</th>
                 <th style="width: 15%;">Name</th>
                 <th style="width: 20%;">Groups</th>
-                <th style="width: 8%;">Staff</th>
-                <th style="width: 8%;">Super</th>
+                <th style="width: 8%;">Admin</th>
                 <th style="width: 8%;">Active</th>
                 <th style="width: 16%;">Joined</th>
             </tr>
@@ -26,7 +25,6 @@
                 <td><a href="{% url 'app:user_edit' u.id %}">{{ u.email }}</a></td>
                 <td>{{ u.first_name }} {{ u.last_name }}</td>
                 <td>{% for g in u.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-muted">None</span>{% endfor %}</td>
-                <td>{% if u.is_staff %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-muted"></i>{% endif %}</td>
                 <td>{% if u.is_superuser %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-muted"></i>{% endif %}</td>
                 <td>{% if u.is_active %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}</td>
                 <td>{{ u.date_joined|date:app_timestamp_format }}</td>
