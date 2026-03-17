@@ -19,7 +19,7 @@ import json
 import secrets
 import hashlib
 import ipaddress
-from datetime import datetime
+from datetime import datetime, timezone
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
@@ -206,7 +206,7 @@ def edit_ext_dyn_list_view(request, id=None):
                 edl_instance.ip_fqdn = "\r\n".join([fqdn.replace("http://", "").replace("https://", "") for fqdn in edl_instance.ip_fqdn.split('\r\n')])
                 edl_instance.acl = "\n".join(corrected_acl)
                 edl_instance.save()
-                return redirect("/", pk=id)
+                return redirect("/")
         else:
             form = ExtDynListsForm(instance=edl)
     else:
@@ -251,7 +251,6 @@ def clone_ext_dyn_list_view(request, item_id):
         if form.is_valid():
             cloned_item = ExtDynLists(**form.cleaned_data)
             cloned_item.id = None
-            cloned_item.friendly_name
             cloned_item.auto_url = generate_hash()
             cloned_item.save()
             return redirect('/')
@@ -634,7 +633,7 @@ def update_edl_fqdn(request):
       or HTTP 500 for server errors.
     """
     try:
-        current_date_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        current_date_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         data = json.loads(request.body)
         auth_header = request.headers.get('Authorization')
         api_key = auth_header.split(' ')[-1] if auth_header else None
@@ -678,7 +677,7 @@ def update_edl_fqdn(request):
             existing_fqdns = edl.ip_fqdn.split("\r\n")
             
             # Extract just the domain names from existing entries to identify new domains
-            existing_domains = set(entry.split(' ')[0] for entry in existing_fqdns if ' ' in entry)  # Assumes space-delimited
+            existing_domains = set(entry.split(' ')[0] for entry in existing_fqdns if entry.strip())
             
             # Determine which domains from the provided list are new
             new_domains = [domain for domain in fqdn_list if domain not in existing_domains]
