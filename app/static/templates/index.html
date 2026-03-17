@@ -4,34 +4,34 @@
 {% block content %}
 
 <div class="content-card">
-    <table class="table table-hover">
+    <table id="edl-table" class="table table-hover table-resizable">
         <thead>
             <tr>
-                <th>EDL Name</th>
-                <th>URL</th>
-                <th>IP/FQDN</th>
-                <th class="actions-column">Actions</th>
+                <th data-col="0">EDL Name</th>
+                <th data-col="1">URL</th>
+                <th data-col="2">IP/FQDN</th>
+                <th data-col="3">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for item in page_obj %}
             <tr>
                 <td>{{ item.friendly_name }}</td>
-                <td><a href="{{ item.full_url }}/" target="_blank">{{ item.full_url }}/</a></td>
+                <td class="text-truncate"><a href="{{ item.full_url }}/" target="_blank">{{ item.full_url }}/</a></td>
                 <td>
                     {% for ip in item.ip_fqdn %}
                         {% if forloop.counter == 3 %}
                             {% if item.display_ellipsis %}
-                                {{ ip }}<br><a href="{% url 'app:item_detail' item_id=item.id %}" target="_blank">more</a><br>
+                                {{ ip }}<br><a href="{% url 'app:item_detail' item_id=item.id %}" target="_blank">more</a>
                             {% else %}
-                                {{ ip }}<br>
+                                {{ ip }}
                             {% endif %}
                         {% else %}
                             {{ ip }}<br>
                         {% endif %}
                     {% endfor %}
                 </td>
-                <td class="actions-column">
+                <td>
                     <a href="{% url 'app:edit' id=item.id %}" title="Edit"><img class="icon action-items" src="{% static 'images/edit.svg' %}" alt="Edit"></a>
                     <a href="{% url 'app:clone' item.id %}" title="Clone"><img class="icon action-items" src="{% static 'images/clone.svg' %}" alt="Clone"></a>
                     <a href="{% url 'app:download_ip_fqdn' item.id %}" title="Download"><img class="icon action-items" src="{% static 'images/download.svg' %}" alt="Download"></a>
@@ -48,30 +48,44 @@
         </tbody>
     </table>
 
-    {% if page_obj.paginator.num_pages > 1 %}
-    <nav class="mt-3">
-        <ul class="pagination justify-content-center">
-            {% if page_obj.has_previous %}
-                <li class="page-item"><a class="page-link" href="?page=1">&laquo;</a></li>
-                <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">&lsaquo;</a></li>
-            {% else %}
-                <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
-                <li class="page-item disabled"><span class="page-link">&lsaquo;</span></li>
-            {% endif %}
+    {% if page_obj.paginator.count > 0 %}
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <div>
+            {% if page_obj.paginator.num_pages > 1 %}
+            <nav>
+                <ul class="pagination mb-0">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?page=1&per_page={{ per_page }}">&laquo;</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&per_page={{ per_page }}">&lsaquo;</a></li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+                        <li class="page-item disabled"><span class="page-link">&lsaquo;</span></li>
+                    {% endif %}
 
-            <li class="page-item disabled">
-                <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-            </li>
+                    <li class="page-item disabled">
+                        <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                    </li>
 
-            {% if page_obj.has_next %}
-                <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">&rsaquo;</a></li>
-                <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">&raquo;</a></li>
-            {% else %}
-                <li class="page-item disabled"><span class="page-link">&rsaquo;</span></li>
-                <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+                    {% if page_obj.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&per_page={{ per_page }}">&rsaquo;</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&per_page={{ per_page }}">&raquo;</a></li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">&rsaquo;</span></li>
+                        <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+                    {% endif %}
+                </ul>
+            </nav>
             {% endif %}
-        </ul>
-    </nav>
+        </div>
+        <div>
+            <select class="form-select form-select-sm" style="width: auto;" onchange="window.location.href='?per_page=' + this.value">
+                <option value="5" {% if per_page == 5 %}selected{% endif %}>5 per page</option>
+                <option value="10" {% if per_page == 10 %}selected{% endif %}>10 per page</option>
+                <option value="25" {% if per_page == 25 %}selected{% endif %}>25 per page</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50 per page</option>
+            </select>
+        </div>
+    </div>
     {% endif %}
 </div>
 

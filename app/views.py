@@ -79,7 +79,12 @@ def index_view(request):
     """
 
     items = get_visible_edls(request.user)
-    paginator = Paginator(items, 5)
+    per_page = request.GET.get("per_page", "5")
+    try:
+        per_page = max(1, min(int(per_page), 100))
+    except (ValueError, TypeError):
+        per_page = 5
+    paginator = Paginator(items, per_page)
     base_url = settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
     for item in items:
         item.full_url = base_url + ('/' if item.auto_url[0] != '/' else '') + item.auto_url
@@ -89,7 +94,7 @@ def index_view(request):
         item.ip_fqdn = item.ip_fqdn[:3]
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
-    context = {'items': items, 'page_obj': page_obj}
+    context = {'items': items, 'page_obj': page_obj, 'per_page': per_page}
     return render(request, 'index.html', context)
 
 @login_required

@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', function() {
             copyToClipboard(this);
         });
     });
+
+    // Resizable columns
+    initResizableTable('edl-table');
 });
 
 function copyToClipboard(clickedElement) {
@@ -94,5 +97,74 @@ function sendDeleteRequest(itemId) {
         }
     }).catch(function(error) {
         console.error('Network error:', error);
+    });
+}
+
+// Resizable table columns with localStorage persistence
+function initResizableTable(tableId) {
+    var table = document.getElementById(tableId);
+    if (!table) return;
+
+    var storageKey = 'col-widths-' + tableId;
+    var headers = table.querySelectorAll('thead th');
+    var defaultWidths = [15, 30, 35, 20];
+
+    // Restore saved widths or use defaults
+    var saved = localStorage.getItem(storageKey);
+    var widths = saved ? JSON.parse(saved) : defaultWidths;
+
+    // Apply widths
+    headers.forEach(function(th, i) {
+        if (widths[i]) th.style.width = widths[i] + '%';
+    });
+
+    // Add resize handles
+    headers.forEach(function(th, i) {
+        if (i === headers.length - 1) return; // no handle on last column
+
+        var handle = document.createElement('div');
+        handle.className = 'col-resize-handle';
+        th.appendChild(handle);
+
+        var startX, startWidth, nextStartWidth, tableWidth;
+
+        handle.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            startX = e.pageX;
+            tableWidth = table.offsetWidth;
+            startWidth = th.offsetWidth;
+            nextStartWidth = headers[i + 1].offsetWidth;
+            handle.classList.add('active');
+
+            function onMouseMove(e) {
+                var diff = e.pageX - startX;
+                var newWidth = startWidth + diff;
+                var newNextWidth = nextStartWidth - diff;
+
+                // Minimum 40px per column
+                if (newWidth < 40 || newNextWidth < 40) return;
+
+                var pct = (newWidth / tableWidth) * 100;
+                var nextPct = (newNextWidth / tableWidth) * 100;
+                th.style.width = pct + '%';
+                headers[i + 1].style.width = nextPct + '%';
+            }
+
+            function onMouseUp() {
+                handle.classList.remove('active');
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+
+                // Save all column widths
+                var currentWidths = [];
+                headers.forEach(function(h) {
+                    currentWidths.push(parseFloat(((h.offsetWidth / table.offsetWidth) * 100).toFixed(2)));
+                });
+                localStorage.setItem(storageKey, JSON.stringify(currentWidths));
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
     });
 }

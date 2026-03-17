@@ -168,6 +168,11 @@
 }
 
 /* Tables */
+.table-resizable {
+    table-layout: fixed;
+    width: 100%;
+}
+
 .table {
     margin-bottom: 0;
 }
@@ -179,15 +184,47 @@
     letter-spacing: 0.03em;
     color: #6c757d;
     border-bottom-width: 1px;
+    position: relative;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
 }
 
 .table td {
     vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Column resize handle */
+.col-resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    cursor: col-resize;
+    background: transparent;
+}
+
+.col-resize-handle:hover,
+.col-resize-handle.active {
+    background-color: rgba(0, 0, 0, 0.15);
 }
 
 /* Action icons */
 .actions-column {
     width: 200px;
+    position: relative;
+}
+
+.copy-confirmation {
+    position: absolute;
+    font-size: 0.75rem;
+    color: #198754;
+    margin-left: 4px;
 }
 
 .icon {
