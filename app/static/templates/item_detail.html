@@ -3,12 +3,14 @@
 {% block title %} - {{ friendly_name }}{% endblock %}
 {% block content %}
 <div class="content-card">
-    <h3>{{ friendly_name }}</h3>
+    <div class="d-flex justify-content-between align-items-center">
+        <h3 class="mb-0">{{ friendly_name }}</h3>
+        <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">Back</a>
+    </div>
     <div class="mt-3">
         {% for entry in item.ip_fqdn %}
             {{ entry }}<br>
         {% endfor %}
     </div>
-    <a href="javascript:history.back()" class="btn btn-outline-secondary mt-3">Back</a>
 </div>
 {% endblock %}
