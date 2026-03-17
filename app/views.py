@@ -203,12 +203,13 @@ def show_ip_fqdn(request, auto_url):
     edl = get_object_or_404(ExtDynLists, auto_url=auto_url)
     acl_list = edl.acl.split('\n')
     user_ip = request.META.get('REMOTE_ADDR')
-    user_agent = request.META.get('HTTP_USER_AGENT', '')
+    user_agent = request.META.get('HTTP_USER_AGENT', '') or 'No User-Agent'
+    detail = f'Agent: {user_agent}'
     if '*' in acl_list or check_acl(user_ip, acl_list):
-        log_activity(request, 'edl_access', edl.friendly_name, user_agent)
+        log_activity(request, 'edl_access', edl.friendly_name, detail)
         return HttpResponse(edl.ip_fqdn, content_type="text/plain")
     else:
-        log_activity(request, 'edl_denied', edl.friendly_name, user_agent)
+        log_activity(request, 'edl_denied', edl.friendly_name, detail)
         raise PermissionDenied
 
 @login_required
