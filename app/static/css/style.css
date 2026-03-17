@@ -315,6 +315,9 @@ td.cell-wrap {
 
 .log-table td, .log-table th {
     padding: 6px 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .log-table .badge {

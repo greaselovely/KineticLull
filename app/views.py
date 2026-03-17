@@ -250,11 +250,8 @@ def show_ip_fqdn(request, auto_url):
     """
 
     user_ip = request.META.get('REMOTE_ADDR')
-    user_agent = request.META.get('HTTP_USER_AGENT', '') or 'No User-Agent'
-    # Capture all HTTP headers for device identification
-    http_headers = {k: v for k, v in request.META.items() if k.startswith('HTTP_')}
-    header_str = '; '.join(f'{k.replace("HTTP_", "").lower()}={v}' for k, v in http_headers.items())
-    detail = header_str or f'Agent: {user_agent}'
+    http_headers = {k.replace('HTTP_', '').lower(): v for k, v in request.META.items() if k.startswith('HTTP_')}
+    detail = '; '.join(f'{k}={v}' for k, v in http_headers.items()) or 'No headers'
 
     try:
         edl = ExtDynLists.objects.get(auto_url=auto_url)

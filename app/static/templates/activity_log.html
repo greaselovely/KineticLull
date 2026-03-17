@@ -14,25 +14,31 @@
             <a href="{% url 'app:activity_log_export' %}{% if search %}?q={{ search }}{% endif %}" class="btn btn-sm btn-outline-secondary" title="Export CSV"><i class="bi bi-download"></i> CSV</a>
         </form>
     </div>
-    <table class="table table-hover mt-3 log-table">
+    <table id="log-table" class="table table-hover mt-3 log-table table-resizable">
         <thead>
             <tr>
-                <th style="width: 15%;">Timestamp</th>
-                <th style="width: 15%;">User</th>
-                <th style="width: 10%;">Action</th>
-                <th style="width: 18%;">Target</th>
-                <th style="width: 30%;">Detail</th>
-                <th style="width: 12%;">IP Address</th>
+                <th data-col="0">Timestamp</th>
+                <th data-col="1">User</th>
+                <th data-col="2">Action</th>
+                <th data-col="3">Target</th>
+                <th data-col="4">Detail</th>
+                <th data-col="5">IP Address</th>
             </tr>
         </thead>
         <tbody class="align-top">
             {% for log in page_obj %}
-            <tr>
+            <tr style="cursor:pointer;" data-bs-toggle="modal" data-bs-target="#logModal"
+                data-timestamp="{{ log.created_at|date:app_timestamp_format }}"
+                data-user="{{ log.user.email|default:'System' }}"
+                data-action="{{ log.action }}"
+                data-target="{{ log.target }}"
+                data-detail="{{ log.detail }}"
+                data-ip="{{ log.ip_address|default:'' }}">
                 <td>{{ log.created_at|date:app_timestamp_format }}</td>
                 <td>{{ log.user.email|default:"System" }}</td>
                 <td><span class="badge bg-secondary">{{ log.action }}</span></td>
                 <td>{{ log.target }}</td>
-                <td class="cell-wrap">{{ log.detail }}</td>
+                <td>{{ log.detail }}</td>
                 <td>{{ log.ip_address|default:"" }}</td>
             </tr>
             {% empty %}
@@ -82,5 +88,46 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Log Detail Modal -->
+<div class="modal fade" id="logModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Log Entry</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body log-table" style="font-size: 0.85rem;">
+                <table class="table table-sm table-borderless mb-0">
+                    <tr><td class="text-muted" style="width:100px;">Timestamp</td><td id="modal-timestamp"></td></tr>
+                    <tr><td class="text-muted">User</td><td id="modal-user"></td></tr>
+                    <tr><td class="text-muted">Action</td><td id="modal-action"></td></tr>
+                    <tr><td class="text-muted">Target</td><td id="modal-target"></td></tr>
+                    <tr><td class="text-muted">IP Address</td><td id="modal-ip"></td></tr>
+                    <tr><td class="text-muted">Detail</td><td id="modal-detail" style="word-break: break-all; white-space: normal;"></td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endtimezone %}
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    initResizableTable('log-table');
+
+    var logModal = document.getElementById('logModal');
+    logModal.addEventListener('show.bs.modal', function(event) {
+        var row = event.relatedTarget;
+        document.getElementById('modal-timestamp').textContent = row.getAttribute('data-timestamp');
+        document.getElementById('modal-user').textContent = row.getAttribute('data-user');
+        document.getElementById('modal-action').textContent = row.getAttribute('data-action');
+        document.getElementById('modal-target').textContent = row.getAttribute('data-target');
+        document.getElementById('modal-detail').textContent = row.getAttribute('data-detail');
+        document.getElementById('modal-ip').textContent = row.getAttribute('data-ip');
+    });
+});
+</script>
 {% endblock %}
