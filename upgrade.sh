@@ -25,6 +25,27 @@ fi
 
 echo "[*] Using Python: $PYTHON"
 
+# Check for .env
+if [ ! -f "project/.env" ]; then
+    if [ -f "db.sqlite3" ]; then
+        echo "[!] project/.env is missing but database exists."
+        echo "[!] A new SECRET_KEY will be generated. Existing sessions will be"
+        echo "[!] invalidated and users will need to log in again."
+        read -p "[?] What is the IP or FQDN this will be accessible at? (include https://) : " KL_URL
+        SECRET_KEY=$($PYTHON -c "import secrets; print(secrets.token_urlsafe(65))")
+        cat > project/.env << ENVEOF
+KINETICLULL_URL = '${KL_URL}'
+SECRET_KEY = '${SECRET_KEY}'
+DEBUG = 'False'
+ENVEOF
+        echo "[+] project/.env created with new SECRET_KEY."
+    else
+        echo "[!] No project/.env or database found."
+        echo "[!] This looks like a fresh install. Run 'bash setup.sh' instead."
+        exit 1
+    fi
+fi
+
 # Step 1: Pull latest code
 echo "[*] Pulling latest code..."
 git pull
