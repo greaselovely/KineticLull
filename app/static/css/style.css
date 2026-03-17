@@ -278,6 +278,21 @@ td.cell-wrap {
     white-space: normal;
 }
 
+/* Activity log table */
+.log-table {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.8rem;
+}
+
+.log-table td, .log-table th {
+    padding: 6px 8px;
+}
+
+.log-table .badge {
+    font-family: inherit;
+    font-size: 0.75rem;
+}
+
 /* Column resize handle */
 .col-resize-handle {
     position: absolute;

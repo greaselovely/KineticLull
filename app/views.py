@@ -1063,7 +1063,17 @@ def user_create_view(request):
             is_staff=is_staff, is_superuser=is_superuser,
         )
         user.groups.set(Group.objects.filter(id__in=selected_groups))
-        log_activity(request, 'create_user', email)
+        group_names = list(Group.objects.filter(id__in=selected_groups).values_list('name', flat=True))
+        detail_parts = []
+        if first_name or last_name:
+            detail_parts.append(f'Name: {first_name} {last_name}'.strip())
+        if is_staff:
+            detail_parts.append('is_staff=True')
+        if is_superuser:
+            detail_parts.append('is_superuser=True')
+        if group_names:
+            detail_parts.append(f'Groups: {", ".join(group_names)}')
+        log_activity(request, 'create_user', email, '; '.join(detail_parts))
         messages.success(request, f'User {email} created.')
         return redirect('app:user_list')
 
@@ -1078,6 +1088,16 @@ def user_edit_view(request, user_id):
     groups = Group.objects.all().order_by('name')
 
     if request.method == 'POST':
+        # Snapshot before state
+        before = {
+            'first_name': edit_user.first_name,
+            'last_name': edit_user.last_name,
+            'is_staff': edit_user.is_staff,
+            'is_active': edit_user.is_active,
+            'is_superuser': edit_user.is_superuser,
+            'groups': set(edit_user.groups.values_list('name', flat=True)),
+        }
+
         edit_user.first_name = request.POST.get('first_name', '').strip()
         edit_user.last_name = request.POST.get('last_name', '').strip()
         edit_user.is_staff = request.POST.get('is_staff') == 'on'
@@ -1089,13 +1109,34 @@ def user_edit_view(request, user_id):
             edit_user.is_superuser = request.POST.get('is_superuser') == 'on'
 
         # Password change (optional)
+        changes = []
         new_password = request.POST.get('password', '').strip()
         if new_password:
             edit_user.set_password(new_password)
+            changes.append('Password changed')
 
         edit_user.save()
+        new_groups = set(Group.objects.filter(id__in=selected_groups).values_list('name', flat=True))
         edit_user.groups.set(Group.objects.filter(id__in=selected_groups))
-        log_activity(request, 'edit_user', edit_user.email)
+
+        # Build change detail
+        for field in ['first_name', 'last_name']:
+            new_val = getattr(edit_user, field)
+            if before[field] != new_val:
+                changes.append(f'{field}: {before[field]!r} -> {new_val!r}')
+        for flag in ['is_staff', 'is_active', 'is_superuser']:
+            new_val = getattr(edit_user, flag)
+            if before[flag] != new_val:
+                changes.append(f'{flag}: {before[flag]} -> {new_val}')
+        added_groups = new_groups - before['groups']
+        removed_groups = before['groups'] - new_groups
+        if added_groups:
+            changes.append(f'Added groups: {", ".join(sorted(added_groups))}')
+        if removed_groups:
+            changes.append(f'Removed groups: {", ".join(sorted(removed_groups))}')
+
+        detail = '; '.join(changes) if changes else 'No changes'
+        log_activity(request, 'edit_user', edit_user.email, detail)
         messages.success(request, f'User {edit_user.email} updated.')
         return redirect('app:user_list')
 
