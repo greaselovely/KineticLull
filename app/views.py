@@ -203,11 +203,18 @@ def show_ip_fqdn(request, auto_url):
     PermissionDenied: If the user's IP address is not allowed access as per the ACL list.
     """
 
-    edl = get_object_or_404(ExtDynLists, auto_url=auto_url)
-    acl_list = edl.acl.split('\n')
     user_ip = request.META.get('REMOTE_ADDR')
     user_agent = request.META.get('HTTP_USER_AGENT', '') or 'No User-Agent'
     detail = f'Agent: {user_agent}'
+
+    try:
+        edl = ExtDynLists.objects.get(auto_url=auto_url)
+    except ExtDynLists.DoesNotExist:
+        log_activity(request, 'edl_not_found', auto_url, detail)
+        from django.http import Http404
+        raise Http404
+
+    acl_list = edl.acl.split('\n')
     if '*' in acl_list or check_acl(user_ip, acl_list):
         log_activity(request, 'edl_access', edl.friendly_name, detail)
         return HttpResponse(edl.ip_fqdn, content_type="text/plain")
