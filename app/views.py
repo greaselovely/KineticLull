@@ -238,10 +238,16 @@ def edit_ext_dyn_list_view(request, id=None):
     """
     if id:
         edl = get_edl_for_user(request.user, id=id)
+        # Snapshot before values for diff
+        before = {
+            'friendly_name': edl.friendly_name,
+            'ip_fqdn': set(edl.ip_fqdn.split('\r\n')),
+            'acl': set(edl.acl.split('\n')),
+            'policy_reference': edl.policy_reference,
+        }
         if request.method == 'POST':
             form = ExtDynListsForm(request.POST, instance=edl)
             if form.is_valid():
-                changed_fields = form.changed_data
                 # Apply corrections to the acl field
                 edl_instance = form.save(commit=False)
 
@@ -251,7 +257,28 @@ def edit_ext_dyn_list_view(request, id=None):
                 edl_instance.ip_fqdn = "\r\n".join([fqdn.replace("http://", "").replace("https://", "") for fqdn in edl_instance.ip_fqdn.split('\r\n')])
                 edl_instance.acl = "\n".join(corrected_acl)
                 edl_instance.save()
-                detail = f'Changed: {", ".join(changed_fields)}' if changed_fields else 'No changes'
+
+                # Build detailed change log
+                changes = []
+                if edl_instance.friendly_name != before['friendly_name']:
+                    changes.append(f'Renamed: {before["friendly_name"]} -> {edl_instance.friendly_name}')
+                after_fqdns = set(edl_instance.ip_fqdn.split('\r\n'))
+                added_fqdns = after_fqdns - before['ip_fqdn']
+                removed_fqdns = before['ip_fqdn'] - after_fqdns
+                if added_fqdns:
+                    changes.append(f'Added entries: {", ".join(sorted(added_fqdns))}')
+                if removed_fqdns:
+                    changes.append(f'Removed entries: {", ".join(sorted(removed_fqdns))}')
+                after_acl = set(edl_instance.acl.split('\n'))
+                added_acl = after_acl - before['acl']
+                removed_acl = before['acl'] - after_acl
+                if added_acl:
+                    changes.append(f'Added ACL: {", ".join(sorted(added_acl))}')
+                if removed_acl:
+                    changes.append(f'Removed ACL: {", ".join(sorted(removed_acl))}')
+                if edl_instance.policy_reference != before['policy_reference']:
+                    changes.append('Updated notes')
+                detail = '; '.join(changes) if changes else 'No changes'
                 log_activity(request, 'edit_edl', edl_instance.friendly_name, detail)
                 return redirect(safe_referer_or_index(request))
         else:
