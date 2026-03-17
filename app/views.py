@@ -1181,8 +1181,10 @@ def user_create_view(request):
         first_name = request.POST.get('first_name', '').strip()
         last_name = request.POST.get('last_name', '').strip()
         password = request.POST.get('password', '')
-        is_superuser = request.POST.get('is_superuser') == 'on'
-        is_staff = is_superuser  # Staff follows superuser
+        # Superuser/staff derived from group membership
+        superuser_group = Group.objects.filter(name='Superuser').first()
+        is_superuser = superuser_group and str(superuser_group.id) in selected_groups
+        is_staff = is_superuser
         selected_groups = request.POST.getlist('groups')
 
         if not email or not password:
@@ -1236,20 +1238,22 @@ def user_edit_view(request, user_id):
 
         edit_user.first_name = request.POST.get('first_name', '').strip()
         edit_user.last_name = request.POST.get('last_name', '').strip()
-        edit_user.is_staff = request.POST.get('is_superuser') == 'on'  # Staff follows superuser
         new_is_active = request.POST.get('is_active') == 'on'
-        new_is_superuser = request.POST.get('is_superuser') == 'on'
         selected_groups = request.POST.getlist('groups')
+
+        # Derive superuser from Superuser group membership
+        superuser_group = Group.objects.filter(name='Superuser').first()
+        new_is_superuser = superuser_group and str(superuser_group.id) in selected_groups
 
         # Protect last superuser
         is_last_superuser = edit_user.is_superuser and CustomUser.objects.filter(is_superuser=True).count() == 1
         if is_last_superuser and (not new_is_superuser or not new_is_active):
-            messages.error(request, 'Cannot remove superuser status or deactivate the last superuser.')
+            messages.error(request, 'Cannot remove the last user from the Superuser group or deactivate them.')
             return redirect('app:user_edit', user_id=user_id)
 
         edit_user.is_active = new_is_active
-        if request.user.is_superuser:
-            edit_user.is_superuser = new_is_superuser
+        edit_user.is_superuser = new_is_superuser
+        edit_user.is_staff = new_is_superuser
 
         # Password change (optional)
         changes = []

@@ -44,20 +44,15 @@
                 {% endfor %}
             </div>
         </div>
+        {% if mode == 'edit' %}
         <div class="mb-3">
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="checkbox" name="is_superuser" id="is_superuser"
-                    {% if edit_user.is_superuser %}checked{% endif %}>
-                <label class="form-check-label" for="is_superuser">Administrator</label>
-            </div>
-            {% if mode == 'edit' %}
             <div class="form-check form-check-inline">
                 <input class="form-check-input" type="checkbox" name="is_active" id="is_active"
                     {% if edit_user.is_active %}checked{% endif %}>
                 <label class="form-check-label" for="is_active">Active</label>
             </div>
-            {% endif %}
         </div>
+        {% endif %}
         <button type="submit" class="btn btn-primary">{% if mode == 'create' %}Create User{% else %}Save Changes{% endif %}</button>
     </form>
 </div>
