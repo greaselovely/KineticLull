@@ -101,7 +101,7 @@ class AppSettings(models.Model):
     # Display
     timezone = models.CharField(max_length=50, default='UTC', verbose_name='Display Timezone')
     timestamp_format = models.CharField(max_length=50, default='Y-m-d H:i:s', choices=TIMESTAMP_CHOICES, verbose_name='Timestamp Format')
-    default_edl_per_page = models.PositiveIntegerField(default=5, verbose_name='Default EDLs per page')
+    default_edl_per_page = models.PositiveIntegerField(default=10, verbose_name='Default EDLs per page')
     default_log_per_page = models.PositiveIntegerField(default=25, verbose_name='Default logs per page')
     edl_preview_entries = models.PositiveIntegerField(default=3, verbose_name='EDL preview entries on index')
 
@@ -110,16 +110,26 @@ class AppSettings(models.Model):
     max_fqdns_per_update = models.PositiveIntegerField(default=50, verbose_name='Max FQDNs per API update')
 
     # Data Limits
-    max_edls_per_group = models.PositiveIntegerField(default=0, verbose_name='Max EDLs per group (0=unlimited)')
-    max_entries_per_edl = models.PositiveIntegerField(default=0, verbose_name='Max entries per EDL (0=unlimited)')
-    max_inbox_per_user = models.PositiveIntegerField(default=0, verbose_name='Max inbox entries per user (0=unlimited)')
+    max_edls_per_group = models.PositiveIntegerField(default=25, verbose_name='Max EDLs per group')
+    max_entries_per_edl = models.PositiveIntegerField(default=5000, verbose_name='Max entries per EDL')
+    max_inbox_per_user = models.PositiveIntegerField(default=25, verbose_name='Max inbox entries per user')
 
     # Retention
-    log_retention_days = models.PositiveIntegerField(default=90, verbose_name='Log retention (days, max 180)')
+    log_retention_days = models.PositiveIntegerField(default=90, verbose_name='Log retention (days)')
 
     # Security
-    session_timeout_minutes = models.PositiveIntegerField(default=30, verbose_name='Session timeout (minutes)')
-    api_key_expiration_days = models.PositiveIntegerField(default=90, verbose_name='API key expiration (days, 14-365)')
+    session_timeout_minutes = models.PositiveIntegerField(default=30, verbose_name='Session inactivity timeout (minutes)')
+    api_key_expiration_days = models.PositiveIntegerField(default=90, verbose_name='API key expiration (days)')
+
+    # Syslog
+    SYSLOG_PROTOCOL_CHOICES = [
+        ('udp', 'UDP'),
+        ('tcp', 'TCP'),
+    ]
+    syslog_enabled = models.BooleanField(default=False, verbose_name='Enable Syslog Forwarding')
+    syslog_host = models.CharField(max_length=255, blank=True, default='', verbose_name='Syslog Host')
+    syslog_port = models.PositiveIntegerField(default=514, verbose_name='Syslog Port')
+    syslog_protocol = models.CharField(max_length=3, default='udp', choices=SYSLOG_PROTOCOL_CHOICES, verbose_name='Syslog Protocol')
 
     # Internal
     db_checksum = models.CharField(max_length=64, blank=True, verbose_name='DB Integrity Checksum')

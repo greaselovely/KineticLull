@@ -87,18 +87,50 @@ def update_db_checksum():
     app_settings.save()
 
 
+def send_syslog(app_settings, user_email, action, target, detail, ip_address):
+    """Send a structured syslog message if syslog is enabled."""
+    if not app_settings.syslog_enabled or not app_settings.syslog_host:
+        return
+    try:
+        import socket
+        msg = f'KineticLull: user="{user_email}" action="{action}" target="{target}" detail="{detail}" src={ip_address}'
+        # CEF-light format, truncate to max syslog message size
+        msg = msg[:1024]
+        sock_type = socket.SOCK_DGRAM if app_settings.syslog_protocol == 'udp' else socket.SOCK_STREAM
+        sock = socket.socket(socket.AF_INET, sock_type)
+        sock.settimeout(2)
+        if app_settings.syslog_protocol == 'tcp':
+            sock.connect((app_settings.syslog_host, app_settings.syslog_port))
+            sock.send(f'<14>{msg}\n'.encode())
+        else:
+            sock.sendto(f'<14>{msg}'.encode(), (app_settings.syslog_host, app_settings.syslog_port))
+        sock.close()
+    except Exception:
+        pass  # Syslog failure should never break the app
+
+
 def log_activity(request, action, target='', detail='', user=None):
-    """Log a user activity to the database, purge old logs, and update the integrity checksum."""
+    """Log a user activity to the database, forward to syslog, purge old logs, and update the integrity checksum."""
+    log_user = user or (request.user if request.user.is_authenticated else None)
+    ip_address = request.META.get('REMOTE_ADDR')
     ActivityLog.objects.create(
-        user=user or (request.user if request.user.is_authenticated else None),
+        user=log_user,
         action=action,
         target=target,
         detail=detail,
-        ip_address=request.META.get('REMOTE_ADDR'),
+        ip_address=ip_address,
     )
-    # Purge logs older than retention period
+    # Forward to syslog
     try:
         app_settings = AppSettings.load()
+        user_email = log_user.email if log_user else 'System'
+        send_syslog(app_settings, user_email, action, target, detail, ip_address)
+    except Exception:
+        pass
+    # Purge logs older than retention period
+    try:
+        if not app_settings:
+            app_settings = AppSettings.load()
         cutoff = datetime.now(timezone.utc) - timedelta(days=app_settings.log_retention_days)
         ActivityLog.objects.filter(created_at__lt=cutoff).delete()
     except Exception:
@@ -1045,16 +1077,16 @@ def app_settings_view(request):
 
     # Field definitions: (POST name, attr name, type, min, max, default)
     int_fields = [
-        ('default_edl_per_page', 'default_edl_per_page', 1, 100, 5),
-        ('default_log_per_page', 'default_log_per_page', 1, 100, 25),
-        ('edl_preview_entries', 'edl_preview_entries', 1, 20, 3),
-        ('max_fqdns_per_submission', 'max_fqdns_per_submission', 1, 1000, 50),
-        ('max_fqdns_per_update', 'max_fqdns_per_update', 1, 1000, 50),
-        ('max_edls_per_group', 'max_edls_per_group', 0, 10000, 0),
-        ('max_entries_per_edl', 'max_entries_per_edl', 0, 150000, 0),
-        ('max_inbox_per_user', 'max_inbox_per_user', 0, 1000, 0),
+        ('default_edl_per_page', 'default_edl_per_page', 5, 50, 10),
+        ('default_log_per_page', 'default_log_per_page', 5, 100, 25),
+        ('edl_preview_entries', 'edl_preview_entries', 1, 10, 3),
+        ('max_fqdns_per_submission', 'max_fqdns_per_submission', 1, 500, 50),
+        ('max_fqdns_per_update', 'max_fqdns_per_update', 1, 500, 50),
+        ('max_edls_per_group', 'max_edls_per_group', 1, 500, 25),
+        ('max_entries_per_edl', 'max_entries_per_edl', 100, 150000, 5000),
+        ('max_inbox_per_user', 'max_inbox_per_user', 5, 100, 25),
         ('log_retention_days', 'log_retention_days', 1, 180, 90),
-        ('session_timeout_minutes', 'session_timeout_minutes', 5, 1440, 30),
+        ('session_timeout_minutes', 'session_timeout_minutes', 5, 480, 30),
         ('api_key_expiration_days', 'api_key_expiration_days', 14, 365, 90),
     ]
 
@@ -1084,6 +1116,29 @@ def app_settings_view(request):
             if val != old_val:
                 setattr(app_settings, attr_name, val)
                 changes.append(f'{attr_name}={val}')
+
+        # Syslog settings
+        new_syslog_enabled = request.POST.get('syslog_enabled') == 'on'
+        new_syslog_host = request.POST.get('syslog_host', '').strip()
+        new_syslog_port = request.POST.get('syslog_port', '514')
+        new_syslog_protocol = request.POST.get('syslog_protocol', 'udp')
+        try:
+            new_syslog_port = max(1, min(int(new_syslog_port), 65535))
+        except (ValueError, TypeError):
+            new_syslog_port = 514
+
+        if new_syslog_enabled != app_settings.syslog_enabled:
+            app_settings.syslog_enabled = new_syslog_enabled
+            changes.append(f'syslog_enabled={new_syslog_enabled}')
+        if new_syslog_host != app_settings.syslog_host:
+            app_settings.syslog_host = new_syslog_host
+            changes.append(f'syslog_host={new_syslog_host}')
+        if new_syslog_port != app_settings.syslog_port:
+            app_settings.syslog_port = new_syslog_port
+            changes.append(f'syslog_port={new_syslog_port}')
+        if new_syslog_protocol in ('udp', 'tcp') and new_syslog_protocol != app_settings.syslog_protocol:
+            app_settings.syslog_protocol = new_syslog_protocol
+            changes.append(f'syslog_protocol={new_syslog_protocol}')
 
         app_settings.save()
 
