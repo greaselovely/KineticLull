@@ -33,7 +33,7 @@ class ExtDynListsForm(forms.ModelForm):
         }
 
 
-class CustomUserChangeForm(UserChangeForm):
+class ProfileChangeForm(UserChangeForm):
     password = None  # Exclude the password field
 
     class Meta:
@@ -49,7 +49,7 @@ class CustomUserChangeForm(UserChangeForm):
         }
 
     def __init__(self, *args, **kwargs):
-        super(CustomUserChangeForm, self).__init__(*args, **kwargs)
+        super(ProfileChangeForm, self).__init__(*args, **kwargs)
         # Optionally customize form fields here, e.g., set a field as read-only
         self.fields['email'].disabled = True
 

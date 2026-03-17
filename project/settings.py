@@ -139,33 +139,12 @@ if not LOG_PATH:
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
-    'handlers': {
-        'file': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': LOG_PATH,
-            'formatter': 'verbose',
-        },
-    },
     'formatters': {
         'verbose': {
             'format': '{asctime} {levelname} {module} {message}',
             'style': '{',
         },
     },
-    'loggers': {
-        'django': {
-            'handlers': ['file'],
-            'level': 'INFO',
-            """
-            DEBUG (numeric value: 10) - Detailed information, typically of interest only when diagnosing problems.
-            INFO (numeric value: 20) - Confirmation that things are working as expected.
-            WARNING (numeric value: 30) - An indication that something unexpected happened, or indicative of some problem in the near future (e.g., 'disk space low'). The software is still working as expected.
-            ERROR (numeric value: 40) - Due to a more serious problem, the software has not been able to perform some function.
-            CRITICAL (numeric value: 50) - A serious error, indicating that the program itself may be unable to continue running.
-            """
-            'propagate': True,
-        },
     'handlers': {
         'file': {
             'level': 'INFO',
@@ -173,7 +152,19 @@ LOGGING = {
             'filename': LOG_PATH,
             'maxBytes': 1024*1024*5,  # 5 MB
             'backupCount': 5,  # keep 5 old copies
-            },
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'app': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': False,
         },
     },
 }

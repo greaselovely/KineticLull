@@ -21,7 +21,6 @@ import sys
 import json
 import signal
 import secrets
-import hashlib
 import logging
 import ipaddress
 import subprocess
@@ -29,11 +28,13 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
 from .models import InboxEntry, ExtDynLists
-# from .forms import ExtDynListsForm, CustomUserChangeForm, ScriptForm
-from .forms import ExtDynListsForm, CustomUserChangeForm
+# from .forms import ExtDynListsForm, ProfileChangeForm, ScriptForm
+from .forms import ExtDynListsForm, ProfileChangeForm
 
 
 def get_visible_edls(user):
@@ -80,7 +81,6 @@ def index_view(request):
     items = get_visible_edls(request.user)
     paginator = Paginator(items, 5)
     base_url = settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
-    # print(base_url)
     for item in items:
         item.full_url = base_url + ('/' if item.auto_url[0] != '/' else '') + item.auto_url
         item.ip_fqdn = item.ip_fqdn.split('\r\n')
@@ -112,24 +112,6 @@ def item_detail_view(request, item_id: int):
     item.ip_fqdn = item.ip_fqdn.split('\r\n')
     context = {'item': item, 'friendly_name': item.friendly_name }
     return render(request, 'item_detail.html', context)
-
-def generate_hash():
-    """
-    Generate a unique hash string based on the current datetime.
-
-    This function generates a hash using the SHA-256 algorithm, applied to the current 
-    datetime string. The generated hash is truncated to the last 10 characters and 
-    appended with '.kl' to create a unique identifier.
-
-    Returns:
-    str: A unique hash string derived from the current datetime, truncated to the 
-        last 10 characters and appended with '.kl'.
-    """
-
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    hash_object = hashlib.sha256(current_time.encode())
-    hash_object = hash_object.hexdigest()[-10:] + ".kl"
-    return hash_object
 
 def show_ip_fqdn(request, auto_url):
     """
@@ -182,7 +164,6 @@ def create_new_edl(request):
         form = ExtDynListsForm(request.POST)
         if form.is_valid():
             edl_instance = form.save(commit=False)
-            edl_instance.auto_url = generate_hash()
 
             # Process each line in acl, filtering out only blank lines
             acl_lines = (line.strip() for line in edl_instance.acl.splitlines())
@@ -194,7 +175,7 @@ def create_new_edl(request):
             edl_instance.groups.set(request.user.groups.all())
             return redirect('/')
         else:
-            print(form.errors)
+            logger.warning("EDL creation form errors: %s", form.errors)
     else:
         form = ExtDynListsForm(initial={'acl': '*', })
 
@@ -281,12 +262,12 @@ def clone_ext_dyn_list_view(request, item_id):
         if form.is_valid():
             cloned_item = ExtDynLists(**form.cleaned_data)
             cloned_item.id = None
-            cloned_item.auto_url = generate_hash()
+            cloned_item.auto_url = ''
             cloned_item.save()
             cloned_item.groups.set(request.user.groups.all())
             return redirect('/')
         else:
-            print(form.errors)
+            logger.warning("EDL clone form errors: %s", form.errors)
     else:
         date_time_format = "%m/%d/%Y @ %H:%M:%S UTC"
         now = datetime.now().strftime(date_time_format)
@@ -446,13 +427,13 @@ def edit_profile_view(request):
             messages.success(request, "New API key generated.")
             return redirect('app:edit_profile')
 
-        form = CustomUserChangeForm(request.POST, instance=user)
+        form = ProfileChangeForm(request.POST, instance=user)
         if form.is_valid():
             form.save()
             messages.success(request, "Profile updated successfully.")
             return redirect('app:profile')
     else:
-        form = CustomUserChangeForm(instance=user)
+        form = ProfileChangeForm(instance=user)
         api_key = APIKey.objects.filter(user=user).first()
 
     context = {
@@ -562,53 +543,6 @@ def logout_view(request):
     logout(request)
     return response
 
-@csrf_exempt
-@require_http_methods(["POST"])
-def submit_fqdn_list(request):
-    """
-    Receives a list of FQDNs (Fully Qualified Domain Names) via a POST request, cleanses it by removing
-    any protocol prefixes (http://, https://), and stores it in the database associated with the authenticated user.
-
-    This view is CSRF exempt and only accepts POST requests. It expects the request to contain a JSON body
-    with a key 'fqdn_list' that maps to a list of FQDN strings. The function authenticates the user based on
-    an API key provided in the 'Authorization' header, validates the FQDN list, and then creates a new InboxEntry
-    with the cleansed FQDN list.
-
-    Parameters:
-    - request: HttpRequest object representing the current request.
-
-    Returns:
-    - JsonResponse indicating success or failure. On success, returns HTTP 201 with a message
-      'Submission successful'. On failure, returns HTTP 400/401/500 with an error message.
-    """
-    # print(request)
-    try:
-        data = json.loads(request.body)
-        auth_header = request.headers.get('Authorization')
-        # Strip "Bearer" part if it's there
-        api_key = auth_header.split(' ')[-1] if auth_header else None
-        user = authenticate_user(api_key)
-
-        if user is None:
-            return JsonResponse({'error': 'Unauthorized'}, status=401)
-
-        fqdn_list = data.get('fqdn_list', [])
-        fqdn_list = [domain.replace("http://", "").replace("https://", "") for domain in fqdn_list]
-
-        if not fqdn_list or len(fqdn_list) > 50:
-            return JsonResponse({'error': 'Invalid FQDN list'}, status=400)
-
-        InboxEntry.objects.create(
-            user_name=user.username,
-            fqdn_list="\n".join(fqdn_list)
-        )
-        return JsonResponse({'message': 'Submission successful'}, status=201)
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    except Exception as e:
-        # Catch-all for any other error, ensuring an HttpResponse is always returned
-        return JsonResponse({'error': 'An error occurred'}, status=500)
-
 @method_decorator(csrf_exempt, name='dispatch')
 class SubmitFQDNView(View):
     """
@@ -640,7 +574,7 @@ class SubmitFQDNView(View):
         if not fqdn_list or len(fqdn_list) > 50:
             return JsonResponse({'error': 'Invalid FQDN list'}, status=400)
         
-        InboxEntry.objects.create(user_email=user.email, fqdn_list="\r\n".join(fqdn_list))
+        InboxEntry.objects.create(submitted_by=user, fqdn_list="\r\n".join(fqdn_list))
 
         return JsonResponse({'message': 'Submission successful'}, status=201)
 
@@ -757,7 +691,6 @@ def review_submission(request, submission_id: int):
         form = ExtDynListsForm(request.POST)
         if form.is_valid():
             new_edl = form.save(commit=False)
-            new_edl.auto_url = generate_hash()
             new_edl.fqdn_list = submission.fqdn_list
             new_edl.save()
             new_edl.groups.set(request.user.groups.all())
@@ -765,8 +698,8 @@ def review_submission(request, submission_id: int):
             return redirect('app:submission_list')
     else:
         submitted_at_str = submission.submitted_at.strftime(date_time_format) if submission.submitted_at else "N/A"
-        user_email = submission.user_email
-        summary_policy_reference = f"Submitted via API on {submitted_at_str} by {user_email}"
+        submitter_email = submission.submitted_by.email if submission.submitted_by else "Unknown"
+        summary_policy_reference = f"Submitted via API on {submitted_at_str} by {submitter_email}"
         form = ExtDynListsForm(initial={
             'ip_fqdn': submission.fqdn_list,
             'acl' : '*',
@@ -820,10 +753,8 @@ def submission_list(request):
 
 @login_required
 def inbox_count(request):
-    user_email = request.user.email
-    
-    # Filter InboxEntry instances by the user's email
-    message_count = InboxEntry.objects.filter(user_email=user_email).count()
+    # Filter InboxEntry instances by the user
+    message_count = InboxEntry.objects.filter(submitted_by=request.user).count()
 
     # Pass the count to your template
     context = {
@@ -832,9 +763,6 @@ def inbox_count(request):
     }
     return render(request, 'navbar.html', context)
 
-
-
-logger = logging.getLogger(__name__)
 
 def get_current_version():
     version_file = Path(settings.BASE_DIR) / 'VERSION'
