@@ -64,6 +64,36 @@ class ActivityLog(models.Model):
         return f"{self.created_at} {self.user} {self.action} {self.target}"
 
 
+class AppSettings(models.Model):
+    TIMESTAMP_CHOICES = [
+        ('Y-m-d H:i:s', '2026-03-17 14:30:00'),
+        ('m/d/Y H:i:s', '03/17/2026 14:30:00'),
+        ('d/m/Y H:i:s', '17/03/2026 14:30:00'),
+        ('M d, Y H:i:s', 'Mar 17, 2026 14:30:00'),
+        ('M d, Y g:i:s A', 'Mar 17, 2026 2:30:00 PM'),
+        ('Y-m-d g:i:s A', '2026-03-17 2:30:00 PM'),
+        ('m/d/Y g:i:s A', '03/17/2026 2:30:00 PM'),
+    ]
+    timezone = models.CharField(max_length=50, default='UTC', verbose_name='Display Timezone')
+    timestamp_format = models.CharField(max_length=50, default='Y-m-d H:i:s', choices=TIMESTAMP_CHOICES, verbose_name='Timestamp Format')
+
+    class Meta:
+        verbose_name = "App Settings"
+        verbose_name_plural = "App Settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return "App Settings"
+
+
 class InboxEntry(models.Model):
     submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='Submitted By', null=True)
     fqdn_list = models.TextField(verbose_name='IP/FQDN')

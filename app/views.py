@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
-from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog
+from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings
 from .forms import ExtDynListsForm, ProfileChangeForm
 
 
@@ -155,11 +155,12 @@ def show_ip_fqdn(request, auto_url):
     edl = get_object_or_404(ExtDynLists, auto_url=auto_url)
     acl_list = edl.acl.split('\n')
     user_ip = request.META.get('REMOTE_ADDR')
+    user_agent = request.META.get('HTTP_USER_AGENT', '')
     if '*' in acl_list or check_acl(user_ip, acl_list):
-        log_activity(request, 'edl_access', edl.friendly_name, f'Served to {user_ip}')
+        log_activity(request, 'edl_access', edl.friendly_name, user_agent)
         return HttpResponse(edl.ip_fqdn, content_type="text/plain")
     else:
-        log_activity(request, 'edl_denied', edl.friendly_name, f'Denied {user_ip}')
+        log_activity(request, 'edl_denied', edl.friendly_name, user_agent)
         raise PermissionDenied
 
 @login_required
@@ -829,6 +830,15 @@ def activity_log_view(request):
     if not (request.user.is_staff or request.user.is_superuser):
         raise PermissionDenied
     logs = ActivityLog.objects.all()
+    search = request.GET.get("q", "").strip()
+    if search:
+        logs = logs.filter(
+            models.Q(action__icontains=search) |
+            models.Q(target__icontains=search) |
+            models.Q(detail__icontains=search) |
+            models.Q(ip_address__icontains=search) |
+            models.Q(user__email__icontains=search)
+        )
     per_page = request.GET.get("per_page", "25")
     try:
         per_page = max(1, min(int(per_page), 100))
@@ -837,7 +847,76 @@ def activity_log_view(request):
     paginator = Paginator(logs, per_page)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
-    return render(request, 'activity_log.html', {'page_obj': page_obj, 'per_page': per_page})
+    return render(request, 'activity_log.html', {
+        'page_obj': page_obj,
+        'per_page': per_page,
+        'search': search,
+    })
+
+
+@login_required
+def activity_log_export(request):
+    import csv
+    if not (request.user.is_staff or request.user.is_superuser):
+        raise PermissionDenied
+    logs = ActivityLog.objects.all()
+    search = request.GET.get("q", "").strip()
+    if search:
+        logs = logs.filter(
+            models.Q(action__icontains=search) |
+            models.Q(target__icontains=search) |
+            models.Q(detail__icontains=search) |
+            models.Q(ip_address__icontains=search) |
+            models.Q(user__email__icontains=search)
+        )
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="activity_log.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Timestamp', 'User', 'Action', 'Target', 'Detail', 'IP Address'])
+    for log in logs:
+        writer.writerow([
+            log.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            log.user.email if log.user else 'System',
+            log.action,
+            log.target,
+            log.detail,
+            log.ip_address or '',
+        ])
+    return response
+
+
+@login_required
+def app_settings_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    import zoneinfo
+    app_settings = AppSettings.load()
+    available_timezones = sorted(zoneinfo.available_timezones())
+
+    valid_ts_formats = [c[0] for c in AppSettings.TIMESTAMP_CHOICES]
+
+    if request.method == 'POST':
+        tz = request.POST.get('timezone', 'UTC')
+        ts_format = request.POST.get('timestamp_format', 'Y-m-d H:i:s')
+        changes = []
+        if tz in available_timezones:
+            app_settings.timezone = tz
+            changes.append(f'timezone={tz}')
+        else:
+            messages.error(request, 'Invalid timezone.')
+        if ts_format in valid_ts_formats:
+            app_settings.timestamp_format = ts_format
+            changes.append(f'timestamp_format={ts_format}')
+        app_settings.save()
+        if changes:
+            log_activity(request, 'update_settings', ', '.join(changes))
+            messages.success(request, 'Settings updated.')
+        return redirect('app:app_settings')
+
+    return render(request, 'app_settings.html', {
+        'app_settings': app_settings,
+        'timezones': available_timezones,
+    })
 
 
 def get_current_version():

@@ -33,13 +33,15 @@
                     {% endfor %}
                 </td>
                 <td>
-                    <i class="bi {% if item.is_favorited %}bi-star-fill text-warning{% else %}bi-star{% endif %} action-items favorite-btn" data-id="{{ item.id }}" title="Favorite" style="cursor:pointer;"></i>
-                    <a href="{% url 'app:edit' id=item.id %}" title="Edit"><img class="icon action-items" src="{% static 'images/edit.svg' %}" alt="Edit"></a>
-                    <a href="{% url 'app:clone' item.id %}" title="Clone"><img class="icon action-items" src="{% static 'images/clone.svg' %}" alt="Clone"></a>
-                    <a href="{% url 'app:download_ip_fqdn' item.id %}" title="Download"><img class="icon action-items" src="{% static 'images/download.svg' %}" alt="Download"></a>
-                    <img class="icon action-items" src="{% static 'images/delete.svg' %}" alt="Delete" onclick="deleteRecord('{{ item.id }}', event)" title="Delete">
-                    <img src="{% static 'images/copy.svg' %}" alt="Copy" class="icon action-items copy-url-btn" data-url="{{ item.full_url }}" style="cursor: pointer;" title="Copy URL">
-                    <span class="copy-confirmation" style="display: none; transition: opacity 600ms;">URL Copied</span>
+                    <span class="actions-row">
+                        <i class="bi {% if item.is_favorited %}bi-star-fill text-warning{% else %}bi-star{% endif %} action-items favorite-btn" data-id="{{ item.id }}" title="Favorite"></i>
+                        <a href="{% url 'app:edit' id=item.id %}" title="Edit"><img class="icon action-items" src="{% static 'images/edit.svg' %}" alt="Edit"></a>
+                        <a href="{% url 'app:clone' item.id %}" title="Clone"><img class="icon action-items" src="{% static 'images/clone.svg' %}" alt="Clone"></a>
+                        <a href="{% url 'app:download_ip_fqdn' item.id %}" title="Download"><img class="icon action-items" src="{% static 'images/download.svg' %}" alt="Download"></a>
+                        <img class="icon action-items" src="{% static 'images/delete.svg' %}" alt="Delete" onclick="deleteRecord('{{ item.id }}', event)" title="Delete">
+                        <img src="{% static 'images/copy.svg' %}" alt="Copy" class="icon action-items copy-url-btn" data-url="{{ item.full_url }}" title="Copy URL">
+                        <span class="copy-confirmation" style="display: none; transition: opacity 600ms;">URL Copied</span>
+                    </span>
                 </td>
             </tr>
             {% empty %}

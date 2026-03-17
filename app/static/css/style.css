@@ -303,6 +303,12 @@ td.cell-wrap {
     position: relative;
 }
 
+.actions-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .copy-confirmation {
     position: absolute;
     font-size: 0.75rem;
@@ -313,7 +319,7 @@ td.cell-wrap {
 .icon {
     width: 18px;
     height: 18px;
-    margin-right: 6px;
+    vertical-align: middle;
     opacity: 0.6;
     transition: opacity 0.15s;
 }
@@ -324,6 +330,9 @@ td.cell-wrap {
 
 .action-items {
     cursor: pointer;
+    font-size: 1.1rem;
+    vertical-align: middle;
+    line-height: 1;
 }
 
 /* Forms */

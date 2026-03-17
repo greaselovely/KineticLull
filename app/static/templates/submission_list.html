@@ -1,7 +1,9 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load tz %}
 {% block title %}API Submissions{% endblock %}
 {% block content %}
+{% timezone app_timezone %}
 <div class="content-card edl-card">
     <h3>API Submissions</h3>
     <table class="table table-hover mt-3">
@@ -26,7 +28,7 @@
                     {% endif %}
                 </td>
                 <td>{{ submission.submitted_by.email|default:"Unknown" }}</td>
-                <td>{{ submission.submitted_at }}</td>
+                <td>{{ submission.submitted_at|date:app_timestamp_format }}</td>
             </tr>
             {% empty %}
             <tr>
@@ -76,4 +78,5 @@
     </div>
     {% endif %}
 </div>
+{% endtimezone %}
 {% endblock %}

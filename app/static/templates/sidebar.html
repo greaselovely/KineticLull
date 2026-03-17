@@ -11,6 +11,12 @@
     </div>
 
     <ul class="sidebar-nav">
+        <li>
+            <a href="{% url 'app:index' %}" title="Home">
+                <i class="bi bi-house"></i>
+                <span class="nav-text">Home</span>
+            </a>
+        </li>
         {% if user.is_authenticated %}
         <li>
             <a href="{% url 'app:new_edl' %}" title="New EDL">
@@ -60,6 +66,12 @@
                 </li>
                 {% endif %}
                 {% if user.is_superuser %}
+                <li>
+                    <a href="{% url 'app:app_settings' %}" title="Settings">
+                        <i class="bi bi-sliders"></i>
+                        <span class="nav-text">Settings</span>
+                    </a>
+                </li>
                 <li>
                     <a href="{% url 'app:upgrade' %}" title="Upgrade">
                         <i class="bi bi-arrow-up-circle"></i>

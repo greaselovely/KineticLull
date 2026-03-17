@@ -1,32 +1,43 @@
 {% extends 'base.html' %}
+{% load tz %}
 {% block title %}- Activity Log{% endblock %}
 {% block content %}
+{% timezone app_timezone %}
 <div class="content-card edl-card">
-    <h3>Activity Log</h3>
+    <div class="d-flex justify-content-between align-items-center">
+        <h3 class="mb-0">Activity Log</h3>
+        <form method="get" class="d-flex" style="gap: 8px;">
+            {% if search %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+            <input type="text" name="q" class="form-control form-control-sm" placeholder="Search logs..." value="{{ search }}" style="width: 220px;">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">Search</button>
+            {% if search %}<a href="{% url 'app:activity_log' %}" class="btn btn-sm btn-outline-secondary">Clear</a>{% endif %}
+            <a href="{% url 'app:activity_log_export' %}{% if search %}?q={{ search }}{% endif %}" class="btn btn-sm btn-outline-secondary" title="Export CSV"><i class="bi bi-download"></i> CSV</a>
+        </form>
+    </div>
     <table class="table table-hover mt-3">
         <thead>
             <tr>
                 <th style="width: 15%;">Timestamp</th>
                 <th style="width: 15%;">User</th>
-                <th style="width: 12%;">Action</th>
-                <th style="width: 20%;">Target</th>
-                <th style="width: 25%;">Detail</th>
-                <th style="width: 13%;">IP Address</th>
+                <th style="width: 10%;">Action</th>
+                <th style="width: 18%;">Target</th>
+                <th style="width: 30%;">Detail</th>
+                <th style="width: 12%;">IP Address</th>
             </tr>
         </thead>
         <tbody class="align-top">
             {% for log in page_obj %}
             <tr>
-                <td>{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
+                <td>{{ log.created_at|date:app_timestamp_format }}</td>
                 <td>{{ log.user.email|default:"System" }}</td>
                 <td><span class="badge bg-secondary">{{ log.action }}</span></td>
                 <td>{{ log.target }}</td>
-                <td>{{ log.detail }}</td>
+                <td class="cell-wrap">{{ log.detail }}</td>
                 <td>{{ log.ip_address|default:"" }}</td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="6" class="text-muted">No activity recorded.</td>
+                <td colspan="6" class="text-muted">{% if search %}No results for "{{ search }}".{% else %}No activity recorded.{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -39,8 +50,8 @@
             <nav>
                 <ul class="pagination mb-0">
                     {% if page_obj.has_previous %}
-                        <li class="page-item"><a class="page-link" href="?page=1&per_page={{ per_page }}">&laquo;</a></li>
-                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&per_page={{ per_page }}">&lsaquo;</a></li>
+                        <li class="page-item"><a class="page-link" href="?page=1&per_page={{ per_page }}{% if search %}&q={{ search }}{% endif %}">&laquo;</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&per_page={{ per_page }}{% if search %}&q={{ search }}{% endif %}">&lsaquo;</a></li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
                         <li class="page-item disabled"><span class="page-link">&lsaquo;</span></li>
@@ -51,8 +62,8 @@
                     </li>
 
                     {% if page_obj.has_next %}
-                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&per_page={{ per_page }}">&rsaquo;</a></li>
-                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&per_page={{ per_page }}">&raquo;</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&per_page={{ per_page }}{% if search %}&q={{ search }}{% endif %}">&rsaquo;</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&per_page={{ per_page }}{% if search %}&q={{ search }}{% endif %}">&raquo;</a></li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">&rsaquo;</span></li>
                         <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
@@ -62,7 +73,7 @@
             {% endif %}
         </div>
         <div>
-            <select class="form-select form-select-sm" style="width: auto;" onchange="window.location.href='?per_page=' + this.value">
+            <select class="form-select form-select-sm" style="width: auto;" onchange="window.location.href='?per_page=' + this.value + '{% if search %}&q={{ search }}{% endif %}'">
                 <option value="25" {% if per_page == 25 %}selected{% endif %}>25 per page</option>
                 <option value="50" {% if per_page == 50 %}selected{% endif %}>50 per page</option>
                 <option value="100" {% if per_page == 100 %}selected{% endif %}>100 per page</option>
@@ -71,4 +82,5 @@
     </div>
     {% endif %}
 </div>
+{% endtimezone %}
 {% endblock %}
