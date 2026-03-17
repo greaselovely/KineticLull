@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block title %}- Not Found{% endblock %}
+{% block content %}
+<div class="content-card">
+    <h3>404 — Not Found</h3>
+    <p class="mt-3">The requested path <code>{{ request_path }}</code> does not exist.</p>
+    <a href="{% url 'app:index' %}" class="btn btn-outline-secondary mt-2">Go Home</a>
+</div>
+{% endblock %}

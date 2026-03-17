@@ -6,7 +6,7 @@ from django.contrib.auth import logout
 from django.core.paginator import Paginator
 from django.http import HttpResponseRedirect
 from django.utils.crypto import get_random_string
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.db import models
 from django.core.exceptions import PermissionDenied
 from django.utils.decorators import method_decorator
@@ -211,7 +211,6 @@ def show_ip_fqdn(request, auto_url):
         edl = ExtDynLists.objects.get(auto_url=auto_url)
     except ExtDynLists.DoesNotExist:
         log_activity(request, 'edl_not_found', auto_url, detail)
-        from django.http import Http404
         raise Http404
 
     acl_list = edl.acl.split('\n')
@@ -221,6 +220,15 @@ def show_ip_fqdn(request, auto_url):
     else:
         log_activity(request, 'edl_denied', edl.friendly_name, detail)
         raise PermissionDenied
+
+
+def custom_404(request, exception):
+    user_ip = request.META.get('REMOTE_ADDR')
+    user_agent = request.META.get('HTTP_USER_AGENT', '') or 'No User-Agent'
+    path = request.get_full_path()
+    log_activity(request, 'not_found', path, f'Agent: {user_agent}')
+    return render(request, '404.html', {'request_path': path}, status=404)
+
 
 @login_required
 def create_new_edl(request):
