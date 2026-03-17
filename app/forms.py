@@ -10,7 +10,6 @@ class ExtDynListsForm(forms.ModelForm):
     class Meta:
         model = ExtDynLists
         exclude = ('auto_url',)
-        fields = '__all__'
         widgets = {
             'friendly_name' : forms.TextInput(attrs={'class' : 'form-control mb-3', 
                                               'id' : 'friendlyNameInput', 
@@ -52,7 +51,7 @@ class CustomUserChangeForm(UserChangeForm):
     def __init__(self, *args, **kwargs):
         super(CustomUserChangeForm, self).__init__(*args, **kwargs)
         # Optionally customize form fields here, e.g., set a field as read-only
-        self.fields['email'].read_only = True
+        self.fields['email'].disabled = True
 
 
 # class ScriptForm(forms.ModelForm):
