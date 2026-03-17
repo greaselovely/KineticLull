@@ -21,7 +21,7 @@
                 {% comment %} <td><a href="{% url 'app:review_submission' submission.id %}">{{ submission.id }}</a></td> {% endcomment %}
                 <td><a href="{% url 'app:review_submission' submission.id %}"><img class="icon action-items" src="{% static 'images/edit.svg' %}" alt="Edit"></a></td>
                 <td>{% for ip_fq in submission.fqdn_list %} {{ ip_fq }}<br> {% endfor %}</td>
-                <td>{{ submission.user_email }}</td>
+                <td>{{ submission.submitted_by.email|default:"Unknown" }}</td>
                 <td>{{ submission.submitted_at }} </td>
             </tr>
             {% endfor %}

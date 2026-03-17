@@ -1,21 +1,27 @@
+import secrets
+
 from django.db import models
 from django.conf import settings
 from django.contrib.auth.models import Group
 
 class ExtDynLists(models.Model):
     friendly_name = models.CharField(max_length=255, verbose_name='EDL Name')
-    auto_url = models.CharField(max_length=255)
+    auto_url = models.CharField(max_length=255, unique=True, blank=True)
     ip_fqdn = models.TextField(verbose_name='IP/FQDN')
     acl = models.TextField(verbose_name='ACL')
     policy_reference = models.TextField(verbose_name='Notes')
     groups = models.ManyToManyField(Group, blank=True, verbose_name='Groups')
-    # use_script = models.ForeignKey('Script', on_delete=models.CASCADE, verbose_name='Script', null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = "Ext Dyn List"
         verbose_name_plural = "Ext Dyn Lists"
         ordering = ["created_date", "friendly_name"]
+
+    def save(self, *args, **kwargs):
+        if not self.auto_url:
+            self.auto_url = secrets.token_urlsafe(16) + ".kl"
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.id}: {self.friendly_name} ({self.auto_url})" 
@@ -29,7 +35,7 @@ class ExtDynLists(models.Model):
 
 
 class InboxEntry(models.Model):
-    user_email = models.CharField(max_length=255, verbose_name='E-Mail Address')
+    submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='Submitted By', null=True)
     fqdn_list = models.TextField(verbose_name='IP/FQDN')
     submitted_at = models.DateTimeField(auto_now_add=True)
 
