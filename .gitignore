@@ -5,6 +5,9 @@ MM.jpeg
 *.pem
 *.bak
 test.sh
+deploy/migrate_to_nginx.sh
+.migration_backup_*/
+ssl/
 # db.sqlite3
 
 # Byte-compiled / optimized / DLL files

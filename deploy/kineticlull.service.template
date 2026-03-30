@@ -1,0 +1,12 @@
+[Unit]
+Description=Gunicorn instance to serve KineticLull
+After=network.target
+
+[Service]
+User={{USER}}
+Group={{USER}}
+WorkingDirectory={{PROJECT_DIR}}
+ExecStart={{VENV_PATH}}/bin/gunicorn --workers {{WORKERS}} --bind 127.0.0.1:8000 project.wsgi:application
+
+[Install]
+WantedBy=multi-user.target

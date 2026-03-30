@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}- Migrate to Nginx{% endblock %}
+{% block content %}
+<div class="content-card" style="max-width: 700px;">
+
+    {% if generated %}
+    <h3>Migration Script Ready</h3>
+
+    <div class="alert alert-success mt-3">
+        <i class="bi bi-check-circle me-2"></i>
+        Migration script has been generated for <strong>{{ server_name }}</strong>.
+    </div>
+
+    <div class="card mt-3">
+        <div class="card-body">
+            <h6>Run this command on the server:</h6>
+            <pre class="bg-dark text-light p-3 rounded mt-2 mb-0"><code>sudo bash {{ script_path }}</code></pre>
+        </div>
+    </div>
+
+    <div class="card mt-3 border-warning">
+        <div class="card-body">
+            <h6 class="text-warning"><i class="bi bi-shield-check me-1"></i> What the script does:</h6>
+            <ul class="small text-muted mb-0">
+                <li>Backs up your current systemd service and authbind config</li>
+                <li>Installs Nginx (if not already installed)</li>
+                <li>Moves or generates self-signed SSL certificates</li>
+                <li>Writes Nginx config with SSL, security headers, and rate limiting</li>
+                <li>Updates the Gunicorn systemd service to bind to 127.0.0.1:8000</li>
+                <li>Restarts both services and runs a health check</li>
+                <li><strong>Automatically rolls back if anything fails</strong></li>
+            </ul>
+        </div>
+    </div>
+
+    <p class="text-muted small mt-3">
+        After running the script, return to the
+        <a href="{% url 'app:deployment_status' %}">deployment status</a> page to verify.
+    </p>
+
+    {% else %}
+    <h3>Migrate to Nginx + Gunicorn</h3>
+
+    <p class="text-muted mt-3">
+        This wizard generates a migration script that you run with <code>sudo</code>.
+        The script includes automatic rollback if anything fails.
+    </p>
+
+    <form method="post" class="mt-3">
+        {% csrf_token %}
+
+        <div class="mb-3">
+            <label for="server_name" class="form-label">Server Name (IP or FQDN)</label>
+            <input type="text" name="server_name" id="server_name" class="form-control form-control-sm"
+                value="{{ server_name }}" placeholder="10.1.1.1 or edl.internal.com" required>
+            <div class="form-text">Do not include https:// — just the hostname or IP.</div>
+        </div>
+
+        <div class="mb-3">
+            <label for="workers" class="form-label">Gunicorn Workers</label>
+            <input type="number" name="workers" id="workers" class="form-control form-control-sm"
+                value="3" min="1" max="16" style="width: 100px;">
+            <div class="form-text">Recommended: 2x CPU cores + 1</div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">SSL Certificates</label>
+            {% if has_ssl_certs %}
+            <p class="small text-success mb-0">
+                <i class="bi bi-check-circle"></i> Certs found in <code>ssl/</code> directory. Will be reused.
+            </p>
+            {% elif has_legacy_certs %}
+            <p class="small text-info mb-0">
+                <i class="bi bi-info-circle"></i> Legacy certs found in project root. Will be moved to <code>ssl/</code>.
+            </p>
+            {% else %}
+            <p class="small text-muted mb-0">
+                <i class="bi bi-info-circle"></i> No certs found. A new self-signed certificate will be generated.
+            </p>
+            {% endif %}
+        </div>
+
+        <div class="mb-3">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="confirmed" id="confirmed" required>
+                <label class="form-check-label" for="confirmed">
+                    I understand the generated script must be run with <code>sudo</code> and will
+                    modify Nginx, systemd, and firewall configuration on this server.
+                </label>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm">Generate Migration Script</button>
+        <a href="{% url 'app:deployment_status' %}" class="btn btn-outline-secondary btn-sm ms-2">Cancel</a>
+    </form>
+    {% endif %}
+
+    <a href="{% url 'app:deployment_status' %}" class="btn btn-outline-secondary btn-sm mt-3">Back to Deployment</a>
+</div>
+{% endblock %}

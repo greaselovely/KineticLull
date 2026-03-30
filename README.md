@@ -5,6 +5,8 @@
 
 KineticLull (http://kineticlull.com) is a web application for managing and deploying External Dynamic Lists (EDLs) used in network security and firewall policy management. It provides a user-friendly interface for creating, managing, and deploying EDLs without requiring direct firewall access. Inspired by Palo Alto Networks' MineMeld, but simpler and self-hosted.
 
+> **Warning**: KineticLull is designed for internal/private network use only. Do not expose it directly to the internet. It uses self-signed certificates and is not hardened for public-facing deployment.
+
 ## Key Features
 
 - **EDL Management**: Create, edit, clone, and delete EDLs through a clean web interface.
@@ -40,7 +42,9 @@ cd KineticLull
 bash setup.sh
 ```
 
-The setup script handles virtual environment creation, dependency installation, database setup, and service configuration. It will prompt for the IP or FQDN the application will be accessible at.
+The setup script handles virtual environment creation, dependency installation, database setup, Nginx + Gunicorn configuration, and systemd service creation. It will prompt for the IP or FQDN the application will be accessible at.
+
+**Deployment architecture**: Fresh installs use Nginx for SSL termination, static file serving, security headers, and API rate limiting. Gunicorn runs behind Nginx on `127.0.0.1:8000`.
 
 ### Default Credentials
 
@@ -64,7 +68,11 @@ cd /path/to/KineticLull
 bash upgrade.sh
 ```
 
-This will pull the latest code, install/update dependencies, run database migrations, collect static files, and restart the service.
+This will pull the latest code, install/update dependencies, run database migrations, collect static files, and restart the service. If you are running the legacy Gunicorn + direct SSL setup, `upgrade.sh` will offer to migrate to Nginx + Gunicorn (highly recommended).
+
+### Option 2b: Web UI Migration Wizard
+
+Superusers can also initiate the Nginx migration from **Admin > Deployment** in the sidebar. The wizard generates a migration script that you run with `sudo` on the server.
 
 ### Option 3: Manual
 

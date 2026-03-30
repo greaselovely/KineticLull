@@ -1565,6 +1565,378 @@ def upgrade_view(request):
     return render(request, 'upgrade.html', context)
 
 
+@login_required
+def deployment_status_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    from app.models import AppSettings
+    import shutil
+
+    app_settings = AppSettings.load()
+    db_mode = app_settings.deployment_mode
+
+    # System-level checks
+    nginx_installed = shutil.which('nginx') is not None
+    nginx_active = False
+    nginx_config_exists = False
+    service_mode = 'unknown'
+
+    try:
+        result = subprocess.run(
+            ['systemctl', 'is-active', 'nginx'],
+            capture_output=True, text=True, timeout=5,
+        )
+        nginx_active = result.stdout.strip() == 'active'
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Check for nginx config
+    for path in ['/etc/nginx/sites-available/kineticlull', '/etc/nginx/conf.d/kineticlull.conf']:
+        if os.path.exists(path):
+            nginx_config_exists = True
+            break
+
+    # Check systemd service
+    service_file = '/etc/systemd/system/kineticlull.service'
+    if os.path.exists(service_file):
+        try:
+            with open(service_file, 'r') as f:
+                svc_content = f.read()
+            if 'authbind' in svc_content or '--certfile' in svc_content:
+                service_mode = 'gunicorn_ssl'
+            elif '127.0.0.1:8000' in svc_content:
+                service_mode = 'nginx_gunicorn'
+        except PermissionError:
+            pass
+
+    # Determine effective mode and any mismatch
+    effective_mode = db_mode
+    mismatch = False
+    if service_mode != 'unknown' and service_mode != db_mode:
+        mismatch = True
+        effective_mode = service_mode
+
+    context = {
+        'title': 'Deployment',
+        'deployment_mode': effective_mode,
+        'deployment_label': dict(AppSettings.DEPLOYMENT_CHOICES).get(effective_mode, effective_mode),
+        'nginx_installed': nginx_installed,
+        'nginx_active': nginx_active,
+        'nginx_config_exists': nginx_config_exists,
+        'mismatch': mismatch,
+        'db_mode': db_mode,
+        'service_mode': service_mode,
+        'can_migrate': effective_mode == 'gunicorn_ssl',
+    }
+    return render(request, 'deployment_status.html', context)
+
+
+@login_required
+def deployment_migrate_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    from app.models import AppSettings
+    base_dir = str(settings.BASE_DIR)
+
+    # Pre-fill server name from .env
+    kl_url = os.environ.get('KINETICLULL_URL', '')
+    server_name = ''
+    if kl_url:
+        parsed = urlparse(kl_url)
+        server_name = parsed.hostname or kl_url.replace('https://', '').replace('http://', '').strip('/')
+
+    # Check for existing certs
+    cert_dir = os.path.join(base_dir, 'ssl')
+    has_ssl_certs = os.path.exists(os.path.join(cert_dir, 'cert.pem'))
+    has_legacy_certs = os.path.exists(os.path.join(base_dir, 'cert.pem'))
+
+    if request.method == 'POST':
+        server_name = request.POST.get('server_name', server_name).strip()
+        workers = request.POST.get('workers', '3').strip()
+        confirmed = request.POST.get('confirmed') == 'on'
+
+        if not server_name:
+            messages.error(request, 'Server name is required.')
+            return redirect('app:deployment_migrate')
+
+        if not confirmed:
+            messages.error(request, 'You must confirm you understand the migration requires sudo.')
+            return redirect('app:deployment_migrate')
+
+        # Strip protocol if user included it
+        server_name = server_name.replace('https://', '').replace('http://', '').strip('/')
+
+        try:
+            workers = int(workers)
+            if workers < 1 or workers > 16:
+                workers = 3
+        except ValueError:
+            workers = 3
+
+        # Generate the migration script
+        deploy_dir = os.path.join(base_dir, 'deploy')
+        script_path = os.path.join(deploy_dir, 'migrate_to_nginx.sh')
+
+        # Read templates
+        nginx_template_path = os.path.join(deploy_dir, 'nginx_kineticlull.conf.template')
+        svc_template_path = os.path.join(deploy_dir, 'kineticlull.service.template')
+
+        try:
+            with open(nginx_template_path, 'r') as f:
+                nginx_template = f.read()
+            with open(svc_template_path, 'r') as f:
+                svc_template = f.read()
+        except FileNotFoundError as e:
+            messages.error(request, f'Template file missing: {e.filename}')
+            return redirect('app:deployment_migrate')
+
+        cert_dir_path = os.path.join(base_dir, 'ssl')
+        static_root = os.path.join(base_dir, 'staticfiles')
+        venv_path = os.path.join(base_dir, 'venv')
+        python_path = os.path.join(venv_path, 'bin', 'python')
+
+        # Render nginx config
+        nginx_config = nginx_template.replace('{{SERVER_NAME}}', server_name)
+        nginx_config = nginx_config.replace('{{CERT_PATH}}', os.path.join(cert_dir_path, 'cert.pem'))
+        nginx_config = nginx_config.replace('{{KEY_PATH}}', os.path.join(cert_dir_path, 'key.pem'))
+        nginx_config = nginx_config.replace('{{STATIC_ROOT}}', static_root)
+
+        # Render service file
+        import getpass
+        current_user = getpass.getuser()
+        svc_config = svc_template.replace('{{USER}}', current_user)
+        svc_config = svc_config.replace('{{PROJECT_DIR}}', base_dir)
+        svc_config = svc_config.replace('{{VENV_PATH}}', venv_path)
+        svc_config = svc_config.replace('{{WORKERS}}', str(workers))
+
+        # Generate self-contained migration script
+        script_content = _generate_migration_script(
+            base_dir=base_dir,
+            server_name=server_name,
+            cert_dir=cert_dir_path,
+            nginx_config=nginx_config,
+            svc_config=svc_config,
+            python_path=python_path,
+        )
+
+        os.makedirs(deploy_dir, exist_ok=True)
+        with open(script_path, 'w') as f:
+            f.write(script_content)
+        os.chmod(script_path, 0o755)
+
+        log_activity(request, 'deployment', 'nginx_migration', f'Migration script generated for {server_name}')
+
+        context = {
+            'title': 'Migration Script Ready',
+            'script_path': script_path,
+            'server_name': server_name,
+            'generated': True,
+        }
+        return render(request, 'deployment_migrate.html', context)
+
+    context = {
+        'title': 'Migrate to Nginx',
+        'server_name': server_name,
+        'has_ssl_certs': has_ssl_certs,
+        'has_legacy_certs': has_legacy_certs,
+        'generated': False,
+    }
+    return render(request, 'deployment_migrate.html', context)
+
+
+def _generate_migration_script(base_dir, server_name, cert_dir, nginx_config, svc_config, python_path):
+    """Generate a self-contained bash script for Nginx migration."""
+    return f'''#!/bin/bash
+# KineticLull - Nginx Migration Script
+# Generated by the KineticLull web wizard
+# Run with: sudo bash {base_dir}/deploy/migrate_to_nginx.sh
+
+set -e
+
+PROJECT_DIR="{base_dir}"
+PROJECT_NAME="kineticlull"
+CERT_DIR="{cert_dir}"
+SERVICE_FILE="/etc/systemd/system/${{PROJECT_NAME}}.service"
+PYTHON="{python_path}"
+LOGFILE="${{PROJECT_DIR}}/migration.log"
+
+echo "Migration started at $(date)" > "${{LOGFILE}}"
+
+log()  {{ echo -e "[*]\\t$1" | tee -a "${{LOGFILE}}"; }}
+ok()   {{ echo -e "[+]\\t$1" | tee -a "${{LOGFILE}}"; }}
+warn() {{ echo -e "[!]\\t$1" | tee -a "${{LOGFILE}}"; }}
+
+# Check for root
+if [ "$EUID" -ne 0 ]; then
+    warn "This script must be run as root (sudo)."
+    exit 1
+fi
+
+echo ""
+echo "========================================="
+echo "  KineticLull Nginx Migration"
+echo "========================================="
+echo ""
+
+# ── Step 0: Backup ──
+BACKUP_DIR="${{PROJECT_DIR}}/.migration_backup_$(date +%Y%m%d%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+log "Backing up current config to ${{BACKUP_DIR}}..."
+
+if [ -f "$SERVICE_FILE" ]; then
+    cp "$SERVICE_FILE" "${{BACKUP_DIR}}/kineticlull.service"
+fi
+if [ -f "/etc/authbind/byport/443" ]; then
+    cp "/etc/authbind/byport/443" "${{BACKUP_DIR}}/authbind_443" 2>/dev/null || true
+fi
+ok "Backup created."
+
+# ── Rollback function ──
+rollback() {{
+    warn "Rolling back..."
+    if [ -f "${{BACKUP_DIR}}/kineticlull.service" ]; then
+        cp "${{BACKUP_DIR}}/kineticlull.service" "$SERVICE_FILE"
+    fi
+    if [ -f "${{BACKUP_DIR}}/authbind_443" ]; then
+        cp "${{BACKUP_DIR}}/authbind_443" "/etc/authbind/byport/443"
+    fi
+    rm -f "/etc/nginx/sites-enabled/${{PROJECT_NAME}}" 2>/dev/null
+    rm -f "/etc/nginx/sites-available/${{PROJECT_NAME}}" 2>/dev/null
+    rm -f "/etc/nginx/conf.d/${{PROJECT_NAME}}.conf" 2>/dev/null
+    systemctl stop nginx 2>/dev/null || true
+    systemctl daemon-reload
+    systemctl restart "${{PROJECT_NAME}}" 2>/dev/null || true
+    $PYTHON "${{PROJECT_DIR}}/manage.py" shell -c "
+from app.models import AppSettings
+s = AppSettings.load()
+s.deployment_mode = 'gunicorn_ssl'
+s.save()
+" 2>>"${{LOGFILE}}" || true
+    ok "Rollback complete. Previous config restored."
+    ok "Backup at: ${{BACKUP_DIR}}"
+    exit 1
+}}
+
+# ── Step 1: Install Nginx ──
+log "Installing Nginx..."
+if [ -f /etc/debian_version ]; then
+    apt-get update -qq
+    apt-get install -y nginx openssl 2>>"${{LOGFILE}}"
+elif [ -f /etc/redhat-release ]; then
+    if command -v dnf &>/dev/null; then
+        dnf install -y nginx openssl 2>>"${{LOGFILE}}"
+    else
+        yum install -y nginx openssl 2>>"${{LOGFILE}}"
+    fi
+else
+    warn "Unsupported OS."
+    exit 1
+fi
+ok "Nginx installed."
+
+# ── Step 2: SSL Certs ──
+mkdir -p "${{CERT_DIR}}"
+if [ -f "${{CERT_DIR}}/cert.pem" ] && [ -f "${{CERT_DIR}}/key.pem" ]; then
+    log "SSL certs already exist."
+elif [ -f "${{PROJECT_DIR}}/cert.pem" ] && [ -f "${{PROJECT_DIR}}/key.pem" ]; then
+    log "Moving certs from project root..."
+    cp "${{PROJECT_DIR}}/cert.pem" "${{CERT_DIR}}/cert.pem"
+    cp "${{PROJECT_DIR}}/key.pem" "${{CERT_DIR}}/key.pem"
+    chmod 600 "${{CERT_DIR}}/key.pem"
+    chmod 644 "${{CERT_DIR}}/cert.pem"
+    ok "Certs moved."
+else
+    log "Generating self-signed SSL certificate..."
+    openssl req -x509 -newkey rsa:4096 \\
+        -keyout "${{CERT_DIR}}/key.pem" \\
+        -out "${{CERT_DIR}}/cert.pem" \\
+        -days 1825 -nodes \\
+        -subj "/CN={server_name}/O=KineticLull/OU=Self-Signed" \\
+        2>>"${{LOGFILE}}"
+    chmod 600 "${{CERT_DIR}}/key.pem"
+    chmod 644 "${{CERT_DIR}}/cert.pem"
+    ok "SSL cert generated."
+fi
+
+# ── Step 3: Write Nginx config ──
+log "Writing Nginx configuration..."
+if [ -f /etc/debian_version ]; then
+    cat > "/etc/nginx/sites-available/${{PROJECT_NAME}}" << 'NGINXEOF'
+{nginx_config}
+NGINXEOF
+    ln -sf "/etc/nginx/sites-available/${{PROJECT_NAME}}" "/etc/nginx/sites-enabled/${{PROJECT_NAME}}"
+    rm -f "/etc/nginx/sites-enabled/default" 2>/dev/null || true
+else
+    cat > "/etc/nginx/conf.d/${{PROJECT_NAME}}.conf" << 'NGINXEOF'
+{nginx_config}
+NGINXEOF
+fi
+
+# ── Step 4: Test Nginx config ──
+if ! nginx -t 2>>"${{LOGFILE}}"; then
+    warn "Nginx config test failed."
+    rollback
+fi
+ok "Nginx config tested OK."
+
+# ── Step 5: Update systemd service ──
+log "Updating Gunicorn systemd service..."
+cat > "$SERVICE_FILE" << 'SVCEOF'
+{svc_config}
+SVCEOF
+ok "Systemd service updated."
+
+# ── Step 6: Restart services ──
+log "Restarting services..."
+systemctl daemon-reload
+systemctl restart "${{PROJECT_NAME}}"
+systemctl enable nginx 2>>"${{LOGFILE}}"
+systemctl restart nginx
+
+# ── Step 7: Health check ──
+sleep 2
+HTTP_CODE=$(curl -sk -o /dev/null -w '%{{http_code}}' "https://localhost/" 2>/dev/null || echo "000")
+
+if [ "${{HTTP_CODE}}" != "200" ] && [ "${{HTTP_CODE}}" != "302" ]; then
+    warn "Health check failed (HTTP ${{HTTP_CODE}})."
+    rollback
+fi
+ok "Health check passed (HTTP ${{HTTP_CODE}})."
+
+# ── Step 8: Update AppSettings ──
+$PYTHON "${{PROJECT_DIR}}/manage.py" shell -c "
+from app.models import AppSettings
+s = AppSettings.load()
+s.deployment_mode = 'nginx_gunicorn'
+s.save()
+" 2>>"${{LOGFILE}}"
+ok "AppSettings updated."
+
+# ── Step 9: Cleanup ──
+if [ -f "/etc/authbind/byport/443" ]; then
+    rm -f "/etc/authbind/byport/443"
+    log "Removed legacy authbind config."
+fi
+
+# Firewall
+if command -v firewall-cmd &>/dev/null; then
+    firewall-cmd --permanent --add-service=https 2>/dev/null || true
+    firewall-cmd --permanent --add-service=http 2>/dev/null || true
+    firewall-cmd --reload 2>/dev/null || true
+elif command -v ufw &>/dev/null; then
+    ufw allow 'Nginx Full' 2>/dev/null || true
+fi
+
+echo ""
+echo "========================================="
+ok "Migration to Nginx + Gunicorn complete!"
+ok "KineticLull is running at https://{server_name}"
+ok "Backup saved at: ${{BACKUP_DIR}}"
+echo "========================================="
+'''
+
 # @login_required
 # def script_list(request):
 #     script_list = Script.objects.all()

@@ -89,6 +89,11 @@ class ActivityLog(models.Model):
 
 
 class AppSettings(models.Model):
+    DEPLOYMENT_CHOICES = [
+        ('gunicorn_ssl', 'Gunicorn (direct SSL)'),
+        ('nginx_gunicorn', 'Nginx + Gunicorn'),
+    ]
+
     TIMESTAMP_CHOICES = [
         ('Y-m-d H:i:s', '2026-03-17 14:30:00'),
         ('m/d/Y H:i:s', '03/17/2026 14:30:00'),
@@ -130,6 +135,12 @@ class AppSettings(models.Model):
     syslog_host = models.CharField(max_length=255, blank=True, default='', verbose_name='Syslog Host')
     syslog_port = models.PositiveIntegerField(default=514, verbose_name='Syslog Port')
     syslog_protocol = models.CharField(max_length=3, default='udp', choices=SYSLOG_PROTOCOL_CHOICES, verbose_name='Syslog Protocol')
+
+    # Deployment
+    deployment_mode = models.CharField(
+        max_length=20, default='gunicorn_ssl',
+        choices=DEPLOYMENT_CHOICES, verbose_name='Deployment Mode'
+    )
 
     # Internal
     db_checksum = models.CharField(max_length=64, blank=True, verbose_name='DB Integrity Checksum')

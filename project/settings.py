@@ -132,6 +132,11 @@ AUTH_USER_MODEL = 'users.CustomUser'
 
 INTERNAL_IPS = ['127.0.0.1',]
 
+# Proxy headers (safe unconditionally; only apply when headers are present)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+
 # Logging #
 KINETICLULL_LOG_FILE = "kineticlull.log"
 LOG_DIR = BASE_DIR / 'logs'

@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}- Deployment{% endblock %}
+{% block content %}
+<div class="content-card" style="max-width: 700px;">
+    <h3>Deployment Status</h3>
+
+    {% if mismatch %}
+    <div class="alert alert-warning mt-3">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>Configuration mismatch:</strong> Database says <code>{{ db_mode }}</code> but
+        systemd service indicates <code>{{ service_mode }}</code>.
+        The system state is shown below. Run <code>bash upgrade.sh</code> to reconcile.
+    </div>
+    {% endif %}
+
+    <div class="card mt-3">
+        <div class="card-body">
+            <div class="d-flex align-items-center mb-3">
+                {% if deployment_mode == 'nginx_gunicorn' %}
+                <span class="badge bg-success me-2"><i class="bi bi-check-circle"></i></span>
+                {% else %}
+                <span class="badge bg-warning text-dark me-2"><i class="bi bi-exclamation-circle"></i></span>
+                {% endif %}
+                <h5 class="mb-0">{{ deployment_label }}</h5>
+            </div>
+
+            <table class="table table-sm mb-0">
+                <tbody>
+                    <tr>
+                        <td class="text-muted" style="width: 200px;">Deployment Mode</td>
+                        <td><code>{{ deployment_mode }}</code></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Nginx Installed</td>
+                        <td>
+                            {% if nginx_installed %}
+                            <i class="bi bi-check-circle text-success"></i> Yes
+                            {% else %}
+                            <i class="bi bi-x-circle text-danger"></i> No
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Nginx Active</td>
+                        <td>
+                            {% if nginx_active %}
+                            <i class="bi bi-check-circle text-success"></i> Running
+                            {% else %}
+                            <i class="bi bi-x-circle text-secondary"></i> Not running
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Nginx Config</td>
+                        <td>
+                            {% if nginx_config_exists %}
+                            <i class="bi bi-check-circle text-success"></i> Present
+                            {% else %}
+                            <i class="bi bi-x-circle text-secondary"></i> Not found
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if can_migrate %}
+    <div class="card mt-3 border-info">
+        <div class="card-body">
+            <h6>Migrate to Nginx + Gunicorn</h6>
+            <p class="text-muted small mb-2">
+                Your installation uses legacy Gunicorn with direct SSL (authbind).
+                Migrating to Nginx provides SSL termination, static file serving,
+                security headers, and API rate limiting.
+            </p>
+            <p class="text-muted small mb-3">
+                You can migrate via the web wizard below or by running
+                <code>bash upgrade.sh</code> from the command line.
+            </p>
+            <a href="{% url 'app:deployment_migrate' %}" class="btn btn-primary btn-sm">
+                Migrate to Nginx
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <a href="{% url 'app:index' %}" class="btn btn-outline-secondary btn-sm mt-3">Back</a>
+</div>
+{% endblock %}
