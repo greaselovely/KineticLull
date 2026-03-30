@@ -6,6 +6,16 @@
 
     <p class="mt-3">Current version: <strong>{{ current_version }}</strong></p>
 
+    {% if legacy_deployment %}
+    <div class="alert alert-warning mt-3">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>Nginx migration recommended.</strong>
+        Your installation is using legacy Gunicorn with direct SSL.
+        After upgrading, visit <a href="{% url 'app:deployment_migrate' %}" class="alert-link">Deployment &rarr; Migrate to Nginx</a>
+        to generate a migration script.
+    </div>
+    {% endif %}
+
     {% if upgrade_available %}
         <p>Available version: <strong>{{ latest_version }}</strong></p>
         <form method="post">

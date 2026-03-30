@@ -1493,10 +1493,14 @@ def upgrade_view(request):
         and latest_version != current_version
     )
 
+    from app.models import AppSettings
+    deployment_mode = AppSettings.load().deployment_mode
+
     context = {
         'current_version': current_version,
         'latest_version': latest_version,
         'upgrade_available': upgrade_available,
+        'legacy_deployment': deployment_mode == 'gunicorn_ssl',
         'title': 'System Upgrade',
     }
 
