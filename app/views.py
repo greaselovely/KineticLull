@@ -112,10 +112,18 @@ def send_syslog(app_settings, user_email, action, target, detail, ip_address):
         pass  # Syslog failure should never break the app
 
 
+def get_client_ip(request):
+    """Extract the real client IP, preferring X-Forwarded-For when behind a reverse proxy."""
+    xff = request.META.get('HTTP_X_FORWARDED_FOR')
+    if xff:
+        return xff.split(',')[0].strip()
+    return request.META.get('HTTP_X_REAL_IP') or request.META.get('REMOTE_ADDR')
+
+
 def log_activity(request, action, target='', detail='', user=None):
     """Log a user activity to the database, forward to syslog, purge old logs, and update the integrity checksum."""
     log_user = user or (request.user if request.user.is_authenticated else None)
-    ip_address = request.META.get('REMOTE_ADDR')
+    ip_address = get_client_ip(request)
     ActivityLog.objects.create(
         user=log_user,
         action=action,
@@ -249,7 +257,7 @@ def show_ip_fqdn(request, auto_url):
     PermissionDenied: If the user's IP address is not allowed access as per the ACL list.
     """
 
-    user_ip = request.META.get('REMOTE_ADDR')
+    user_ip = get_client_ip(request)
     http_headers = {k.replace('HTTP_', '').lower(): v for k, v in request.META.items() if k.startswith('HTTP_')}
     detail = '; '.join(f'{k}={v}' for k, v in http_headers.items()) or 'No headers'
 
