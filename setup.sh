@@ -92,6 +92,21 @@ configure_firewall() {
     fi
 }
 
+# ─── Nginx Permissions ────────────────────────────────────────────────────────
+
+ensure_nginx_traversal() {
+    log "Ensuring Nginx can traverse path to project directory..."
+    local DIR="${PROJECT_DIR}"
+    while [ "$DIR" != "/" ]; do
+        if [ -d "$DIR" ] && ! stat -c '%A' "$DIR" 2>/dev/null | grep -q '...x$'; then
+            sudo chmod o+x "$DIR"
+            log "  chmod o+x $DIR"
+        fi
+        DIR=$(dirname "$DIR")
+    done
+    ok "Directory traversal permissions verified."
+}
+
 # ─── SSL Certificate ─────────────────────────────────────────────────────────
 
 generate_ssl_cert() {
@@ -195,6 +210,8 @@ configure_nginx() {
     else
         echo "${RENDERED}" | sudo tee "${NGINX_CONF_DIR}/${PROJECT_NAME}.conf" > /dev/null
     fi
+
+    ensure_nginx_traversal
 
     # Test config
     if ! sudo nginx -t 2>>"${LOGFILE}"; then

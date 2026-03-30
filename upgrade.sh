@@ -69,6 +69,24 @@ s.save()
     ok "Backup preserved at: ${BACKUP_DIR}"
 }
 
+# ─── Nginx Permissions ────────────────────────────────────────────────────────
+
+ensure_nginx_traversal() {
+    # Nginx (www-data/nginx) needs o+x on every directory in the path
+    # to PROJECT_DIR so it can reach staticfiles/ for serving static files.
+    log "Ensuring Nginx can traverse path to project directory..."
+    local DIR="${PROJECT_DIR}"
+    while [ "$DIR" != "/" ]; do
+        # Only fix directories that are missing o+x
+        if [ -d "$DIR" ] && ! stat -c '%A' "$DIR" 2>/dev/null | grep -q '...x$'; then
+            sudo chmod o+x "$DIR"
+            log "  chmod o+x $DIR"
+        fi
+        DIR=$(dirname "$DIR")
+    done
+    ok "Directory traversal permissions verified."
+}
+
 # ─── Service Restart Helpers ──────────────────────────────────────────────────
 
 restart_legacy_service() {
@@ -86,6 +104,7 @@ restart_legacy_service() {
 }
 
 restart_nginx_services() {
+    ensure_nginx_traversal
     log "Restarting services..."
     if systemctl is-active --quiet "$PROJECT_NAME" 2>/dev/null; then
         sudo systemctl restart "$PROJECT_NAME"
@@ -214,6 +233,8 @@ print(parsed.hostname or url.replace('https://','').replace('http://','').strip(
     else
         echo "${RENDERED}" | sudo tee "/etc/nginx/conf.d/${PROJECT_NAME}.conf" > /dev/null
     fi
+
+    ensure_nginx_traversal
 
     # ── Step 4: Test Nginx config ──
     if ! sudo nginx -t 2>>"${LOGFILE}"; then

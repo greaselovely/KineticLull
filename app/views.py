@@ -1874,6 +1874,14 @@ else
 NGINXEOF
 fi
 
+# Ensure Nginx can traverse the path to staticfiles
+log "Setting directory permissions for Nginx traversal..."
+TRAV_DIR="${{PROJECT_DIR}}"
+while [ "$TRAV_DIR" != "/" ]; do
+    chmod o+x "$TRAV_DIR"
+    TRAV_DIR=$(dirname "$TRAV_DIR")
+done
+
 # ── Step 4: Test Nginx config ──
 if ! nginx -t 2>>"${{LOGFILE}}"; then
     warn "Nginx config test failed."
