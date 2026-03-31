@@ -316,10 +316,32 @@ log "Server name: ${SERVER_NAME}"
 log "Workers: ${GUNICORN_WORKERS}"
 log "Project dir: ${PROJECT_DIR}"
 
+# Create .env before Django setup (settings.py blocks on input() if missing)
+create_env() {
+    local ENV_FILE="${PROJECT_DIR}/project/.env"
+    if [ -f "${ENV_FILE}" ]; then
+        log "project/.env already exists. Skipping."
+        return
+    fi
+
+    log "Creating project/.env..."
+    local SECRET_KEY
+    SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(65))" 2>/dev/null || openssl rand -base64 48)
+
+    cat > "${ENV_FILE}" <<ENVEOF
+KINETICLULL_URL = 'https://${SERVER_NAME}'
+SECRET_KEY = '${SECRET_KEY}'
+DEBUG = 'False'
+ENVEOF
+    chmod 600 "${ENV_FILE}"
+    ok "project/.env created."
+}
+
 detect_os
 install_packages
 generate_ssl_cert
 setup_python
+create_env
 setup_django
 configure_nginx
 configure_gunicorn_service
