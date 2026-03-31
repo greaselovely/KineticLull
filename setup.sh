@@ -157,6 +157,15 @@ generate_self_signed_cert() {
 }
 
 setup_letsencrypt() {
+    # Check if LE cert already exists
+    if [ -f "/etc/letsencrypt/live/${SERVER_NAME}/fullchain.pem" ]; then
+        log "Let's Encrypt certificate already exists for ${SERVER_NAME}."
+        CERT_DIR="/etc/letsencrypt/live/${SERVER_NAME}"
+        CERT_PATH="${CERT_DIR}/fullchain.pem"
+        KEY_PATH="${CERT_DIR}/privkey.pem"
+        return
+    fi
+
     log "Setting up Let's Encrypt certificate..."
 
     # Install certbot
@@ -201,11 +210,23 @@ TMPEOF
 
     sudo nginx -t 2>>"${LOGFILE}" && sudo systemctl restart nginx
 
-    # Request the certificate
+    # Request the certificate (retry once — first attempt can fail with
+    # "No such authorization" if the account was just registered)
     log "Requesting certificate for ${SERVER_NAME}..."
-    if ! sudo certbot certonly --nginx -d "${SERVER_NAME}" --non-interactive --agree-tos \
-        --register-unsafely-without-email 2>>"${LOGFILE}"; then
+    local LE_SUCCESS=false
+    for attempt in 1 2; do
+        if sudo certbot certonly --nginx -d "${SERVER_NAME}" --non-interactive --agree-tos \
+            --register-unsafely-without-email 2>>"${LOGFILE}"; then
+            LE_SUCCESS=true
+            break
+        fi
+        if [ "$attempt" -eq 1 ]; then
+            log "First attempt failed. Retrying in 5 seconds..."
+            sleep 5
+        fi
+    done
 
+    if [ "$LE_SUCCESS" = false ]; then
         warn "Let's Encrypt certificate request failed."
         warn "Common causes: DNS not pointing to this server, port 80 not reachable from internet."
         ask "Fall back to self-signed certificate? [Y/n]"
