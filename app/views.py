@@ -1737,6 +1737,15 @@ def deployment_status_view(request):
         mismatch = True
         effective_mode = service_mode
 
+    # Python environment info
+    import platform
+    import pkg_resources
+    python_version = platform.python_version()
+    installed_packages = sorted(
+        [{'name': d.project_name, 'version': d.version} for d in pkg_resources.working_set],
+        key=lambda x: x['name'].lower()
+    )
+
     context = {
         'title': 'Deployment',
         'deployment_mode': effective_mode,
@@ -1748,6 +1757,8 @@ def deployment_status_view(request):
         'db_mode': db_mode,
         'service_mode': service_mode,
         'can_migrate': effective_mode == 'gunicorn_ssl',
+        'python_version': python_version,
+        'installed_packages': installed_packages,
     }
     return render(request, 'deployment_status.html', context)
 

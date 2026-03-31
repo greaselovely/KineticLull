@@ -65,6 +65,47 @@
         </div>
     </div>
 
+    <div class="card mt-3">
+        <div class="card-body">
+            <h6 class="mb-3">Python Environment</h6>
+            <table class="table table-sm mb-0">
+                <tbody>
+                    <tr>
+                        <td class="text-muted" style="width: 200px;">Python Version</td>
+                        <td><code>{{ python_version }}</code></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Installed Packages</td>
+                        <td>{{ installed_packages|length }}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="mt-2">
+                <a class="small text-muted" data-bs-toggle="collapse" href="#pkg-list" role="button" aria-expanded="false">
+                    <i class="bi bi-chevron-down"></i> Show all packages
+                </a>
+                <div class="collapse mt-2" id="pkg-list">
+                    <table class="table table-sm" style="font-size: 0.8rem;">
+                        <thead>
+                            <tr>
+                                <th>Package</th>
+                                <th>Version</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pkg in installed_packages %}
+                            <tr>
+                                <td><code>{{ pkg.name }}</code></td>
+                                <td>{{ pkg.version }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {% if can_migrate %}
     <div class="card mt-3 border-info">
         <div class="card-body">
