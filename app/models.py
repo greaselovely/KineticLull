@@ -85,6 +85,15 @@ class ActivityLog(models.Model):
             prev_hash = entry.chain_hash
         return True, None
 
+    @classmethod
+    def rebase_chain(cls):
+        """Recalculate all chain hashes from scratch. Use after legitimate deletions."""
+        prev_hash = ''
+        for entry in cls.objects.order_by('id'):
+            entry.chain_hash = entry._compute_hash(prev_hash)
+            prev_hash = entry.chain_hash
+            super(ActivityLog, entry).save(update_fields=['chain_hash'])
+
     def __str__(self):
         return f"{self.created_at} {self.user} {self.action} {self.target}"
 

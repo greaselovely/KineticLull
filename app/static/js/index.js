@@ -48,6 +48,22 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // System submenu toggle
+    var systemToggle = document.getElementById('system-menu-toggle');
+    var systemSubmenu = document.getElementById('system-submenu');
+    if (systemToggle && systemSubmenu) {
+        if (localStorage.getItem('system-menu-open') === 'true') {
+            systemSubmenu.classList.add('open');
+            systemToggle.classList.add('open');
+        }
+        systemToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            systemSubmenu.classList.toggle('open');
+            systemToggle.classList.toggle('open');
+            localStorage.setItem('system-menu-open', systemSubmenu.classList.contains('open'));
+        });
+    }
+
     // Favorite toggle
     document.querySelectorAll('.favorite-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {

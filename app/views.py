@@ -1029,11 +1029,19 @@ def integrity_check_view(request):
         raise PermissionDenied
     checksum_ok, chain_ok, chain_break_id = check_db_integrity()
 
-    if request.method == 'POST' and request.POST.get('action') == 'reset_checksum':
-        update_db_checksum()
-        log_activity(request, 'reset_checksum', 'DB checksum reset by admin')
-        messages.success(request, 'Checksum reset to current state.')
-        return redirect('app:integrity_check')
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'reset_checksum':
+            update_db_checksum()
+            log_activity(request, 'reset_checksum', 'DB checksum reset by admin')
+            messages.success(request, 'Checksum reset to current state.')
+            return redirect('app:integrity_check')
+        elif action == 'rebase_chain':
+            ActivityLog.rebase_chain()
+            update_db_checksum()
+            log_activity(request, 'rebase_chain', 'Log chain rebased by admin')
+            messages.success(request, 'Log chain rebased and checksum updated.')
+            return redirect('app:integrity_check')
 
     return render(request, 'integrity_check.html', {
         'checksum_ok': checksum_ok,

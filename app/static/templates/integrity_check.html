@@ -30,6 +30,12 @@
                 <i class="bi bi-exclamation-triangle me-2"></i>Log chain broken at entry ID {{ chain_break_id }}.
                 One or more log entries may have been tampered with or deleted.
             </div>
+            <form method="post" class="mt-2">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="rebase_chain">
+                <button type="submit" class="btn btn-sm btn-outline-warning">Rebase Chain</button>
+                <small class="text-muted ms-2">Recalculates all chain hashes from the current first entry. Use after legitimate deletions (e.g., log retention, EDL cleanup).</small>
+            </form>
         {% endif %}
     </div>
 </div>
