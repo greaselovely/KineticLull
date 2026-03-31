@@ -1739,10 +1739,10 @@ def deployment_status_view(request):
 
     # Python environment info
     import platform
-    import pkg_resources
+    from importlib.metadata import distributions
     python_version = platform.python_version()
     installed_packages = sorted(
-        [{'name': d.project_name, 'version': d.version} for d in pkg_resources.working_set],
+        [{'name': d.metadata['Name'], 'version': d.metadata['Version']} for d in distributions()],
         key=lambda x: x['name'].lower()
     )
 
