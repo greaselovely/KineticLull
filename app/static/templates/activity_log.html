@@ -12,6 +12,15 @@
             <button type="submit" class="btn btn-sm btn-outline-secondary">Search</button>
             {% if search %}<a href="{% url 'app:activity_log' %}" class="btn btn-sm btn-outline-secondary">Clear</a>{% endif %}
             <a href="{% url 'app:activity_log_export' %}{% if search %}?q={{ search }}{% endif %}" class="btn btn-sm btn-outline-secondary" title="Export CSV"><i class="bi bi-download"></i> CSV</a>
+            <select id="refresh-interval" class="form-select form-select-sm" style="width: auto;" title="Auto-refresh">
+                <option value="0">Manual</option>
+                <option value="10">10s</option>
+                <option value="30">30s</option>
+                <option value="60">60s</option>
+            </select>
+            <button type="button" id="refresh-btn" class="btn btn-sm btn-outline-secondary" title="Refresh" onclick="window.location.reload();">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
         </form>
     </div>
     <div class="log-table-wrapper">
@@ -130,6 +139,31 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('modal-detail').textContent = row.getAttribute('data-detail');
         document.getElementById('modal-ip').textContent = row.getAttribute('data-ip');
     });
+
+    // Auto-refresh
+    var refreshSelect = document.getElementById('refresh-interval');
+    var refreshTimer = null;
+    var storageKey = 'log-refresh-interval';
+
+    // Restore saved interval
+    var saved = localStorage.getItem(storageKey);
+    if (saved) {
+        refreshSelect.value = saved;
+        startRefresh(parseInt(saved));
+    }
+
+    refreshSelect.addEventListener('change', function() {
+        var seconds = parseInt(this.value);
+        localStorage.setItem(storageKey, seconds);
+        startRefresh(seconds);
+    });
+
+    function startRefresh(seconds) {
+        if (refreshTimer) clearInterval(refreshTimer);
+        if (seconds > 0) {
+            refreshTimer = setInterval(function() { window.location.reload(); }, seconds * 1000);
+        }
+    }
 });
 </script>
 {% endblock %}
