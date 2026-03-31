@@ -352,7 +352,7 @@ def create_new_edl(request):
             edl_instance.save()
             edl_instance.groups.set(request.user.groups.all())
             log_activity(request, 'create_edl', edl_instance.friendly_name)
-            return redirect(safe_referer_or_index(request))
+            return redirect('app:index')
         else:
             logger.warning("EDL creation form errors: %s", form.errors)
     else:
