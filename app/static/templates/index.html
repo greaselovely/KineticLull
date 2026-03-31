@@ -57,13 +57,8 @@
                         <a href="{% url 'app:edit' id=item.id %}" title="Edit"><img class="icon action-items" src="{% static 'images/edit.svg' %}" alt="Edit"></a>
                         <a href="{% url 'app:clone' item.id %}" title="Clone"><img class="icon action-items" src="{% static 'images/clone.svg' %}" alt="Clone"></a>
                         <a href="{% url 'app:download_ip_fqdn' item.id %}" title="Download"><img class="icon action-items" src="{% static 'images/download.svg' %}" alt="Download"></a>
-                        {% if item.is_protected %}
-                        <img class="icon action-items" src="{% static 'images/delete.svg' %}" alt="Delete" style="opacity: 0.25; cursor: not-allowed;" title="Protected — actively polled">
-                        {% else %}
-                        <img class="icon action-items" src="{% static 'images/delete.svg' %}" alt="Delete" onclick="deleteRecord('{{ item.id }}', event)" title="Delete">
-                        {% endif %}
+                        <img class="icon action-items" src="{% static 'images/delete.svg' %}" alt="Delete" onclick="deleteRecord('{{ item.id }}', event)" title="{% if item.is_protected %}Protected — actively polled{% else %}Delete{% endif %}"{% if item.is_protected %} style="opacity: 0.5;"{% endif %}>
                         <img src="{% static 'images/copy.svg' %}" alt="Copy" class="icon action-items copy-url-btn" data-url="{{ item.full_url }}" title="Copy URL">
-                        <span class="copy-confirmation" style="display: none; transition: opacity 600ms;">URL Copied</span>
                     </span>
                 </td>
             </tr>

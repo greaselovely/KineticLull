@@ -92,23 +92,23 @@ function copyToClipboard(clickedElement) {
 
     if (navigator.clipboard) {
         navigator.clipboard.writeText(fullURL).then(function() {
-            showConfirmation(clickedElement.nextElementSibling);
+            showCopyFlash(clickedElement);
         }).catch(function(error) {
             console.error('Copy failed:', error);
         });
     }
 }
 
-function showConfirmation(element) {
-    if (!element) return;
-    element.style.display = 'inline';
-    element.style.opacity = '1';
+function showCopyFlash(element) {
+    var star = document.createElement('i');
+    star.className = 'bi bi-star-fill';
+    star.style.cssText = 'color: #ffc107; font-size: 1rem; position: absolute; margin-left: -8px; margin-top: -4px; pointer-events: none; transition: opacity 0.3s;';
+    element.parentNode.style.position = 'relative';
+    element.parentNode.appendChild(star);
     setTimeout(function() {
-        element.style.opacity = '0';
-        setTimeout(function() {
-            element.style.display = 'none';
-        }, 600);
-    }, 2000);
+        star.style.opacity = '0';
+        setTimeout(function() { star.remove(); }, 300);
+    }, 700);
 }
 
 function deleteRecord(itemId, event) {
@@ -137,23 +137,84 @@ function deleteRecord(itemId, event) {
     document.body.appendChild(confirmBox);
 }
 
-function sendDeleteRequest(itemId) {
+function sendDeleteRequest(itemId, force) {
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    var body = { 'id': itemId };
+    if (force) body.force = true;
     fetch('delete/' + itemId + '/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': csrfToken
         },
-        body: JSON.stringify({ 'id': itemId })
+        body: JSON.stringify(body)
     }).then(function(response) {
         if (response.ok) {
             var box = document.getElementById('confirmBox');
             if (box) box.remove();
             window.location.reload(true);
+        } else if (response.status === 409) {
+            var box = document.getElementById('confirmBox');
+            if (box) box.remove();
+            response.json().then(function(data) {
+                showProtectedDeleteModal(itemId, data);
+            });
         }
     }).catch(function(error) {
         console.error('Network error:', error);
+    });
+}
+
+function showProtectedDeleteModal(itemId, data) {
+    // Remove existing modal if any
+    var existing = document.getElementById('protectedDeleteModal');
+    if (existing) existing.remove();
+
+    var modal = document.createElement('div');
+    modal.id = 'protectedDeleteModal';
+    modal.className = 'modal fade';
+    modal.tabIndex = -1;
+    modal.innerHTML =
+        '<div class="modal-dialog">' +
+        '  <div class="modal-content">' +
+        '    <div class="modal-header">' +
+        '      <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Active EDL</h5>' +
+        '      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>' +
+        '    </div>' +
+        '    <div class="modal-body">' +
+        '      <p><strong>' + data.edl_name + '</strong> was accessed <strong>' + data.access_count +
+        '      </strong> time' + (data.access_count !== 1 ? 's' : '') + ' in the last <strong>' +
+        data.window_minutes + '</strong> minutes.</p>' +
+        '      <p class="text-muted small">This EDL appears to be actively polled by a firewall. Deleting it may break firewall policy.</p>' +
+        '      <label class="form-label">Type <strong>' + data.edl_name + '</strong> to confirm deletion:</label>' +
+        '      <input type="text" class="form-control form-control-sm" id="protectedDeleteConfirmInput" autocomplete="off">' +
+        '    </div>' +
+        '    <div class="modal-footer">' +
+        '      <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>' +
+        '      <button type="button" class="btn btn-sm btn-danger" id="protectedDeleteConfirmBtn" disabled>Delete</button>' +
+        '    </div>' +
+        '  </div>' +
+        '</div>';
+
+    document.body.appendChild(modal);
+
+    var bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    var input = document.getElementById('protectedDeleteConfirmInput');
+    var btn = document.getElementById('protectedDeleteConfirmBtn');
+
+    input.addEventListener('input', function() {
+        btn.disabled = input.value !== data.edl_name;
+    });
+
+    btn.addEventListener('click', function() {
+        bsModal.hide();
+        sendDeleteRequest(itemId, true);
+    });
+
+    modal.addEventListener('hidden.bs.modal', function() {
+        modal.remove();
     });
 }
 

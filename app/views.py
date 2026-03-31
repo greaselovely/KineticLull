@@ -543,23 +543,28 @@ def delete_item(request, item_id):
     if app_settings.edl_delete_protection:
         from django.utils import timezone as tz
         from datetime import timedelta
+
+        # Check for force delete (superuser override with name confirmation)
+        force = False
+        try:
+            body = json.loads(request.body)
+            force = body.get('force', False)
+        except (json.JSONDecodeError, ValueError):
+            pass
+
         window_start = tz.now() - timedelta(minutes=app_settings.edl_delete_window_minutes)
         access_count = ActivityLog.objects.filter(
             action='edl_access',
             target=item.friendly_name,
             created_at__gte=window_start,
         ).count()
-        if access_count >= app_settings.edl_delete_threshold:
-            messages.error(
-                request,
-                f'Cannot delete "{item.friendly_name}" — it was accessed {access_count} time{"s" if access_count != 1 else ""} '
-                f'in the last {app_settings.edl_delete_window_minutes} minutes. '
-                f'It appears to be actively polled by a firewall.'
-            )
-            referer_url = request.META.get('HTTP_REFERER')
-            if referer_url:
-                return HttpResponseRedirect(referer_url)
-            return redirect(reverse('app:index'))
+        if access_count >= app_settings.edl_delete_threshold and not (force and request.user.is_superuser):
+            return JsonResponse({
+                'protected': True,
+                'edl_name': item.friendly_name,
+                'access_count': access_count,
+                'window_minutes': app_settings.edl_delete_window_minutes,
+            }, status=409)
 
     log_activity(request, 'delete_edl', item.friendly_name)
     item.delete()
