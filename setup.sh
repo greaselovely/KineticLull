@@ -317,6 +317,7 @@ configure_nginx() {
         -e "s|{{CERT_PATH}}|${CERT_PATH}|g" \
         -e "s|{{KEY_PATH}}|${KEY_PATH}|g" \
         -e "s|{{STATIC_ROOT}}|${STATIC_ROOT}|g" \
+        -e "s|{{PROJECT_DIR}}|${PROJECT_DIR}|g" \
         "${TEMPLATE}")
 
     if [ "$NGINX_CONF_METHOD" = "sites" ]; then
@@ -335,6 +336,14 @@ configure_nginx() {
         warn "Nginx configuration test failed. Check ${LOGFILE} for details."
         exit 1
     fi
+
+    # Allow the app user to reload Nginx without a password (for IP blocklist updates)
+    local CURRENT_USER
+    CURRENT_USER=$(whoami)
+    local SUDOERS_FILE="/etc/sudoers.d/kineticlull-nginx"
+    echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload" | sudo tee "${SUDOERS_FILE}" > /dev/null
+    sudo chmod 440 "${SUDOERS_FILE}"
+    log "Sudoers rule added for Nginx reload."
 
     ok "Nginx configured and tested."
 }

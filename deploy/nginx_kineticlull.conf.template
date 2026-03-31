@@ -3,6 +3,7 @@
 # WARNING: This application is designed for internal/private network use only.
 
 # Rate limiting
+limit_req_zone $binary_remote_addr zone=kineticlull_general:10m rate=5r/s;
 limit_req_zone $binary_remote_addr zone=kineticlull_api:10m rate=10r/s;
 
 server {
@@ -16,6 +17,9 @@ server {
     ssl_prefer_server_ciphers on;
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 10m;
+
+    # IP blocklist (managed by KineticLull)
+    include {{PROJECT_DIR}}/deploy/blocklist.conf;
 
     # Security headers
     add_header X-Frame-Options DENY always;
@@ -44,6 +48,7 @@ server {
 
     # All other requests
     location / {
+        limit_req zone=kineticlull_general burst=10 nodelay;
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

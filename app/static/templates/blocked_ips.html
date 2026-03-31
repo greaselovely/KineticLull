@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load tz %}
+{% block title %}- Blocked IPs{% endblock %}
+{% block content %}
+{% timezone app_timezone %}
+<div class="content-card edl-card">
+    <div class="d-flex justify-content-between align-items-center">
+        <h3 class="mb-0">Blocked IPs</h3>
+        <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#blockModal">
+            <i class="bi bi-plus-circle"></i> Block IP
+        </button>
+    </div>
+
+    <table class="table table-hover mt-3" style="font-size: 0.85rem;">
+        <thead>
+            <tr>
+                <th>IP Address</th>
+                <th>Reason</th>
+                <th>Blocked At</th>
+                <th>Blocked By</th>
+                <th>Type</th>
+                <th>Expires</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in blocked_ips %}
+            <tr>
+                <td><code>{{ entry.ip_address }}</code></td>
+                <td>{{ entry.reason }}</td>
+                <td>{{ entry.blocked_at|date:app_timestamp_format }}</td>
+                <td>{{ entry.blocked_by.email|default:"System" }}</td>
+                <td>
+                    {% if entry.auto_blocked %}
+                    <span class="badge bg-warning text-dark">Auto</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Manual</span>
+                    {% endif %}
+                </td>
+                <td>{{ entry.expires_at|date:app_timestamp_format|default:"Never" }}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-success unblock-btn" data-ip="{{ entry.ip_address }}" title="Unblock">
+                        <i class="bi bi-unlock"></i>
+                    </button>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-muted">No blocked IPs.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Block IP Modal -->
+<div class="modal fade" id="blockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Block IP Address</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="block-ip-input" class="form-label">IP Address</label>
+                    <input type="text" class="form-control form-control-sm" id="block-ip-input" placeholder="e.g., 185.177.72.50">
+                </div>
+                <div class="mb-3">
+                    <label for="block-reason-input" class="form-label">Reason</label>
+                    <input type="text" class="form-control form-control-sm" id="block-reason-input" placeholder="Scanner, abuse, etc." value="Manually blocked">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-danger" id="confirm-block-btn">Block</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endtimezone %}
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    // Block IP
+    document.getElementById('confirm-block-btn').addEventListener('click', function() {
+        var ip = document.getElementById('block-ip-input').value.trim();
+        var reason = document.getElementById('block-reason-input').value.trim();
+        if (!ip) return;
+
+        fetch('{% url "app:block_ip" %}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+            body: 'ip_address=' + encodeURIComponent(ip) + '&reason=' + encodeURIComponent(reason)
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'blocked') {
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to block IP');
+            }
+        });
+    });
+
+    // Unblock IP
+    document.querySelectorAll('.unblock-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var ip = this.getAttribute('data-ip');
+            if (!confirm('Unblock ' + ip + '?')) return;
+
+            fetch('{% url "app:unblock_ip" %}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+                body: 'ip_address=' + encodeURIComponent(ip)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 'unblocked') {
+                    window.location.reload();
+                }
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

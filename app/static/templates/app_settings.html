@@ -122,6 +122,41 @@
             </div>
         </div>
 
+        <h6 class="text-muted text-uppercase mt-4">Auto-Block</h6>
+        <hr class="mt-1 mb-3">
+        <div class="mb-3">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="autoblock_enabled" id="autoblock_enabled"
+                    {% if app_settings.autoblock_enabled %}checked{% endif %}>
+                <label class="form-check-label" for="autoblock_enabled">Enable Auto-Block</label>
+            </div>
+            <div class="form-text">Automatically block IPs that exceed the request threshold. Blocked at the Nginx level.</div>
+        </div>
+        <div class="row g-3 mb-3">
+            <div class="col-4">
+                <label for="autoblock_threshold" class="form-label">Threshold</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" name="autoblock_threshold" id="autoblock_threshold" class="form-control" value="{{ app_settings.autoblock_threshold }}" min="5" max="1000">
+                    <span class="input-group-text">hits</span>
+                </div>
+            </div>
+            <div class="col-4">
+                <label for="autoblock_window_seconds" class="form-label">Window</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" name="autoblock_window_seconds" id="autoblock_window_seconds" class="form-control" value="{{ app_settings.autoblock_window_seconds }}" min="10" max="3600">
+                    <span class="input-group-text">sec</span>
+                </div>
+            </div>
+            <div class="col-4">
+                <label for="autoblock_duration_minutes" class="form-label">Block Duration</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" name="autoblock_duration_minutes" id="autoblock_duration_minutes" class="form-control" value="{{ app_settings.autoblock_duration_minutes }}" min="0" max="525600">
+                    <span class="input-group-text">min</span>
+                </div>
+                <div class="form-text">0 = permanent</div>
+            </div>
+        </div>
+
         <button type="submit" class="btn btn-primary btn-sm mt-3">Save Settings</button>
     </form>
 </div>

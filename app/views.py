@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
-from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings
+from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP
 from .forms import ExtDynListsForm, ProfileChangeForm
 
 from users.models import CustomUser
@@ -265,6 +265,7 @@ def show_ip_fqdn(request, auto_url):
         edl = ExtDynLists.objects.get(auto_url=auto_url)
     except ExtDynLists.DoesNotExist:
         log_activity(request, 'edl_not_found', auto_url, detail)
+        BlockedIP.check_autoblock(user_ip)
         request._kl_logged_404 = True
         raise Http404
 
@@ -282,6 +283,9 @@ def custom_404(request, exception):
     if not getattr(request, '_kl_logged_404', False):
         user_agent = request.META.get('HTTP_USER_AGENT', '') or 'No User-Agent'
         log_activity(request, 'not_found', path, f'Agent: {user_agent}')
+        ip = get_client_ip(request)
+        if ip:
+            BlockedIP.check_autoblock(ip)
     return render(request, '404.html', {'request_path': path}, status=404)
 
 
@@ -1151,6 +1155,27 @@ def app_settings_view(request):
             app_settings.syslog_protocol = new_syslog_protocol
             changes.append(f'syslog_protocol={new_syslog_protocol}')
 
+        # Auto-block settings
+        new_autoblock_enabled = request.POST.get('autoblock_enabled') == 'on'
+        if new_autoblock_enabled != app_settings.autoblock_enabled:
+            app_settings.autoblock_enabled = new_autoblock_enabled
+            changes.append(f'autoblock_enabled={new_autoblock_enabled}')
+
+        for field_name, min_val, max_val, default in [
+            ('autoblock_threshold', 5, 1000, 50),
+            ('autoblock_window_seconds', 10, 3600, 60),
+            ('autoblock_duration_minutes', 0, 525600, 0),
+        ]:
+            try:
+                val = int(request.POST.get(field_name, default))
+                val = max(min_val, min(val, max_val))
+            except (ValueError, TypeError):
+                val = default
+            old_val = getattr(app_settings, field_name)
+            if val != old_val:
+                setattr(app_settings, field_name, val)
+                changes.append(f'{field_name}={val}')
+
         app_settings.save()
 
         # Apply session timeout
@@ -1714,6 +1739,7 @@ def deployment_migrate_view(request):
         nginx_config = nginx_config.replace('{{CERT_PATH}}', os.path.join(cert_dir_path, 'cert.pem'))
         nginx_config = nginx_config.replace('{{KEY_PATH}}', os.path.join(cert_dir_path, 'key.pem'))
         nginx_config = nginx_config.replace('{{STATIC_ROOT}}', static_root)
+        nginx_config = nginx_config.replace('{{PROJECT_DIR}}', base_dir)
 
         # Render service file
         import getpass
@@ -1756,6 +1782,74 @@ def deployment_migrate_view(request):
         'generated': False,
     }
     return render(request, 'deployment_migrate.html', context)
+
+
+@login_required
+def blocked_ips_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    from django.utils import timezone
+    # Clean up expired entries
+    BlockedIP.objects.filter(expires_at__isnull=False, expires_at__lte=timezone.now()).delete()
+
+    blocked_ips = BlockedIP.objects.all()
+    context = {
+        'title': 'Blocked IPs',
+        'blocked_ips': blocked_ips,
+    }
+    return render(request, 'blocked_ips.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def block_ip_view(request):
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+
+    ip = request.POST.get('ip_address', '').strip()
+    reason = request.POST.get('reason', 'Manually blocked').strip()
+
+    if not ip:
+        return JsonResponse({'error': 'IP address required'}, status=400)
+
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid IP address'}, status=400)
+
+    obj, created = BlockedIP.objects.get_or_create(
+        ip_address=ip,
+        defaults={
+            'reason': reason,
+            'blocked_by': request.user,
+            'auto_blocked': False,
+        }
+    )
+
+    if created:
+        BlockedIP.sync_to_nginx()
+        log_activity(request, 'ip_blocked', ip, reason)
+
+    return JsonResponse({'status': 'blocked', 'created': created, 'ip': ip})
+
+
+@login_required
+@require_http_methods(["POST"])
+def unblock_ip_view(request):
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+
+    ip = request.POST.get('ip_address', '').strip()
+    if not ip:
+        return JsonResponse({'error': 'IP address required'}, status=400)
+
+    deleted, _ = BlockedIP.objects.filter(ip_address=ip).delete()
+    if deleted:
+        BlockedIP.sync_to_nginx()
+        log_activity(request, 'ip_unblocked', ip)
+
+    return JsonResponse({'status': 'unblocked', 'ip': ip})
 
 
 def _generate_migration_script(base_dir, server_name, cert_dir, nginx_config, svc_config, python_path):

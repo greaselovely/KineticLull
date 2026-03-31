@@ -224,6 +224,7 @@ print(parsed.hostname or url.replace('https://','').replace('http://','').strip(
         -e "s|{{CERT_PATH}}|${CERT_DIR}/cert.pem|g" \
         -e "s|{{KEY_PATH}}|${CERT_DIR}/key.pem|g" \
         -e "s|{{STATIC_ROOT}}|${STATIC_ROOT}|g" \
+        -e "s|{{PROJECT_DIR}}|${PROJECT_DIR}|g" \
         "${TEMPLATE}")
 
     if [ "$NGINX_CONF_METHOD" = "sites" ]; then
@@ -276,6 +277,16 @@ WantedBy=multi-user.target
 SVCEOF
     fi
     ok "Systemd service updated (Gunicorn on 127.0.0.1:8000)."
+
+    # Allow the app user to reload Nginx without a password (for IP blocklist updates)
+    local SUDOERS_FILE="/etc/sudoers.d/kineticlull-nginx"
+    if [ ! -f "$SUDOERS_FILE" ]; then
+        local CURRENT_USER
+        CURRENT_USER=$(whoami)
+        echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload" | sudo tee "${SUDOERS_FILE}" > /dev/null
+        sudo chmod 440 "${SUDOERS_FILE}"
+        log "Sudoers rule added for Nginx reload."
+    fi
 
     # ── Step 6: Restart services ──
     log "Restarting services..."

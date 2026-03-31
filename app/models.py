@@ -1,3 +1,4 @@
+import os
 import hashlib
 import secrets
 
@@ -136,6 +137,12 @@ class AppSettings(models.Model):
     syslog_port = models.PositiveIntegerField(default=514, verbose_name='Syslog Port')
     syslog_protocol = models.CharField(max_length=3, default='udp', choices=SYSLOG_PROTOCOL_CHOICES, verbose_name='Syslog Protocol')
 
+    # Auto-block
+    autoblock_enabled = models.BooleanField(default=False, verbose_name='Enable Auto-Block')
+    autoblock_threshold = models.PositiveIntegerField(default=50, verbose_name='Auto-Block Threshold (requests)')
+    autoblock_window_seconds = models.PositiveIntegerField(default=60, verbose_name='Auto-Block Window (seconds)')
+    autoblock_duration_minutes = models.PositiveIntegerField(default=0, verbose_name='Auto-Block Duration (minutes, 0=permanent)')
+
     # Deployment
     deployment_mode = models.CharField(
         max_length=20, default='gunicorn_ssl',
@@ -160,6 +167,95 @@ class AppSettings(models.Model):
 
     def __str__(self):
         return "App Settings"
+
+
+class BlockedIP(models.Model):
+    ip_address = models.GenericIPAddressField(unique=True)
+    reason = models.CharField(max_length=255, blank=True)
+    blocked_at = models.DateTimeField(auto_now_add=True)
+    blocked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, verbose_name='Blocked By'
+    )
+    auto_blocked = models.BooleanField(default=False)
+    expires_at = models.DateTimeField(null=True, blank=True, verbose_name='Expires At')
+
+    class Meta:
+        verbose_name = "Blocked IP"
+        verbose_name_plural = "Blocked IPs"
+        ordering = ["-blocked_at"]
+
+    def __str__(self):
+        return f"{self.ip_address} ({'auto' if self.auto_blocked else 'manual'})"
+
+    @property
+    def is_expired(self):
+        if self.expires_at is None:
+            return False
+        from django.utils import timezone
+        return timezone.now() >= self.expires_at
+
+    @classmethod
+    def sync_to_nginx(cls):
+        """Write the blocklist file and reload Nginx."""
+        import subprocess
+        from django.utils import timezone
+
+        # Remove expired entries
+        cls.objects.filter(expires_at__isnull=False, expires_at__lte=timezone.now()).delete()
+
+        blocked = cls.objects.values_list('ip_address', flat=True)
+        blocklist_path = os.path.join(settings.BASE_DIR, 'deploy', 'blocklist.conf')
+        os.makedirs(os.path.dirname(blocklist_path), exist_ok=True)
+
+        with open(blocklist_path, 'w') as f:
+            for ip in blocked:
+                f.write(f'deny {ip};\n')
+
+        # Reload Nginx to pick up the new blocklist
+        try:
+            subprocess.run(
+                ['sudo', 'nginx', '-s', 'reload'],
+                capture_output=True, timeout=5,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass  # Nginx not installed or not running (dev environment)
+
+    @classmethod
+    def check_autoblock(cls, ip_address):
+        """Check if an IP should be auto-blocked based on threshold settings."""
+        from django.utils import timezone
+        from datetime import timedelta
+
+        app_settings = AppSettings.load()
+        if not app_settings.autoblock_enabled:
+            return False
+
+        # Don't re-block if already blocked
+        if cls.objects.filter(ip_address=ip_address).exists():
+            return False
+
+        window_start = timezone.now() - timedelta(seconds=app_settings.autoblock_window_seconds)
+        hit_count = ActivityLog.objects.filter(
+            ip_address=ip_address,
+            action__in=['not_found', 'edl_not_found', 'edl_access'],
+            created_at__gte=window_start,
+        ).count()
+
+        if hit_count >= app_settings.autoblock_threshold:
+            expires = None
+            if app_settings.autoblock_duration_minutes > 0:
+                expires = timezone.now() + timedelta(minutes=app_settings.autoblock_duration_minutes)
+
+            cls.objects.create(
+                ip_address=ip_address,
+                reason=f'Auto-blocked: {hit_count} hits in {app_settings.autoblock_window_seconds}s',
+                auto_blocked=True,
+                expires_at=expires,
+            )
+            cls.sync_to_nginx()
+            return True
+        return False
 
 
 class InboxEntry(models.Model):
