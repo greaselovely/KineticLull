@@ -208,8 +208,27 @@ def index_view(request):
         item.display_ellipsis = item.ip_fqdn_count > preview
         item.ip_fqdn = item.ip_fqdn[:preview]
     favorite_ids = set(Favorite.objects.filter(user=request.user).values_list('edl_id', flat=True))
+
+    # Check which EDLs are actively polled (delete-protected)
+    protected_edls = set()
+    if app_settings.edl_delete_protection:
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        window_start = tz.now() - timedelta(minutes=app_settings.edl_delete_window_minutes)
+        from django.db.models import Count
+        active_edls = (
+            ActivityLog.objects.filter(action='edl_access', created_at__gte=window_start)
+            .values('target')
+            .annotate(count=Count('id'))
+            .filter(count__gte=app_settings.edl_delete_threshold)
+            .values_list('target', flat=True)
+        )
+        protected_edls = set(active_edls)
+
     for item in items:
         item.is_favorited = item.id in favorite_ids
+        item.is_protected = item.friendly_name in protected_edls
+
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
     context = {'items': items, 'page_obj': page_obj, 'per_page': per_page}
