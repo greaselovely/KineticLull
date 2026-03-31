@@ -352,6 +352,7 @@ def create_new_edl(request):
             edl_instance.save()
             edl_instance.groups.set(request.user.groups.all())
             log_activity(request, 'create_edl', edl_instance.friendly_name)
+            update_db_checksum()
             return redirect('app:index')
         else:
             logger.warning("EDL creation form errors: %s", form.errors)
@@ -426,7 +427,8 @@ def edit_ext_dyn_list_view(request, id=None):
                     changes.append('Updated notes')
                 detail = '; '.join(changes) if changes else 'No changes'
                 log_activity(request, 'edit_edl', edl_instance.friendly_name, detail)
-                return redirect(safe_referer_or_index(request))
+                update_db_checksum()
+                return redirect('app:index')
         else:
             form = ExtDynListsForm(instance=edl)
     else:
@@ -475,6 +477,7 @@ def clone_ext_dyn_list_view(request, item_id):
             cloned_item.save()
             cloned_item.groups.set(request.user.groups.all())
             log_activity(request, 'clone_edl', cloned_item.friendly_name, f'Cloned from {original_item.friendly_name}')
+            update_db_checksum()
             return redirect(safe_referer_or_index(request))
         else:
             logger.warning("EDL clone form errors: %s", form.errors)
@@ -568,6 +571,7 @@ def delete_item(request, item_id):
 
     log_activity(request, 'delete_edl', item.friendly_name)
     item.delete()
+    update_db_checksum()
 
     # Redirect back to the referring page if it's on the same host
     referer_url = request.META.get('HTTP_REFERER')
@@ -1046,6 +1050,26 @@ def favorites_view(request):
         item.display_ellipsis = item.ip_fqdn_count > preview
         item.ip_fqdn = item.ip_fqdn[:preview]
         item.is_favorited = True
+
+    # Check which EDLs are actively polled (delete-protected)
+    protected_edls = set()
+    if app_settings.edl_delete_protection:
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        from django.db.models import Count
+        window_start = tz.now() - timedelta(minutes=app_settings.edl_delete_window_minutes)
+        active_edls = (
+            ActivityLog.objects.filter(action='edl_access', created_at__gte=window_start)
+            .values('target')
+            .annotate(count=Count('id'))
+            .filter(count__gte=app_settings.edl_delete_threshold)
+            .values_list('target', flat=True)
+        )
+        protected_edls = set(active_edls)
+
+    for item in items:
+        item.is_protected = item.friendly_name in protected_edls
+
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
     context = {'items': items, 'page_obj': page_obj, 'per_page': per_page, 'favorites_view': True}
