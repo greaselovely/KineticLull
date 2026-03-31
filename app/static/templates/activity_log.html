@@ -14,7 +14,8 @@
             <a href="{% url 'app:activity_log_export' %}{% if search %}?q={{ search }}{% endif %}" class="btn btn-sm btn-outline-secondary" title="Export CSV"><i class="bi bi-download"></i> CSV</a>
         </form>
     </div>
-    <table id="log-table" class="table table-hover mt-3 log-table table-resizable">
+    <div class="log-table-wrapper">
+    <table id="log-table" class="table table-hover mt-3 log-table">
         <thead>
             <tr>
                 <th data-col="0">Timestamp</th>
@@ -48,6 +49,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
 
     {% if page_obj.paginator.count > 0 %}
     <div class="edl-footer d-flex justify-content-between align-items-center">

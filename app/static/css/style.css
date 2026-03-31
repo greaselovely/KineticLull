@@ -308,17 +308,37 @@ td.cell-wrap {
 }
 
 /* Activity log table */
+.log-table-wrapper {
+    overflow-x: auto;
+}
+
 .log-table {
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     font-size: 0.8rem;
+    table-layout: fixed;
+    width: 100%;
 }
 
 .log-table td, .log-table th {
     padding: 6px 8px;
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
+
+/* Fixed column widths for log table */
+.log-table th:nth-child(1),
+.log-table td:nth-child(1) { width: 160px; }  /* Timestamp */
+.log-table th:nth-child(2),
+.log-table td:nth-child(2) { width: 160px; }  /* User */
+.log-table th:nth-child(3),
+.log-table td:nth-child(3) { width: 100px; }  /* Action */
+.log-table th:nth-child(4),
+.log-table td:nth-child(4) { width: 150px; }  /* Target */
+.log-table th:nth-child(5),
+.log-table td:nth-child(5) { width: auto; }    /* Detail - takes remaining space */
+.log-table th:nth-child(6),
+.log-table td:nth-child(6) { width: 120px; }  /* IP Address */
 
 .log-table .badge {
     font-family: inherit;

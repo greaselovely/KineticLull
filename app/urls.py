@@ -4,6 +4,7 @@ from django.conf import settings
 from django.views.static import serve
 from django.conf.urls.static import static
 from django.contrib.auth.views import LoginView
+from django.views.generic.base import RedirectView
 
 from . import views
 from .views import SubmitFQDNView, update_edl_fqdn
@@ -45,6 +46,7 @@ urlpatterns = [
     path('groups/', views.group_list_view, name='group_list'),
     path('groups/create/', views.group_create_view, name='group_create'),
     path('groups/<int:group_id>/edit/', views.group_edit_view, name='group_edit'),
+    path('favicon.ico', RedirectView.as_view(url='/static/images/favicon.ico', permanent=True)),
     # keep this at the bottom
     re_path(r'^(?P<auto_url>[\w.-]+)/?$', views.show_ip_fqdn, name='show_ip_fqdn'),
 ]
