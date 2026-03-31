@@ -400,6 +400,16 @@ start_services() {
     fi
 }
 
+# ─── Cron Jobs ────────────────────────────────────────────────────────────────
+
+setup_cron() {
+    log "Setting up cron jobs..."
+    local CRON_CMD="*/5 * * * * cd ${PROJECT_DIR} && ${VENV_PATH}/bin/python manage.py parse_nginx_rejections >> /dev/null 2>&1"
+    # Add cron job if not already present
+    (crontab -l 2>/dev/null | grep -v "parse_nginx_rejections"; echo "${CRON_CMD}") | crontab -
+    ok "Nginx rejection parser cron installed (every 5 minutes)."
+}
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 echo ""
@@ -490,6 +500,7 @@ configure_nginx
 configure_gunicorn_service
 configure_firewall
 start_services
+setup_cron
 
 echo ""
 echo "========================================="

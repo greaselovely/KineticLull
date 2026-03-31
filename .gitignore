@@ -8,6 +8,7 @@ test.sh
 deploy/migrate_to_nginx.sh
 .migration_backup_*/
 ssl/
+.nginx_parse_state
 # db.sqlite3
 
 # Byte-compiled / optimized / DLL files

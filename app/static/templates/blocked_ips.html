@@ -6,47 +6,74 @@
 <div class="content-card edl-card">
     <div class="d-flex justify-content-between align-items-center">
         <h3 class="mb-0">Blocked IPs</h3>
-        <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#blockModal">
-            <i class="bi bi-plus-circle"></i> Block IP
-        </button>
+        <div class="d-flex" style="gap: 8px;">
+            <a href="{% url 'app:blocklist_export' %}" class="btn btn-sm btn-outline-secondary" title="Export blocklist"><i class="bi bi-download"></i> Export</a>
+            <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#blockModal">
+                <i class="bi bi-plus-circle"></i> Block IP
+            </button>
+        </div>
     </div>
+
+    {% if total_rejections > 0 %}
+    <div class="text-muted small mt-2">{{ total_rejections }} total rejections in the last 30 days</div>
+    {% endif %}
 
     <table class="table table-hover mt-3" style="font-size: 0.85rem;">
         <thead>
             <tr>
                 <th>IP Address</th>
                 <th>Reason</th>
+                <th>Type</th>
                 <th>Blocked At</th>
                 <th>Blocked By</th>
-                <th>Type</th>
                 <th>Expires</th>
+                <th>Rejected</th>
                 <th></th>
             </tr>
         </thead>
         <tbody>
-            {% for entry in blocked_ips %}
+            {% for item in blocked_data %}
             <tr>
-                <td><code>{{ entry.ip_address }}</code></td>
-                <td>{{ entry.reason }}</td>
-                <td>{{ entry.blocked_at|date:app_timestamp_format }}</td>
-                <td>{{ entry.blocked_by.email|default:"System" }}</td>
+                <td><code>{{ item.entry.ip_address }}</code></td>
+                <td>{{ item.entry.reason }}</td>
                 <td>
-                    {% if entry.auto_blocked %}
+                    {% if item.entry.auto_blocked %}
                     <span class="badge bg-warning text-dark">Auto</span>
                     {% else %}
-                    <span class="badge bg-secondary">Manual</span>
+                    <span class="badge bg-info text-dark">Manual</span>
                     {% endif %}
                 </td>
-                <td>{{ entry.expires_at|date:app_timestamp_format|default:"Never" }}</td>
+                <td>{{ item.entry.blocked_at|date:app_timestamp_format }}</td>
+                <td>{{ item.entry.blocked_by.email|default:"System" }}</td>
+                <td>{{ item.entry.expires_at|date:app_timestamp_format|default:"Never" }}</td>
                 <td>
-                    <button class="btn btn-sm btn-outline-success unblock-btn" data-ip="{{ entry.ip_address }}" title="Unblock">
+                    {% if item.rejection_count > 0 %}
+                    <a href="#" class="badge bg-danger text-decoration-none timeline-btn" data-ip="{{ item.entry.ip_address }}" title="View rejection timeline">
+                        {{ item.rejection_count }}
+                    </a>
+                    {% else %}
+                    <span class="text-muted">0</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-success unblock-btn" data-ip="{{ item.entry.ip_address }}" title="Unblock">
                         <i class="bi bi-unlock"></i>
                     </button>
                 </td>
             </tr>
+            {% if item.top_paths %}
+            <tr class="path-row" style="display: none;" data-ip="{{ item.entry.ip_address }}">
+                <td colspan="8" class="ps-4 py-1" style="font-size: 0.8rem; background: var(--bg-secondary, #f8f9fa);">
+                    <strong class="text-muted">Top paths probed:</strong>
+                    {% for path in item.top_paths %}
+                    <code class="ms-2">{{ path }}</code>
+                    {% endfor %}
+                </td>
+            </tr>
+            {% endif %}
             {% empty %}
             <tr>
-                <td colspan="7" class="text-muted">No blocked IPs.</td>
+                <td colspan="8" class="text-muted">No blocked IPs.</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -79,12 +106,41 @@
     </div>
 </div>
 
+<!-- Timeline Modal -->
+<div class="modal fade" id="timelineModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Rejection Timeline — <span id="timeline-ip"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <canvas id="timelineChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endtimezone %}
 {% endblock %}
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    var timelineChart = null;
+
+    // Toggle path rows on IP click
+    document.querySelectorAll('td code').forEach(function(el) {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', function() {
+            var ip = this.textContent.trim();
+            var rows = document.querySelectorAll('.path-row[data-ip="' + ip + '"]');
+            rows.forEach(function(row) {
+                row.style.display = row.style.display === 'none' ? '' : 'none';
+            });
+        });
+    });
 
     // Block IP
     document.getElementById('confirm-block-btn').addEventListener('click', function() {
@@ -123,6 +179,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.status === 'unblocked') {
                     window.location.reload();
                 }
+            });
+        });
+    });
+
+    // Timeline chart
+    document.querySelectorAll('.timeline-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            var ip = this.getAttribute('data-ip');
+            document.getElementById('timeline-ip').textContent = ip;
+
+            fetch('{% url "app:blocked_ip_timeline" %}?ip=' + encodeURIComponent(ip))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var ctx = document.getElementById('timelineChart').getContext('2d');
+                if (timelineChart) timelineChart.destroy();
+                timelineChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Rejections',
+                            data: data.values,
+                            backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                            borderColor: 'rgba(220, 53, 69, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            x: { title: { display: true, text: 'Time' }, ticks: { maxTicksLimit: 20 } },
+                            y: { title: { display: true, text: 'Rejections' }, beginAtZero: true }
+                        },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+                var modal = new bootstrap.Modal(document.getElementById('timelineModal'));
+                modal.show();
             });
         });
     });

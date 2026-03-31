@@ -267,6 +267,30 @@ class BlockedIP(models.Model):
         return False
 
 
+class NginxRejection(models.Model):
+    """Stores parsed Nginx 403 rejections from blocked IPs."""
+    ip_address = models.GenericIPAddressField(db_index=True)
+    path = models.CharField(max_length=500)
+    timestamp = models.DateTimeField(db_index=True)
+
+    class Meta:
+        verbose_name = "Nginx Rejection"
+        verbose_name_plural = "Nginx Rejections"
+        ordering = ["-timestamp"]
+        indexes = [
+            models.Index(fields=['ip_address', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.timestamp} {self.ip_address} {self.path}"
+
+    @classmethod
+    def purge_old(cls, days=30):
+        from django.utils import timezone
+        from datetime import timedelta
+        cls.objects.filter(timestamp__lt=timezone.now() - timedelta(days=days)).delete()
+
+
 class InboxEntry(models.Model):
     submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='Submitted By', null=True)
     fqdn_list = models.TextField(verbose_name='IP/FQDN')

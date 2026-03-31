@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
-from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP
+from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection
 from .forms import ExtDynListsForm, ProfileChangeForm
 
 from users.models import CustomUser
@@ -213,6 +213,18 @@ def index_view(request):
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
     context = {'items': items, 'page_obj': page_obj, 'per_page': per_page}
+
+    # Security summary for superusers
+    if request.user.is_superuser:
+        from datetime import timedelta
+        from django.utils import timezone as tz
+        twenty_four_hours_ago = tz.now() - timedelta(hours=24)
+        context['security_summary'] = {
+            'blocked_ips': BlockedIP.objects.count(),
+            'rejections_24h': NginxRejection.objects.filter(timestamp__gte=twenty_four_hours_ago).count(),
+            'auto_blocked_24h': BlockedIP.objects.filter(auto_blocked=True, blocked_at__gte=twenty_four_hours_ago).count(),
+        }
+
     return render(request, 'index.html', context)
 
 @login_required
@@ -1798,15 +1810,104 @@ def blocked_ips_view(request):
         raise PermissionDenied
 
     from django.utils import timezone
+    from django.db.models import Count
+    from datetime import timedelta
+
     # Clean up expired entries
     BlockedIP.objects.filter(expires_at__isnull=False, expires_at__lte=timezone.now()).delete()
 
     blocked_ips = BlockedIP.objects.all()
+
+    # Get rejection counts per IP (last 30 days)
+    rejection_counts = dict(
+        NginxRejection.objects.filter(
+            timestamp__gte=timezone.now() - timedelta(days=30)
+        ).values_list('ip_address').annotate(count=Count('id')).values_list('ip_address', 'count')
+    )
+
+    # Get top paths per IP (last 5 unique paths from activity logs before block)
+    top_paths = {}
+    for entry in blocked_ips:
+        paths = list(
+            ActivityLog.objects.filter(
+                ip_address=entry.ip_address,
+                action__in=['not_found', 'edl_not_found'],
+            ).order_by('-created_at').values_list('target', flat=True)[:10]
+        )
+        # Deduplicate while preserving order
+        seen = set()
+        unique_paths = []
+        for p in paths:
+            if p not in seen:
+                seen.add(p)
+                unique_paths.append(p)
+                if len(unique_paths) >= 5:
+                    break
+        top_paths[entry.ip_address] = unique_paths
+
+    # Annotate blocked_ips with extra data
+    blocked_data = []
+    for entry in blocked_ips:
+        blocked_data.append({
+            'entry': entry,
+            'rejection_count': rejection_counts.get(entry.ip_address, 0),
+            'top_paths': top_paths.get(entry.ip_address, []),
+        })
+
     context = {
         'title': 'Blocked IPs',
-        'blocked_ips': blocked_ips,
+        'blocked_data': blocked_data,
+        'total_rejections': sum(rejection_counts.values()),
     }
     return render(request, 'blocked_ips.html', context)
+
+
+@login_required
+def blocked_ip_timeline_view(request):
+    """Return JSON data for the 7-day rejection timeline for a specific IP."""
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+
+    from django.utils import timezone
+    from django.db.models import Count
+    from django.db.models.functions import TruncHour
+    from datetime import timedelta
+
+    ip = request.GET.get('ip', '').strip()
+    if not ip:
+        return JsonResponse({'error': 'IP required'}, status=400)
+
+    seven_days_ago = timezone.now() - timedelta(days=7)
+
+    data = list(
+        NginxRejection.objects.filter(
+            ip_address=ip,
+            timestamp__gte=seven_days_ago,
+        ).annotate(
+            hour=TruncHour('timestamp')
+        ).values('hour').annotate(
+            count=Count('id')
+        ).order_by('hour').values_list('hour', 'count')
+    )
+
+    return JsonResponse({
+        'ip': ip,
+        'labels': [h.strftime('%m/%d %H:%M') for h, _ in data],
+        'values': [c for _, c in data],
+    })
+
+
+@login_required
+def blocklist_export_view(request):
+    """Export blocked IPs as plain text, one per line."""
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    ips = BlockedIP.objects.values_list('ip_address', flat=True)
+    content = '\n'.join(ips)
+    response = HttpResponse(content, content_type='text/plain')
+    response['Content-Disposition'] = 'attachment; filename="kineticlull_blocklist.txt"'
+    return response
 
 
 @login_required
