@@ -114,7 +114,15 @@ ensure_nginx_traversal() {
 
 # ─── SSL Certificate ─────────────────────────────────────────────────────────
 
-generate_ssl_cert() {
+setup_ssl() {
+    if [ "$SSL_MODE" = "letsencrypt" ]; then
+        setup_letsencrypt
+    else
+        generate_self_signed_cert
+    fi
+}
+
+generate_self_signed_cert() {
     mkdir -p "${CERT_DIR}"
 
     if [ -f "${CERT_DIR}/cert.pem" ] && [ -f "${CERT_DIR}/key.pem" ]; then
@@ -145,7 +153,90 @@ generate_ssl_cert() {
         2>>"${LOGFILE}"
     chmod 600 "${CERT_DIR}/key.pem"
     chmod 644 "${CERT_DIR}/cert.pem"
-    ok "SSL certificate generated."
+    ok "Self-signed SSL certificate generated."
+}
+
+setup_letsencrypt() {
+    log "Setting up Let's Encrypt certificate..."
+
+    # Install certbot
+    if ! command -v certbot &>/dev/null; then
+        log "Installing certbot..."
+        if [ "$OS_FAMILY" = "debian" ]; then
+            sudo apt-get install -y certbot python3-certbot-nginx 2>>"${LOGFILE}"
+        else
+            if command -v dnf &>/dev/null; then
+                sudo dnf install -y certbot python3-certbot-nginx 2>>"${LOGFILE}"
+            else
+                sudo yum install -y certbot python3-certbot-nginx 2>>"${LOGFILE}"
+            fi
+        fi
+    fi
+    ok "Certbot installed."
+
+    # Nginx must be running on port 80 for the HTTP-01 challenge.
+    # Write a minimal temporary config so certbot can verify.
+    local TEMP_CONF
+    if [ -d "/etc/nginx/sites-available" ]; then
+        TEMP_CONF="/etc/nginx/sites-available/${PROJECT_NAME}"
+        sudo tee "$TEMP_CONF" > /dev/null <<TMPEOF
+server {
+    listen 80;
+    server_name ${SERVER_NAME};
+    location / { return 200 'ok'; }
+}
+TMPEOF
+        sudo ln -sf "$TEMP_CONF" "/etc/nginx/sites-enabled/${PROJECT_NAME}"
+        sudo rm -f "/etc/nginx/sites-enabled/default" 2>/dev/null || true
+    else
+        TEMP_CONF="/etc/nginx/conf.d/${PROJECT_NAME}.conf"
+        sudo tee "$TEMP_CONF" > /dev/null <<TMPEOF
+server {
+    listen 80;
+    server_name ${SERVER_NAME};
+    location / { return 200 'ok'; }
+}
+TMPEOF
+    fi
+
+    sudo nginx -t 2>>"${LOGFILE}" && sudo systemctl restart nginx
+
+    # Request the certificate
+    log "Requesting certificate for ${SERVER_NAME}..."
+    if ! sudo certbot certonly --nginx -d "${SERVER_NAME}" --non-interactive --agree-tos \
+        --register-unsafely-without-email 2>>"${LOGFILE}"; then
+
+        warn "Let's Encrypt certificate request failed."
+        warn "Common causes: DNS not pointing to this server, port 80 not reachable from internet."
+        ask "Fall back to self-signed certificate? [Y/n]"
+        read -p "[?]	: " LE_FALLBACK
+        if [ -z "$LE_FALLBACK" ] || [ "$LE_FALLBACK" = "Y" ] || [ "$LE_FALLBACK" = "y" ]; then
+            SSL_MODE="selfsigned"
+            generate_self_signed_cert
+            return
+        else
+            warn "Cannot continue without SSL. Aborting."
+            exit 1
+        fi
+    fi
+
+    # Point cert paths to Let's Encrypt locations
+    CERT_DIR="/etc/letsencrypt/live/${SERVER_NAME}"
+    CERT_PATH="${CERT_DIR}/fullchain.pem"
+    KEY_PATH="${CERT_DIR}/privkey.pem"
+
+    # Enable auto-renewal timer
+    if systemctl list-unit-files | grep -q certbot.timer; then
+        sudo systemctl enable certbot.timer 2>>"${LOGFILE}"
+        sudo systemctl start certbot.timer 2>>"${LOGFILE}"
+        ok "Certbot auto-renewal timer enabled."
+    else
+        # Add a cron job as fallback
+        (sudo crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --deploy-hook 'systemctl reload nginx'") | sudo crontab -
+        ok "Certbot renewal cron job added (daily at 3am)."
+    fi
+
+    ok "Let's Encrypt certificate issued for ${SERVER_NAME}."
 }
 
 # ─── Python Virtual Environment ──────────────────────────────────────────────
@@ -202,8 +293,8 @@ configure_nginx() {
     local RENDERED
     RENDERED=$(sed \
         -e "s|{{SERVER_NAME}}|${SERVER_NAME}|g" \
-        -e "s|{{CERT_PATH}}|${CERT_DIR}/cert.pem|g" \
-        -e "s|{{KEY_PATH}}|${CERT_DIR}/key.pem|g" \
+        -e "s|{{CERT_PATH}}|${CERT_PATH}|g" \
+        -e "s|{{KEY_PATH}}|${KEY_PATH}|g" \
         -e "s|{{STATIC_ROOT}}|${STATIC_ROOT}|g" \
         "${TEMPLATE}")
 
@@ -305,6 +396,23 @@ if [ -z "${SERVER_NAME}" ]; then
     exit 1
 fi
 
+# Ask about SSL
+SSL_MODE="selfsigned"
+echo ""
+ask "SSL certificate options:"
+echo "	  1) Self-signed (default, for internal/private networks)"
+echo "	  2) Let's Encrypt (requires public DNS and port 80 access)"
+read -p "[?]	Choose [1]: " SSL_CHOICE
+if [ "$SSL_CHOICE" = "2" ]; then
+    SSL_MODE="letsencrypt"
+    # Validate: Let's Encrypt won't work with an IP address
+    if echo "$SERVER_NAME" | grep -qP '^\d+\.\d+\.\d+\.\d+$'; then
+        warn "Let's Encrypt requires a domain name, not an IP address."
+        warn "Falling back to self-signed certificate."
+        SSL_MODE="selfsigned"
+    fi
+fi
+
 # Ask about workers
 ask "Gunicorn workers (default: 3, recommended: 2x CPU cores + 1):"
 read -p "[?]	Workers [3]: " WORKERS_INPUT
@@ -312,7 +420,12 @@ if [ -n "${WORKERS_INPUT}" ]; then
     GUNICORN_WORKERS="${WORKERS_INPUT}"
 fi
 
+# Initialize cert paths (may be overridden by setup_letsencrypt)
+CERT_PATH="${CERT_DIR}/cert.pem"
+KEY_PATH="${CERT_DIR}/key.pem"
+
 log "Server name: ${SERVER_NAME}"
+log "SSL mode: ${SSL_MODE}"
 log "Workers: ${GUNICORN_WORKERS}"
 log "Project dir: ${PROJECT_DIR}"
 
@@ -339,7 +452,7 @@ ENVEOF
 
 detect_os
 install_packages
-generate_ssl_cert
+setup_ssl
 setup_python
 create_env
 setup_django
@@ -355,7 +468,11 @@ echo "========================================="
 echo ""
 ok "KineticLull is running at https://${SERVER_NAME}"
 ok "Deployment: Nginx + Gunicorn"
-ok "SSL: Self-signed certificate in ${CERT_DIR}"
+if [ "$SSL_MODE" = "letsencrypt" ]; then
+    ok "SSL: Let's Encrypt (auto-renewing)"
+else
+    ok "SSL: Self-signed certificate in ${CERT_DIR}"
+fi
 ok "Service: sudo systemctl status ${PROJECT_NAME}"
 ok "Logs: ${PROJECT_DIR}/logs/kineticlull.log"
 echo ""
