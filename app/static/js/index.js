@@ -100,14 +100,13 @@ function copyToClipboard(clickedElement) {
 }
 
 function showCopyFlash(element) {
-    var star = document.createElement('i');
-    star.className = 'bi bi-star-fill';
-    star.style.cssText = 'color: #ffc107; font-size: 1rem; position: absolute; margin-left: -8px; margin-top: -4px; pointer-events: none; transition: opacity 0.3s;';
-    element.parentNode.style.position = 'relative';
-    element.parentNode.appendChild(star);
+    var sparkle = document.createElement('i');
+    sparkle.className = 'bi bi-stars';
+    sparkle.style.cssText = 'color: #ffc107; font-size: 0.85rem; pointer-events: none; transition: opacity 0.3s; vertical-align: middle; margin-left: 2px;';
+    element.insertAdjacentElement('afterend', sparkle);
     setTimeout(function() {
-        star.style.opacity = '0';
-        setTimeout(function() { star.remove(); }, 300);
+        sparkle.style.opacity = '0';
+        setTimeout(function() { sparkle.remove(); }, 300);
     }, 700);
 }
 
