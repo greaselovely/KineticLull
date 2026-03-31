@@ -16,12 +16,14 @@
     <div class="card mt-3">
         <div class="card-body">
             <div class="d-flex align-items-center mb-3">
-                {% if deployment_mode == 'nginx_gunicorn' %}
-                <span class="badge bg-success me-2"><i class="bi bi-check-circle"></i></span>
-                {% else %}
-                <span class="badge bg-warning text-dark me-2"><i class="bi bi-exclamation-circle"></i></span>
-                {% endif %}
-                <h5 class="mb-0">{{ deployment_label }}</h5>
+                <h5 class="mb-0">
+                    {% if deployment_mode == 'nginx_gunicorn' %}
+                    <span class="badge bg-success me-2"><i class="bi bi-check-circle"></i></span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark me-2"><i class="bi bi-exclamation-circle"></i></span>
+                    {% endif %}
+                    {{ deployment_label }}
+                </h5>
             </div>
 
             <table class="table table-sm mb-0">
@@ -67,42 +69,33 @@
 
     <div class="card mt-3">
         <div class="card-body">
-            <h6 class="mb-3">Python Environment</h6>
-            <table class="table table-sm mb-0">
+            <div class="d-flex align-items-center mb-3">
+                <h5 class="mb-0">Python Environment</h5>
+            </div>
+            <table class="table table-sm mb-3">
                 <tbody>
                     <tr>
                         <td class="text-muted" style="width: 200px;">Python Version</td>
                         <td><code>{{ python_version }}</code></td>
                     </tr>
-                    <tr>
-                        <td class="text-muted">Installed Packages</td>
-                        <td>{{ installed_packages|length }}</td>
-                    </tr>
                 </tbody>
             </table>
-            <div class="mt-2">
-                <a class="small text-muted" data-bs-toggle="collapse" href="#pkg-list" role="button" aria-expanded="false">
-                    <i class="bi bi-chevron-down"></i> Show all packages
-                </a>
-                <div class="collapse mt-2" id="pkg-list">
-                    <table class="table table-sm" style="font-size: 0.8rem;">
-                        <thead>
-                            <tr>
-                                <th>Package</th>
-                                <th>Version</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for pkg in installed_packages %}
-                            <tr>
-                                <td><code>{{ pkg.name }}</code></td>
-                                <td>{{ pkg.version }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            <table class="table table-sm mb-0" style="font-size: 0.8rem;">
+                <thead>
+                    <tr>
+                        <th>Package</th>
+                        <th>Version</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pkg in installed_packages %}
+                    <tr>
+                        <td><code>{{ pkg.name }}</code></td>
+                        <td>{{ pkg.version }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 

@@ -1,4 +1,4 @@
-django
+django>=5.2,<5.3
 django-debug_toolbar
 whitenoise
 python-dotenv
