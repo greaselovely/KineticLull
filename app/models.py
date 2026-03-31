@@ -92,7 +92,7 @@ class ActivityLog(models.Model):
         for entry in cls.objects.order_by('id'):
             entry.chain_hash = entry._compute_hash(prev_hash)
             prev_hash = entry.chain_hash
-            super(ActivityLog, entry).save(update_fields=['chain_hash'])
+            models.Model.save(entry, update_fields=['chain_hash'])
 
     def __str__(self):
         return f"{self.created_at} {self.user} {self.action} {self.target}"
