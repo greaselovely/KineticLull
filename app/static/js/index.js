@@ -140,7 +140,7 @@ function sendDeleteRequest(itemId, force) {
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     var body = { 'id': itemId };
     if (force) body.force = true;
-    fetch('delete/' + itemId + '/', {
+    fetch('/delete/' + itemId + '/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
