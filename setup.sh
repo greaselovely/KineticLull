@@ -61,14 +61,19 @@ detect_os() {
 
 install_packages() {
     log "Installing system packages..."
+
+    # Detect Python version for venv package
+    local PY_VERSION
+    PY_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3")
+
     if [ "$OS_FAMILY" = "debian" ]; then
         sudo apt-get update -qq
-        sudo apt-get install -y nginx openssl
+        sudo apt-get install -y nginx openssl "python${PY_VERSION}-venv"
     else
         if command -v dnf &>/dev/null; then
-            sudo dnf install -y nginx openssl
+            sudo dnf install -y nginx openssl python3-virtualenv
         else
-            sudo yum install -y nginx openssl
+            sudo yum install -y nginx openssl python3-virtualenv
         fi
     fi
     ok "System packages installed."
