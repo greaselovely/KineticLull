@@ -146,6 +146,11 @@ class AppSettings(models.Model):
     syslog_port = models.PositiveIntegerField(default=514, verbose_name='Syslog Port')
     syslog_protocol = models.CharField(max_length=3, default='udp', choices=SYSLOG_PROTOCOL_CHOICES, verbose_name='Syslog Protocol')
 
+    # EDL Protection
+    edl_delete_protection = models.BooleanField(default=True, verbose_name='Enable Active EDL Delete Protection')
+    edl_delete_threshold = models.PositiveIntegerField(default=3, verbose_name='Min accesses to protect')
+    edl_delete_window_minutes = models.PositiveIntegerField(default=15, verbose_name='Protection window (minutes)')
+
     # Auto-block
     autoblock_enabled = models.BooleanField(default=False, verbose_name='Enable Auto-Block')
     autoblock_threshold = models.PositiveIntegerField(default=50, verbose_name='Auto-Block Threshold (requests)')

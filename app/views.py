@@ -518,6 +518,30 @@ def delete_item(request, item_id):
     - HttpResponseRedirect: Redirects to the referring page or to a fallback URL after the item is deleted.
     """
     item = get_edl_for_user(request.user, id=item_id)
+
+    # Check if EDL is actively being polled
+    app_settings = AppSettings.load()
+    if app_settings.edl_delete_protection:
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        window_start = tz.now() - timedelta(minutes=app_settings.edl_delete_window_minutes)
+        access_count = ActivityLog.objects.filter(
+            action='edl_access',
+            target=item.friendly_name,
+            created_at__gte=window_start,
+        ).count()
+        if access_count >= app_settings.edl_delete_threshold:
+            messages.error(
+                request,
+                f'Cannot delete "{item.friendly_name}" — it was accessed {access_count} time{"s" if access_count != 1 else ""} '
+                f'in the last {app_settings.edl_delete_window_minutes} minutes. '
+                f'It appears to be actively polled by a firewall.'
+            )
+            referer_url = request.META.get('HTTP_REFERER')
+            if referer_url:
+                return HttpResponseRedirect(referer_url)
+            return redirect(reverse('app:index'))
+
     log_activity(request, 'delete_edl', item.friendly_name)
     item.delete()
 
@@ -1174,6 +1198,26 @@ def app_settings_view(request):
         if new_syslog_protocol in ('udp', 'tcp') and new_syslog_protocol != app_settings.syslog_protocol:
             app_settings.syslog_protocol = new_syslog_protocol
             changes.append(f'syslog_protocol={new_syslog_protocol}')
+
+        # EDL delete protection
+        new_edl_delete_protection = request.POST.get('edl_delete_protection') == 'on'
+        if new_edl_delete_protection != app_settings.edl_delete_protection:
+            app_settings.edl_delete_protection = new_edl_delete_protection
+            changes.append(f'edl_delete_protection={new_edl_delete_protection}')
+
+        for field_name, min_val, max_val, default in [
+            ('edl_delete_threshold', 1, 100, 3),
+            ('edl_delete_window_minutes', 5, 1440, 15),
+        ]:
+            try:
+                val = int(request.POST.get(field_name, default))
+                val = max(min_val, min(val, max_val))
+            except (ValueError, TypeError):
+                val = default
+            old_val = getattr(app_settings, field_name)
+            if val != old_val:
+                setattr(app_settings, field_name, val)
+                changes.append(f'{field_name}={val}')
 
         # Auto-block settings
         new_autoblock_enabled = request.POST.get('autoblock_enabled') == 'on'

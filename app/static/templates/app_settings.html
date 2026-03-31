@@ -80,6 +80,35 @@
 
         <div class="card mb-3">
             <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">EDL Protection</h6>
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="edl_delete_protection" id="edl_delete_protection"
+                            {% if app_settings.edl_delete_protection %}checked{% endif %}>
+                        <label class="form-check-label" for="edl_delete_protection">Prevent deletion of actively polled EDLs</label>
+                    </div>
+                </div>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label for="edl_delete_threshold" class="form-label">Min Accesses to Protect</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" name="edl_delete_threshold" id="edl_delete_threshold" class="form-control" value="{{ app_settings.edl_delete_threshold }}" min="1" max="100">
+                            <span class="input-group-text">hits</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <label for="edl_delete_window_minutes" class="form-label">Look-back Window</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" name="edl_delete_window_minutes" id="edl_delete_window_minutes" class="form-control" value="{{ app_settings.edl_delete_window_minutes }}" min="5" max="1440">
+                            <span class="input-group-text">min</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
                 <h6 class="text-muted text-uppercase mb-3">Security</h6>
                 <div class="row g-3">
                     <div class="col-4">
