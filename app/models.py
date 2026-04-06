@@ -299,6 +299,7 @@ class NginxRejection(models.Model):
 class ShortenedURL(models.Model):
     original_url = models.URLField(max_length=2048, verbose_name='Original URL')
     short_code = models.CharField(max_length=255, unique=True, blank=True)
+    notes = models.TextField(blank=True, default='', verbose_name='Notes')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shortened_urls')
     hit_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)

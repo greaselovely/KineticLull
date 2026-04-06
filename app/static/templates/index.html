@@ -23,7 +23,10 @@
 {% endif %}
 
 <div class="content-card edl-card">
-    <h3>{% if favorites_view %}Favorites{% else %}EDLs{% endif %}</h3>
+    <div class="d-flex justify-content-between align-items-center">
+        <h3>{% if favorites_view %}Favorites{% else %}EDLs{% endif %}</h3>
+        {% if not favorites_view %}<a href="{% url 'app:new_edl' %}" title="New EDL"><img class="icon action-items" src="{% static 'images/plus.svg' %}" alt="New EDL"></a>{% endif %}
+    </div>
     <table id="edl-table" class="table table-hover table-resizable">
         <thead>
             <tr>

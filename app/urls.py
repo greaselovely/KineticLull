@@ -7,12 +7,13 @@ from django.contrib.auth.views import LoginView
 from django.views.generic.base import RedirectView
 
 from . import views
-from .views import SubmitFQDNView, update_edl_fqdn, short_urls_view, create_short_url, delete_short_url, redirect_short_url, restart_services_view
+from .views import SubmitFQDNView, update_edl_fqdn, short_urls_view, create_short_url, edit_short_url, delete_short_url, redirect_short_url, restart_services_view
 
 app_name = "app"
 
 urlpatterns = [
-    path('', views.index_view, name='index'),
+    path('', views.favorites_view, name='home'),
+    path('edls/', views.index_view, name='index'),
     path('edit/', views.edit_ext_dyn_list_view, name="edit"),
     path('edit/<id>', views.edit_ext_dyn_list_view, name="edit"),
     path('clone/', views.clone_ext_dyn_list_view, name="clone"),
@@ -40,7 +41,7 @@ urlpatterns = [
     path('api/blocked-ip-timeline/', views.blocked_ip_timeline_view, name='blocked_ip_timeline'),
     path('api/restart-services/', restart_services_view, name='restart_services'),
     path('blocked-ips/export/', views.blocklist_export_view, name='blocklist_export'),
-    path('favorites/', views.favorites_view, name='favorites'),
+    path('favorites/', views.favorites_view, name='favorites'),  # legacy redirect support
     path('favorite/<int:item_id>/', views.toggle_favorite, name='toggle_favorite'),
     path('logs/', views.activity_log_view, name='activity_log'),
     path('logs/export/', views.activity_log_export, name='activity_log_export'),
@@ -52,9 +53,10 @@ urlpatterns = [
     path('groups/', views.group_list_view, name='group_list'),
     path('groups/create/', views.group_create_view, name='group_create'),
     path('groups/<int:group_id>/edit/', views.group_edit_view, name='group_edit'),
-    path('short-urls/', short_urls_view, name='short_urls'),
-    path('short-urls/create/', create_short_url, name='create_short_url'),
-    path('short-urls/delete/<int:url_id>/', delete_short_url, name='delete_short_url'),
+    path('urls/', short_urls_view, name='short_urls'),
+    path('urls/create/', create_short_url, name='create_short_url'),
+    path('urls/<int:url_id>/edit/', edit_short_url, name='edit_short_url'),
+    path('urls/delete/<int:url_id>/', delete_short_url, name='delete_short_url'),
     path('s/<str:short_code>/', redirect_short_url, name='redirect_short_url'),
     path('favicon.ico', RedirectView.as_view(url='/static/images/favicon.ico', permanent=True)),
     # keep this at the bottom

@@ -2353,13 +2353,12 @@ def short_urls_view(request):
     return render(request, 'short_urls.html', {
         'page_obj': page_obj,
         'per_page': per_page,
-        'form': ShortenedURLForm(),
     })
 
 
 @login_required
 def create_short_url(request):
-    """Create a new shortened URL for the current user."""
+    """Create a new shortened URL via a dedicated form page."""
     if request.method == 'POST':
         form = ShortenedURLForm(request.POST)
         if form.is_valid():
@@ -2369,9 +2368,25 @@ def create_short_url(request):
             log_activity(request, 'create_short_url', short_url.short_code, short_url.original_url)
             messages.success(request, f'Short URL created: /s/{short_url.short_code}')
             return redirect('app:short_urls')
-        else:
-            messages.error(request, 'Invalid URL. Please check and try again.')
-    return redirect('app:short_urls')
+    else:
+        form = ShortenedURLForm()
+    return render(request, 'edit_short_url.html', {'form': form})
+
+
+@login_required
+def edit_short_url(request, url_id):
+    """Edit an existing shortened URL owned by the current user."""
+    short_url = get_object_or_404(ShortenedURL, id=url_id, created_by=request.user)
+    if request.method == 'POST':
+        form = ShortenedURLForm(request.POST, instance=short_url)
+        if form.is_valid():
+            form.save()
+            log_activity(request, 'edit_short_url', short_url.short_code, short_url.original_url)
+            messages.success(request, 'Short URL updated.')
+            return redirect('app:short_urls')
+    else:
+        form = ShortenedURLForm(instance=short_url)
+    return render(request, 'edit_short_url.html', {'form': form, 'short_url': short_url})
 
 
 @login_required

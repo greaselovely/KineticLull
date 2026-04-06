@@ -1,23 +1,15 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load tz %}
-{% block title %} - Short URLs{% endblock %}
+{% block title %} - URLs{% endblock %}
 {% block content %}
 {% timezone app_timezone %}
 
-<div class="content-card">
-    <h3>Create Short URL</h3>
-    <form method="post" action="{% url 'app:create_short_url' %}">
-        {% csrf_token %}
-        <div class="d-flex gap-2 align-items-start">
-            {{ form.original_url }}
-            <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Shorten</button>
-        </div>
-    </form>
-</div>
-
-<div class="content-card edl-card mt-3">
-    <h3>Your Short URLs</h3>
+<div class="content-card edl-card">
+    <div class="d-flex justify-content-between align-items-center">
+        <h3>URLs</h3>
+        <a href="{% url 'app:create_short_url' %}" title="New URL"><img class="icon action-items" src="{% static 'images/plus.svg' %}" alt="New URL"></a>
+    </div>
     <table id="short-url-table" class="table table-hover table-resizable">
         <thead>
             <tr>
@@ -41,6 +33,7 @@
                 <td>{{ url.created_at|date:app_timestamp_format }}</td>
                 <td>
                     <span class="actions-row">
+                        <a href="{% url 'app:edit_short_url' url.id %}" title="Edit"><img class="icon action-items" src="{% static 'images/edit.svg' %}" alt="Edit"></a>
                         <img src="{% static 'images/delete.svg' %}" alt="Delete" class="icon action-items" onclick="deleteShortUrl('{{ url.id }}', event)" title="Delete">
                         <img src="{% static 'images/copy.svg' %}" alt="Copy" class="icon action-items copy-url-btn" data-url="{{ url.short_url }}" title="Copy Short URL">
                     </span>
@@ -48,7 +41,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="5" class="text-muted">No short URLs yet. Create one above.</td>
+                <td colspan="5" class="text-muted">No URLs yet. Click the + to create one.</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -98,10 +91,11 @@
 
 {% block scripts %}
 <script>
+var deleteUrlBase = "{% url 'app:delete_short_url' url_id=0 %}".replace('/0/', '/');
 function deleteShortUrl(urlId, event) {
     event.preventDefault();
     showConfirmModal('Delete this short URL?', function() {
-        window.location.href = '/short-urls/delete/' + urlId + '/';
+        window.location.href = deleteUrlBase + urlId + '/';
     });
 }
 </script>

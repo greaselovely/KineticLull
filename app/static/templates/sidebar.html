@@ -1,7 +1,7 @@
 {% load static %}
 <nav id="sidebar" class="sidebar">
     <div class="sidebar-header">
-        <a href="{% url 'app:index' %}" class="sidebar-brand">
+        <a href="{% url 'app:home' %}" class="sidebar-brand">
             <span class="brand-full">KineticLull</span>
             <span class="brand-mini">KL</span>
         </a>
@@ -12,28 +12,22 @@
 
     <ul class="sidebar-nav">
         <li>
-            <a href="{% url 'app:index' %}" title="Home">
-                <i class="bi bi-house"></i>
-                <span class="nav-text">Home</span>
-            </a>
-        </li>
-        {% if user.is_authenticated %}
-        <li>
-            <a href="{% url 'app:favorites' %}" title="Favorites">
+            <a href="{% url 'app:home' %}" title="Favorites">
                 <i class="bi bi-star"></i>
                 <span class="nav-text">Favorites</span>
             </a>
         </li>
+        {% if user.is_authenticated %}
         <li>
-            <a href="{% url 'app:new_edl' %}" title="New EDL">
-                <i class="bi bi-plus-circle"></i>
-                <span class="nav-text">New EDL</span>
+            <a href="{% url 'app:index' %}" title="EDLs">
+                <i class="bi bi-list-ul"></i>
+                <span class="nav-text">EDLs</span>
             </a>
         </li>
         <li>
-            <a href="{% url 'app:short_urls' %}" title="Short URLs">
+            <a href="{% url 'app:short_urls' %}" title="URLs">
                 <i class="bi bi-link-45deg"></i>
-                <span class="nav-text">Short URLs</span>
+                <span class="nav-text">URLs</span>
             </a>
         </li>
         <li>
