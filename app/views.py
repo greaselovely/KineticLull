@@ -1710,36 +1710,20 @@ def upgrade_view(request):
             success = False
             logger.error(f"Upgrade collectstatic failed for {request.user.email}: {result.stderr.strip()}")
 
-        # Step 5: restart services via systemctl (fall back to SIGHUP if sudoers not configured)
-        restart_ok = True
-        for svc in ['kineticlull', 'nginx']:
-            result = subprocess.run(
-                ['sudo', '-n', 'systemctl', 'restart', svc],
-                capture_output=True, text=True, timeout=15,
-            )
-            if result.returncode != 0:
-                restart_ok = False
-                logger.warning(f"Upgrade: systemctl restart {svc} failed: {result.stderr.strip()}")
+        log_activity(request, 'upgrade', f'v{current_version}', 'Code updated, restarting')
 
-        if not restart_ok:
-            # sudoers not yet configured — fall back to SIGHUP and warn the user
-            logger.info("Falling back to SIGHUP reload (sudoers rules not configured)")
-            try:
-                os.kill(os.getppid(), signal.SIGHUP)
-            except (ProcessLookupError, PermissionError):
-                success = False
-                logger.error(f"Upgrade reload failed for {request.user.email}: could not signal Gunicorn master")
-            messages.info(request, 'Run "bash upgrade.sh" once from the command line to enable seamless in-app upgrades.')
+        if not success:
+            # git pull/migrate/collectstatic had errors — return JSON so JS knows
+            return JsonResponse({'status': 'error', 'message': 'Upgrade completed with errors. Check server logs.'})
 
-        if success:
-            new_version = get_current_version()
-            messages.success(request, f'Upgraded to {new_version}. Application is reloading.')
-            log_activity(request, 'upgrade', f'v{current_version} -> v{new_version}')
-        else:
-            messages.warning(request, 'Upgrade completed but the service could not restart automatically. Run "sudo systemctl restart kineticlull && sudo systemctl restart nginx" from the command line.')
-            log_activity(request, 'upgrade', f'v{current_version}', 'Completed but restart failed')
+        # Step 5: restart services — this kills our own process, so respond first
+        # Use Popen so we don't block waiting for our own death
+        subprocess.Popen(
+            ['bash', '-c', 'sleep 2 && sudo -n systemctl restart kineticlull; sudo -n systemctl restart nginx'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
 
-        return redirect('app:upgrade')
+        return JsonResponse({'status': 'ok', 'message': 'Restarting...'})
 
     return render(request, 'upgrade.html', context)
 

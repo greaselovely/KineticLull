@@ -65,17 +65,29 @@
         btn.style.display = 'none';
         status.style.display = 'block';
 
-        // Fire the upgrade request — we don't care about the response
+        // Fire the upgrade request
         fetch(form.action || window.location.href, {
             method: 'POST',
             body: new FormData(form),
-        }).catch(function() {});
+        }).then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
+            if (data.status === 'error') {
+                status.style.display = 'none';
+                document.getElementById('upgrade-failed').style.display = 'block';
+                return;
+            }
+        }).catch(function() {
+            // Connection dropped — expected during restart
+        });
 
-        // Poll until the service comes back
+        // Wait for the restart to begin before polling
         var attempts = 0;
         var maxAttempts = 60;
         var totalSeconds = maxAttempts * 3;
-        var poll = setInterval(function() {
+        var poll;
+        setTimeout(function() {
+        poll = setInterval(function() {
             attempts++;
             var remaining = Math.max(0, totalSeconds - (attempts * 3));
             statusText.textContent = 'Upgrading... waiting for service to restart (' + remaining + 's remaining)';
@@ -95,6 +107,7 @@
                 })
                 .catch(function() {});
         }, 3000);
+        }, 5000);  // 5s delay — wait for restart to begin
     });
 })();
 </script>
