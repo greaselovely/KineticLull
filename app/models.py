@@ -114,6 +114,7 @@ class AppSettings(models.Model):
         ('m/d/Y g:i:s A', '03/17/2026 2:30:00 PM'),
     ]
     # Display
+    timezone_configured = models.BooleanField(default=False, verbose_name='Timezone has been configured')
     timezone = models.CharField(max_length=50, default='UTC', verbose_name='Display Timezone')
     timestamp_format = models.CharField(max_length=50, default='Y-m-d H:i:s', choices=TIMESTAMP_CHOICES, verbose_name='Timestamp Format')
     default_edl_per_page = models.PositiveIntegerField(default=10, verbose_name='Default EDLs per page')

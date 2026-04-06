@@ -1205,6 +1205,8 @@ def app_settings_view(request):
         if tz in available_timezones and tz != app_settings.timezone:
             app_settings.timezone = tz
             changes.append(f'timezone={tz}')
+        if tz in available_timezones:
+            app_settings.timezone_configured = True
 
         # Timestamp format
         ts_format = request.POST.get('timestamp_format', 'Y-m-d H:i:s')
@@ -1734,6 +1736,28 @@ def restart_services_view(request):
     """Restart KineticLull and Nginx via the web UI."""
     if not request.user.is_superuser:
         raise PermissionDenied
+
+    # Check if sudoers rules are in place before attempting restart
+    result = subprocess.run(
+        ['sudo', '-n', 'systemctl', 'status', 'kineticlull'],
+        capture_output=True, text=True, timeout=5,
+    )
+    if result.returncode != 0 and 'password is required' in result.stderr.lower():
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Sudoers rules not configured. Run "bash upgrade.sh" once from the command line.',
+        })
+
+    base_dir = str(settings.BASE_DIR)
+    python = sys.executable
+    manage_py = os.path.join(base_dir, 'manage.py')
+
+    # Collect static files before restart
+    subprocess.run(
+        [python, manage_py, 'collectstatic', '--noinput'],
+        cwd=base_dir, capture_output=True, text=True,
+    )
+
     log_activity(request, 'restart_services', '', 'Manual restart from web UI')
     subprocess.Popen(
         ['bash', '-c', 'sleep 2 && sudo -n systemctl restart kineticlull; sudo -n systemctl restart nginx'],

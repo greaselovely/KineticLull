@@ -3,6 +3,12 @@
 {% block content %}
 <div style="max-width: 650px;">
     <h3 class="mb-3">Settings</h3>
+    {% if request.GET.tz_setup %}
+    <div class="alert alert-info">
+        <i class="bi bi-clock me-2"></i>
+        <strong>Set your timezone.</strong> Please configure your display timezone below, then save.
+    </div>
+    {% endif %}
     <form method="post">
         {% csrf_token %}
 
