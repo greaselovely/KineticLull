@@ -377,7 +377,8 @@ td.cell-wrap {
     gap: 6px;
 }
 
-.actions-row a {
+.actions-row a,
+a > .action-items {
     color: inherit;
 }
 
