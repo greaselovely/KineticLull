@@ -11,13 +11,13 @@
     </div>
 
     <ul class="sidebar-nav">
+        {% if user.is_authenticated %}
         <li>
             <a href="{% url 'app:home' %}" title="Favorites">
                 <i class="bi bi-star"></i>
                 <span class="nav-text">Favorites</span>
             </a>
         </li>
-        {% if user.is_authenticated %}
         <li>
             <a href="{% url 'app:index' %}" title="EDLs">
                 <i class="bi bi-list-ul"></i>
