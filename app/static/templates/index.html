@@ -25,7 +25,7 @@
 <div class="content-card edl-card">
     <div class="d-flex justify-content-between align-items-center">
         <h3>{% if favorites_view %}Favorites{% else %}EDLs{% endif %}</h3>
-        {% if not favorites_view %}<a href="{% url 'app:new_edl' %}" title="New EDL"><img class="icon action-items" src="{% static 'images/plus.svg' %}" alt="New EDL"></a>{% endif %}
+        {% if not favorites_view %}<a href="{% url 'app:new_edl' %}" title="New EDL"><i class="bi bi-plus-circle action-items"></i></a>{% endif %}
     </div>
     <table id="edl-table" class="table table-hover table-resizable">
         <thead>
@@ -57,11 +57,11 @@
                 <td>
                     <span class="actions-row">
                         <i class="bi {% if item.is_favorited %}bi-star-fill text-warning{% else %}bi-star{% endif %} action-items favorite-btn" data-id="{{ item.id }}" title="Favorite"></i>
-                        <a href="{% url 'app:edit' id=item.id %}" title="Edit"><img class="icon action-items" src="{% static 'images/edit.svg' %}" alt="Edit"></a>
-                        <a href="{% url 'app:clone' item.id %}" title="Clone"><img class="icon action-items" src="{% static 'images/clone.svg' %}" alt="Clone"></a>
-                        <a href="{% url 'app:download_ip_fqdn' item.id %}" title="Download"><img class="icon action-items" src="{% static 'images/download.svg' %}" alt="Download"></a>
-                        <img class="icon action-items" src="{% static 'images/delete.svg' %}" alt="Delete" onclick="deleteRecord('{{ item.id }}', event)" title="{% if item.is_protected %}Protected — actively polled{% else %}Delete{% endif %}"{% if item.is_protected %} style="opacity: 0.5;"{% endif %}>
-                        <img src="{% static 'images/copy.svg' %}" alt="Copy" class="icon action-items copy-url-btn" data-url="{{ item.full_url }}" title="Copy URL">
+                        <a href="{% url 'app:edit' id=item.id %}" title="Edit"><i class="bi bi-pencil action-items"></i></a>
+                        <a href="{% url 'app:clone' item.id %}" title="Clone"><i class="bi bi-copy action-items"></i></a>
+                        <a href="{% url 'app:download_ip_fqdn' item.id %}" title="Download"><i class="bi bi-download action-items"></i></a>
+                        <i class="bi bi-trash action-items text-danger" onclick="deleteRecord('{{ item.id }}', event)" title="{% if item.is_protected %}Protected — actively polled{% else %}Delete{% endif %}"{% if item.is_protected %} style="opacity: 0.3;"{% endif %}></i>
+                        <i class="bi bi-clipboard action-items copy-url-btn" data-url="{{ item.full_url }}" title="Copy URL"></i>
                     </span>
                 </td>
             </tr>

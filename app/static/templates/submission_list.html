@@ -18,7 +18,7 @@
         <tbody class="align-top">
             {% for submission in page_obj %}
             <tr>
-                <td><a href="{% url 'app:review_submission' submission.id %}"><img class="icon action-items" src="{% static 'images/edit.svg' %}" alt="Edit"></a></td>
+                <td><a href="{% url 'app:review_submission' submission.id %}"><i class="bi bi-pencil action-items"></i></a></td>
                 <td class="cell-wrap">
                     {% for ip_fq in submission.fqdn_display %}
                         {{ ip_fq }}<br>

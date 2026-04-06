@@ -19,8 +19,8 @@
     <div id="api-key-container" class="mt-3">
         <p>Your API Key:
             <code id="api-key" class="blur-text">{{ api_key }}</code>
-            <img src="{% static 'images/show.svg' %}" alt="Show/Hide" class="icon action-items" id="toggle-api-key-visibility" style="cursor: pointer;">
-            <img src="{% static 'images/copy.svg' %}" alt="Copy" class="icon action-items" id="copy-api-key" style="cursor: pointer;">
+            <i class="bi bi-eye action-items" id="toggle-api-key-visibility" style="cursor: pointer;" title="Show/Hide"></i>
+            <i class="bi bi-clipboard action-items" id="copy-api-key" style="cursor: pointer;" title="Copy"></i>
             <span id="copy-confirmation" style="display: none; transition: opacity 600ms;">Copied</span>
         </p>
     </div>

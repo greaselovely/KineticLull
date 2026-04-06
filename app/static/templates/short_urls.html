@@ -8,7 +8,7 @@
 <div class="content-card edl-card">
     <div class="d-flex justify-content-between align-items-center">
         <h3>URLs</h3>
-        <a href="{% url 'app:create_short_url' %}" title="New URL"><img class="icon action-items" src="{% static 'images/plus.svg' %}" alt="New URL"></a>
+        <a href="{% url 'app:create_short_url' %}" title="New URL"><i class="bi bi-plus-circle action-items"></i></a>
     </div>
     <table id="short-url-table" class="table table-hover table-resizable">
         <thead>
@@ -33,9 +33,9 @@
                 <td>{{ url.created_at|date:app_timestamp_format }}</td>
                 <td>
                     <span class="actions-row">
-                        <a href="{% url 'app:edit_short_url' url.id %}" title="Edit"><img class="icon action-items" src="{% static 'images/edit.svg' %}" alt="Edit"></a>
-                        <img src="{% static 'images/delete.svg' %}" alt="Delete" class="icon action-items" onclick="deleteShortUrl('{{ url.id }}', event)" title="Delete">
-                        <img src="{% static 'images/copy.svg' %}" alt="Copy" class="icon action-items copy-url-btn" data-url="{{ url.short_url }}" title="Copy Short URL">
+                        <a href="{% url 'app:edit_short_url' url.id %}" title="Edit"><i class="bi bi-pencil action-items"></i></a>
+                        <i class="bi bi-trash action-items text-danger" onclick="deleteShortUrl('{{ url.id }}', event)" title="Delete"></i>
+                        <i class="bi bi-clipboard action-items copy-url-btn" data-url="{{ url.short_url }}" title="Copy Short URL"></i>
                     </span>
                 </td>
             </tr>
