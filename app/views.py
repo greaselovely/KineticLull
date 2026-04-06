@@ -1753,10 +1753,12 @@ def restart_services_view(request):
     manage_py = os.path.join(base_dir, 'manage.py')
 
     # Collect static files before restart
-    subprocess.run(
+    cs_result = subprocess.run(
         [python, manage_py, 'collectstatic', '--noinput'],
         cwd=base_dir, capture_output=True, text=True,
     )
+    if cs_result.returncode != 0:
+        logger.error(f"collectstatic failed: {cs_result.stderr.strip()}")
 
     log_activity(request, 'restart_services', '', 'Manual restart from web UI')
     subprocess.Popen(

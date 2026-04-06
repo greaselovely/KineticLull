@@ -378,8 +378,10 @@ td.cell-wrap {
 }
 
 .actions-row a,
-a > .action-items {
-    color: inherit;
+a > .action-items,
+a:has(> .action-items) {
+    color: #212529;
+    text-decoration: none;
 }
 
 .copy-confirmation {
