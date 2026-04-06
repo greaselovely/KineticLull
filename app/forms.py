@@ -1,6 +1,6 @@
 from django import forms
 # from .models import ExtDynLists, Script
-from .models import ExtDynLists
+from .models import ExtDynLists, ShortenedURL
 from django.contrib.auth.forms import UserChangeForm
 from users.models import CustomUser
 
@@ -30,6 +30,20 @@ class ExtDynListsForm(forms.ModelForm):
                                               'placeholder' : 'Security Policy Reference\nTicket Number\nOther Notes', 
                                               'required' : 'required',
                                               'rows' : '4'}),
+        }
+
+
+class ShortenedURLForm(forms.ModelForm):
+    class Meta:
+        model = ShortenedURL
+        fields = ['original_url']
+        widgets = {
+            'original_url': forms.URLInput(attrs={
+                'class': 'form-control mb-3',
+                'id': 'originalUrlInput',
+                'placeholder': 'https://example.com/very/long/url/to/shorten',
+                'required': 'required',
+            }),
         }
 
 

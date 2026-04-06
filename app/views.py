@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
-from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection
-from .forms import ExtDynListsForm, ProfileChangeForm
+from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL
+from .forms import ExtDynListsForm, ProfileChangeForm, ShortenedURLForm
 
 from users.models import CustomUser
 from django.contrib.auth.models import Group, Permission
@@ -1659,6 +1659,22 @@ def upgrade_view(request):
         manage_py = os.path.join(base_dir, 'manage.py')
         success = True
 
+        # Step 0: Back up database
+        db_path = os.path.join(base_dir, 'db.sqlite3')
+        if os.path.exists(db_path):
+            backup_dir = os.path.join(base_dir, 'backups')
+            os.makedirs(backup_dir, exist_ok=True)
+            backup_file = os.path.join(backup_dir, f'db.sqlite3.{datetime.now().strftime("%Y%m%d%H%M%S")}.bak')
+            import shutil
+            shutil.copy2(db_path, backup_file)
+            logger.info(f"Database backed up to {backup_file}")
+
+            # Prune backups older than 30 days
+            cutoff_ts = datetime.now().timestamp() - (30 * 86400)
+            for f in Path(backup_dir).glob('db.sqlite3.*.bak'):
+                if f.stat().st_mtime < cutoff_ts:
+                    f.unlink()
+
         # Step 1: git pull
         result = subprocess.run(
             ['git', 'pull'], cwd=base_dir, capture_output=True, text=True,
@@ -2301,3 +2317,64 @@ echo "========================================="
 #         return redirect('script_review')
 #     else:
 #         raise PermissionDenied
+
+
+# ── URL Shortener ──────────────────────────────────────────────
+
+@login_required
+def short_urls_view(request):
+    """List the current user's shortened URLs."""
+    app_settings = AppSettings.load()
+    urls = ShortenedURL.objects.filter(created_by=request.user)
+    per_page = request.GET.get("per_page", "25")
+    try:
+        per_page = max(1, min(int(per_page), 100))
+    except (ValueError, TypeError):
+        per_page = 25
+    paginator = Paginator(urls, per_page)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    base_url = settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
+    for url in page_obj:
+        url.short_url = f"{base_url}/s/{url.short_code}"
+
+    return render(request, 'short_urls.html', {
+        'page_obj': page_obj,
+        'per_page': per_page,
+        'form': ShortenedURLForm(),
+    })
+
+
+@login_required
+def create_short_url(request):
+    """Create a new shortened URL for the current user."""
+    if request.method == 'POST':
+        form = ShortenedURLForm(request.POST)
+        if form.is_valid():
+            short_url = form.save(commit=False)
+            short_url.created_by = request.user
+            short_url.save()
+            log_activity(request, 'create_short_url', short_url.short_code, short_url.original_url)
+            messages.success(request, f'Short URL created: /s/{short_url.short_code}')
+            return redirect('app:short_urls')
+        else:
+            messages.error(request, 'Invalid URL. Please check and try again.')
+    return redirect('app:short_urls')
+
+
+@login_required
+def delete_short_url(request, url_id):
+    """Delete a shortened URL owned by the current user."""
+    short_url = get_object_or_404(ShortenedURL, id=url_id, created_by=request.user)
+    code = short_url.short_code
+    short_url.delete()
+    log_activity(request, 'delete_short_url', code)
+    messages.success(request, 'Short URL deleted.')
+    return redirect('app:short_urls')
+
+
+def redirect_short_url(request, short_code):
+    """Public redirect endpoint — no login required."""
+    short_url = get_object_or_404(ShortenedURL, short_code=short_code)
+    ShortenedURL.objects.filter(pk=short_url.pk).update(hit_count=models.F('hit_count') + 1)
+    return HttpResponseRedirect(short_url.original_url)

@@ -287,6 +287,14 @@ setup_django() {
     log "Collecting static files..."
     ${PYTHON} "${PROJECT_DIR}/manage.py" collectstatic --noinput 2>>"${LOGFILE}"
 
+    # Create default superuser if no users exist
+    ${PYTHON} "${PROJECT_DIR}/manage.py" shell -c "
+from users.models import CustomUser
+if not CustomUser.objects.exists():
+    CustomUser.objects.create_superuser(email='support@kineticlull.com', password='Password!')
+    print('Default superuser created.')
+" 2>>"${LOGFILE}"
+
     # Set deployment mode in AppSettings
     ${PYTHON} "${PROJECT_DIR}/manage.py" shell -c "
 from app.models import AppSettings

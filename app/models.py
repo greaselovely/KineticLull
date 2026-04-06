@@ -296,6 +296,27 @@ class NginxRejection(models.Model):
         cls.objects.filter(timestamp__lt=timezone.now() - timedelta(days=days)).delete()
 
 
+class ShortenedURL(models.Model):
+    original_url = models.URLField(max_length=2048, verbose_name='Original URL')
+    short_code = models.CharField(max_length=255, unique=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shortened_urls')
+    hit_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Shortened URL"
+        verbose_name_plural = "Shortened URLs"
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.short_code:
+            self.short_code = secrets.token_urlsafe(8)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.short_code} -> {self.original_url}"
+
+
 class InboxEntry(models.Model):
     submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='Submitted By', null=True)
     fqdn_list = models.TextField(verbose_name='IP/FQDN')

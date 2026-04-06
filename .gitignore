@@ -1,4 +1,5 @@
 logs/
+backups/
 staticfiles/
 *.json
 MM.jpeg
@@ -9,7 +10,7 @@ deploy/migrate_to_nginx.sh
 .migration_backup_*/
 ssl/
 .nginx_parse_state
-# db.sqlite3
+db.sqlite3
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -71,7 +72,7 @@ cover/
 # Django stuff:
 *.log
 local_settings.py
-# db.sqlite3
+db.sqlite3
 db.sqlite3-journal
 
 # Flask stuff:

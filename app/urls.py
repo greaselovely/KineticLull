@@ -7,7 +7,7 @@ from django.contrib.auth.views import LoginView
 from django.views.generic.base import RedirectView
 
 from . import views
-from .views import SubmitFQDNView, update_edl_fqdn
+from .views import SubmitFQDNView, update_edl_fqdn, short_urls_view, create_short_url, delete_short_url, redirect_short_url
 
 app_name = "app"
 
@@ -51,6 +51,10 @@ urlpatterns = [
     path('groups/', views.group_list_view, name='group_list'),
     path('groups/create/', views.group_create_view, name='group_create'),
     path('groups/<int:group_id>/edit/', views.group_edit_view, name='group_edit'),
+    path('short-urls/', short_urls_view, name='short_urls'),
+    path('short-urls/create/', create_short_url, name='create_short_url'),
+    path('short-urls/delete/<int:url_id>/', delete_short_url, name='delete_short_url'),
+    path('s/<str:short_code>/', redirect_short_url, name='redirect_short_url'),
     path('favicon.ico', RedirectView.as_view(url='/static/images/favicon.ico', permanent=True)),
     # keep this at the bottom
     re_path(r'^(?P<auto_url>[\w.-]+)/?$', views.show_ip_fqdn, name='show_ip_fqdn'),
