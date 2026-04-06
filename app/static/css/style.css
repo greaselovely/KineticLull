@@ -377,6 +377,12 @@ td.cell-wrap {
     gap: 6px;
 }
 
+.actions-row a {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+}
+
 .actions-row a,
 a > .action-items,
 a:has(> .action-items) {
