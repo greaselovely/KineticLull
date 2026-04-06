@@ -427,14 +427,14 @@ fi
 
 # Step 3: Back up database before migrations
 if [ -f "db.sqlite3" ]; then
-    BACKUP_DIR="${PROJECT_DIR}/backups"
-    mkdir -p "${BACKUP_DIR}"
-    BACKUP_FILE="${BACKUP_DIR}/db.sqlite3.$(date +%Y%m%d%H%M%S).bak"
-    cp "db.sqlite3" "${BACKUP_FILE}"
-    ok "Database backed up to ${BACKUP_FILE}"
+    DB_BACKUP_DIR="${PROJECT_DIR}/backups"
+    mkdir -p "${DB_BACKUP_DIR}"
+    DB_BACKUP_FILE="${DB_BACKUP_DIR}/db.sqlite3.$(date +%Y%m%d%H%M%S).bak"
+    cp "db.sqlite3" "${DB_BACKUP_FILE}"
+    ok "Database backed up to ${DB_BACKUP_FILE}"
 
     # Prune backups older than 30 days
-    find "${BACKUP_DIR}" -name "db.sqlite3.*.bak" -mtime +30 -delete 2>/dev/null || true
+    find "${DB_BACKUP_DIR}" -name "db.sqlite3.*.bak" -mtime +30 -delete 2>/dev/null || true
 fi
 
 # Step 4: Run migrations
