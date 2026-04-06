@@ -19,11 +19,11 @@
     <table id="short-url-table" class="table table-hover table-resizable">
         <thead>
             <tr>
-                <th>Short URL</th>
-                <th>Original URL</th>
-                <th>Hits</th>
-                <th>Created</th>
-                <th>Actions</th>
+                <th data-col="0">Short URL</th>
+                <th data-col="1">Original URL</th>
+                <th data-col="2">Hits</th>
+                <th data-col="3">Created</th>
+                <th data-col="4">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -39,8 +39,8 @@
                 <td>{{ url.created_at|date:"Y-m-d H:i" }}</td>
                 <td>
                     <span class="actions-row">
-                        <img src="{% static 'images/copy.svg' %}" alt="Copy" class="icon action-items copy-url-btn" data-url="{{ url.short_url }}" title="Copy Short URL">
                         <img src="{% static 'images/delete.svg' %}" alt="Delete" class="icon action-items" onclick="deleteShortUrl('{{ url.id }}', event)" title="Delete">
+                        <img src="{% static 'images/copy.svg' %}" alt="Copy" class="icon action-items copy-url-btn" data-url="{{ url.short_url }}" title="Copy Short URL">
                     </span>
                 </td>
             </tr>

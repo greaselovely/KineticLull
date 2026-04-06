@@ -29,6 +29,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Resizable columns
     initResizableTable('edl-table');
+    initResizableTable('short-url-table');
+    initResizableTable('log-table');
 
     // Admin submenu toggle
     var adminToggle = document.getElementById('admin-menu-toggle');
@@ -224,7 +226,7 @@ function initResizableTable(tableId) {
 
     var storageKey = 'col-widths-' + tableId;
     var headers = table.querySelectorAll('thead th');
-    var defaultWidths = [15, 30, 35, 20];
+    var defaultWidths = Array.from(headers).map(function() { return 100 / headers.length; });
 
     // Restore saved widths or use defaults
     var saved = localStorage.getItem(storageKey);
