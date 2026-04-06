@@ -279,14 +279,18 @@ SVCEOF
     ok "Systemd service updated (Gunicorn on 127.0.0.1:8000)."
 
     # Allow the app user to reload Nginx without a password (for IP blocklist updates)
-    local SUDOERS_FILE="/etc/sudoers.d/kineticlull-nginx"
-    if [ ! -f "$SUDOERS_FILE" ]; then
-        local CURRENT_USER
-        CURRENT_USER=$(whoami)
-        echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload" | sudo tee "${SUDOERS_FILE}" > /dev/null
-        sudo chmod 440 "${SUDOERS_FILE}"
-        log "Sudoers rule added for Nginx reload."
-    fi
+    local SUDOERS_FILE="/etc/sudoers.d/kineticlull"
+    local CURRENT_USER
+    CURRENT_USER=$(whoami)
+    # Remove old file if it exists under the previous name
+    sudo rm -f "/etc/sudoers.d/kineticlull-nginx" 2>/dev/null || true
+    cat <<SUDOEOF | sudo tee "${SUDOERS_FILE}" > /dev/null
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart kineticlull
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx
+SUDOEOF
+    sudo chmod 440 "${SUDOERS_FILE}"
+    log "Sudoers rules updated for service management."
 
     # ── Step 6: Restart services ──
     log "Restarting services..."

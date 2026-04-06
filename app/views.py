@@ -1710,12 +1710,15 @@ def upgrade_view(request):
             success = False
             logger.error(f"Upgrade collectstatic failed for {request.user.email}: {result.stderr.strip()}")
 
-        # Step 5: graceful reload via SIGHUP to Gunicorn master
-        try:
-            os.kill(os.getppid(), signal.SIGHUP)
-        except (ProcessLookupError, PermissionError):
-            success = False
-            logger.error(f"Upgrade reload failed for {request.user.email}: could not signal Gunicorn master")
+        # Step 5: restart services via systemctl
+        for svc in ['kineticlull', 'nginx']:
+            result = subprocess.run(
+                ['sudo', 'systemctl', 'restart', svc],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode != 0:
+                success = False
+                logger.error(f"Upgrade restart {svc} failed for {request.user.email}: {result.stderr.strip()}")
 
         if success:
             new_version = get_current_version()

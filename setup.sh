@@ -348,10 +348,14 @@ configure_nginx() {
     # Allow the app user to reload Nginx without a password (for IP blocklist updates)
     local CURRENT_USER
     CURRENT_USER=$(whoami)
-    local SUDOERS_FILE="/etc/sudoers.d/kineticlull-nginx"
-    echo "${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload" | sudo tee "${SUDOERS_FILE}" > /dev/null
+    local SUDOERS_FILE="/etc/sudoers.d/kineticlull"
+    cat <<SUDOEOF | sudo tee "${SUDOERS_FILE}" > /dev/null
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart kineticlull
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx
+SUDOEOF
     sudo chmod 440 "${SUDOERS_FILE}"
-    log "Sudoers rule added for Nginx reload."
+    log "Sudoers rules added for service management."
 
     ok "Nginx configured and tested."
 }
