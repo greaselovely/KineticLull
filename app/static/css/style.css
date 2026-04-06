@@ -104,10 +104,11 @@
 .sidebar-footer a {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
+    gap: 8px;
+    padding: 6px 16px;
     color: var(--sidebar-text);
     text-decoration: none;
+    font-size: 0.85rem;
     white-space: nowrap;
     transition: background-color var(--transition-speed), color var(--transition-speed);
 }
@@ -120,8 +121,8 @@
 
 .sidebar-nav li a i,
 .sidebar-footer a i {
-    font-size: 1.15rem;
-    width: 28px;
+    font-size: 1rem;
+    width: 24px;
     text-align: center;
     flex-shrink: 0;
 }

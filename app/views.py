@@ -1736,8 +1736,8 @@ def upgrade_view(request):
             messages.success(request, f'Upgraded to {new_version}. Application is reloading.')
             log_activity(request, 'upgrade', f'v{current_version} -> v{new_version}')
         else:
-            messages.warning(request, 'Upgrade completed with errors. Check the logs or restart the service manually.')
-            log_activity(request, 'upgrade', f'v{current_version}', 'Completed with errors')
+            messages.warning(request, 'Upgrade completed but the service could not restart automatically. Run "sudo systemctl restart kineticlull && sudo systemctl restart nginx" from the command line.')
+            log_activity(request, 'upgrade', f'v{current_version}', 'Completed but restart failed')
 
         return redirect('app:upgrade')
 
