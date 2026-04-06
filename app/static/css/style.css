@@ -377,6 +377,10 @@ td.cell-wrap {
     gap: 6px;
 }
 
+.actions-row a {
+    color: inherit;
+}
+
 .copy-confirmation {
     position: absolute;
     font-size: 0.75rem;
