@@ -449,7 +449,19 @@ $PYTHON manage.py migrate --noinput 2>>"${LOGFILE}"
 log "Collecting static files..."
 $PYTHON manage.py collectstatic --noinput 2>>"${LOGFILE}"
 
-# Step 5: Detect deployment mode & offer Nginx migration
+# Step 5: Ensure sudoers rules are current
+CURRENT_USER=$(whoami)
+SUDOERS_FILE="/etc/sudoers.d/kineticlull"
+sudo rm -f "/etc/sudoers.d/kineticlull-nginx" 2>/dev/null || true
+cat <<SUDOEOF | sudo tee "${SUDOERS_FILE}" > /dev/null
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart kineticlull
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx
+SUDOEOF
+sudo chmod 440 "${SUDOERS_FILE}"
+ok "Sudoers rules updated."
+
+# Step 6: Detect deployment mode & offer Nginx migration
 CURRENT_MODE=$(detect_deployment_mode)
 log "Current deployment mode: ${CURRENT_MODE}"
 

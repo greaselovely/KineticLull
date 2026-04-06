@@ -1710,15 +1710,26 @@ def upgrade_view(request):
             success = False
             logger.error(f"Upgrade collectstatic failed for {request.user.email}: {result.stderr.strip()}")
 
-        # Step 5: restart services via systemctl
+        # Step 5: restart services via systemctl (fall back to SIGHUP if sudoers not configured)
+        restart_ok = True
         for svc in ['kineticlull', 'nginx']:
             result = subprocess.run(
-                ['sudo', 'systemctl', 'restart', svc],
+                ['sudo', '-n', 'systemctl', 'restart', svc],
                 capture_output=True, text=True, timeout=15,
             )
             if result.returncode != 0:
+                restart_ok = False
+                logger.warning(f"Upgrade: systemctl restart {svc} failed: {result.stderr.strip()}")
+
+        if not restart_ok:
+            # sudoers not yet configured — fall back to SIGHUP and warn the user
+            logger.info("Falling back to SIGHUP reload (sudoers rules not configured)")
+            try:
+                os.kill(os.getppid(), signal.SIGHUP)
+            except (ProcessLookupError, PermissionError):
                 success = False
-                logger.error(f"Upgrade restart {svc} failed for {request.user.email}: {result.stderr.strip()}")
+                logger.error(f"Upgrade reload failed for {request.user.email}: could not signal Gunicorn master")
+            messages.info(request, 'Run "bash upgrade.sh" once from the command line to enable seamless in-app upgrades.')
 
         if success:
             new_version = get_current_version()
