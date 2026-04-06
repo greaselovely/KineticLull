@@ -310,7 +310,7 @@ class ShortenedURL(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.short_code:
-            self.short_code = secrets.token_urlsafe(8)
+            self.short_code = secrets.token_urlsafe(8) + ".kl"
         super().save(*args, **kwargs)
 
     def __str__(self):
