@@ -287,3 +287,41 @@ function initResizableTable(tableId) {
         });
     });
 }
+
+// Reusable Bootstrap confirmation modal
+function showConfirmModal(message, onConfirm) {
+    var existing = document.getElementById('confirmModal');
+    if (existing) existing.remove();
+
+    var modal = document.createElement('div');
+    modal.id = 'confirmModal';
+    modal.className = 'modal fade';
+    modal.tabIndex = -1;
+    modal.innerHTML =
+        '<div class="modal-dialog">' +
+        '  <div class="modal-content">' +
+        '    <div class="modal-header">' +
+        '      <h5 class="modal-title"><i class="bi bi-question-circle me-2"></i>Confirm</h5>' +
+        '      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>' +
+        '    </div>' +
+        '    <div class="modal-body"><p>' + message + '</p></div>' +
+        '    <div class="modal-footer">' +
+        '      <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>' +
+        '      <button type="button" class="btn btn-sm btn-danger" id="confirmModalBtn">Confirm</button>' +
+        '    </div>' +
+        '  </div>' +
+        '</div>';
+
+    document.body.appendChild(modal);
+    var bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    document.getElementById('confirmModalBtn').addEventListener('click', function() {
+        bsModal.hide();
+        onConfirm();
+    });
+
+    modal.addEventListener('hidden.bs.modal', function() {
+        modal.remove();
+    });
+}

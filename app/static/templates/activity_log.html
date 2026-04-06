@@ -171,24 +171,24 @@ document.addEventListener('DOMContentLoaded', function() {
         blockBtn.addEventListener('click', function() {
             var ip = document.getElementById('modal-ip').textContent.trim();
             if (!ip || ip === '127.0.0.1') return;
-            if (!confirm('Block ' + ip + '?')) return;
-
-            var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            fetch('{% url "app:block_ip" %}', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
-                body: 'ip_address=' + encodeURIComponent(ip) + '&reason=Blocked from activity log'
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.status === 'blocked') {
-                    blockBtn.classList.remove('btn-outline-danger');
-                    blockBtn.classList.add('btn-success');
-                    blockBtn.innerHTML = '<i class="bi bi-shield-check"></i>';
-                    blockBtn.disabled = true;
-                } else {
-                    alert(data.error || 'Failed to block IP');
-                }
+            showConfirmModal('Block ' + ip + '?', function() {
+                var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                fetch('{% url "app:block_ip" %}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+                    body: 'ip_address=' + encodeURIComponent(ip) + '&reason=Blocked from activity log'
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.status === 'blocked') {
+                        blockBtn.classList.remove('btn-outline-danger');
+                        blockBtn.classList.add('btn-success');
+                        blockBtn.innerHTML = '<i class="bi bi-shield-check"></i>';
+                        blockBtn.disabled = true;
+                    } else {
+                        alert(data.error || 'Failed to block IP');
+                    }
+                });
             });
         });
     }

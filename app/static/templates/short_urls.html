@@ -1,7 +1,9 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load tz %}
 {% block title %} - Short URLs{% endblock %}
 {% block content %}
+{% timezone app_timezone %}
 
 <div class="content-card">
     <h3>Create Short URL</h3>
@@ -36,7 +38,7 @@
                     <a href="{{ url.original_url }}" target="_blank">{{ url.original_url }}</a>
                 </td>
                 <td>{{ url.hit_count }}</td>
-                <td>{{ url.created_at|date:"Y-m-d H:i" }}</td>
+                <td>{{ url.created_at|date:app_timestamp_format }}</td>
                 <td>
                     <span class="actions-row">
                         <img src="{% static 'images/delete.svg' %}" alt="Delete" class="icon action-items" onclick="deleteShortUrl('{{ url.id }}', event)" title="Delete">
@@ -91,16 +93,16 @@
     </div>
     {% endif %}
 </div>
-
+{% endtimezone %}
 {% endblock %}
 
 {% block scripts %}
 <script>
 function deleteShortUrl(urlId, event) {
     event.preventDefault();
-    if (confirm('Delete this short URL?')) {
+    showConfirmModal('Delete this short URL?', function() {
         window.location.href = '/short-urls/delete/' + urlId + '/';
-    }
+    });
 }
 </script>
 {% endblock %}

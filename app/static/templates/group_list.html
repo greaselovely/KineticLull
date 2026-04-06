@@ -38,7 +38,7 @@
                     {% elif group.user_set.exists %}
                         <button class="btn btn-sm btn-outline-secondary" disabled title="Remove all members first">Delete</button>
                     {% else %}
-                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete group {{ group.name }}?')">
+                        <form method="post" style="display:inline;" onsubmit="event.preventDefault(); var f=this; showConfirmModal('Delete group {{ group.name }}?', function(){ f.submit(); });">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="delete">
                             <input type="hidden" name="group_id" value="{{ group.id }}">

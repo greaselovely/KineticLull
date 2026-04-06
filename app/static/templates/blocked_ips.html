@@ -167,18 +167,18 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.unblock-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var ip = this.getAttribute('data-ip');
-            if (!confirm('Unblock ' + ip + '?')) return;
-
-            fetch('{% url "app:unblock_ip" %}', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
-                body: 'ip_address=' + encodeURIComponent(ip)
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.status === 'unblocked') {
-                    window.location.reload();
-                }
+            showConfirmModal('Unblock ' + ip + '?', function() {
+                fetch('{% url "app:unblock_ip" %}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+                    body: 'ip_address=' + encodeURIComponent(ip)
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.status === 'unblocked') {
+                        window.location.reload();
+                    }
+                });
             });
         });
     });
