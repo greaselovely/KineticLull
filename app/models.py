@@ -246,6 +246,10 @@ class BlockedIP(models.Model):
         if not app_settings.autoblock_enabled:
             return False
 
+        # Never block whitelisted IPs
+        if WhitelistedIP.is_whitelisted(ip_address):
+            return False
+
         # Don't re-block if already blocked
         if cls.objects.filter(ip_address=ip_address).exists():
             return False
@@ -270,6 +274,44 @@ class BlockedIP(models.Model):
             )
             cls.sync_to_nginx()
             return True
+        return False
+
+
+class WhitelistedIP(models.Model):
+    ip_address = models.CharField(max_length=50, unique=True, verbose_name='IP Address or Subnet')
+    reason = models.CharField(max_length=255, blank=True)
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, verbose_name='Added By'
+    )
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Whitelisted IP"
+        verbose_name_plural = "Whitelisted IPs"
+        ordering = ["-added_at"]
+
+    def __str__(self):
+        return self.ip_address
+
+    @classmethod
+    def is_whitelisted(cls, ip_address):
+        """Check if an IP is whitelisted (exact match or within a subnet)."""
+        import ipaddress as iplib
+        try:
+            addr = iplib.ip_address(ip_address)
+        except ValueError:
+            return False
+        for entry in cls.objects.all():
+            try:
+                if '/' in entry.ip_address:
+                    if addr in iplib.ip_network(entry.ip_address, strict=False):
+                        return True
+                else:
+                    if addr == iplib.ip_address(entry.ip_address):
+                        return True
+            except ValueError:
+                continue
         return False
 
 

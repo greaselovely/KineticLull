@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
-from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL
+from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP
 from .forms import ExtDynListsForm, ProfileChangeForm, ShortenedURLForm
 
 from users.models import CustomUser
@@ -2009,12 +2009,72 @@ def blocked_ips_view(request):
             'top_paths': top_paths.get(entry.ip_address, []),
         })
 
+    # Get current user's IP for auto-whitelist suggestion
+    user_ip = get_client_ip(request)
+    user_ip_whitelisted = WhitelistedIP.is_whitelisted(user_ip) if user_ip else False
+
     context = {
         'title': 'Blocked IPs',
         'blocked_data': blocked_data,
         'total_rejections': sum(rejection_counts.values()),
+        'whitelisted_ips': WhitelistedIP.objects.all(),
+        'user_ip': user_ip,
+        'user_ip_whitelisted': user_ip_whitelisted,
     }
     return render(request, 'blocked_ips.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def whitelist_ip_view(request):
+    """Add an IP or subnet to the whitelist."""
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+
+    ip = request.POST.get('ip_address', '').strip()
+    reason = request.POST.get('reason', '').strip()
+
+    if not ip:
+        return JsonResponse({'error': 'IP address or subnet required'}, status=400)
+
+    # Validate IP or CIDR
+    try:
+        if '/' in ip:
+            ipaddress.ip_network(ip, strict=False)
+        else:
+            ipaddress.ip_address(ip)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid IP address or subnet'}, status=400)
+
+    obj, created = WhitelistedIP.objects.get_or_create(
+        ip_address=ip,
+        defaults={'reason': reason, 'added_by': request.user}
+    )
+
+    if created:
+        log_activity(request, 'whitelist_ip', ip, reason)
+        # Remove from blocklist if currently blocked
+        blocked = BlockedIP.objects.filter(ip_address=ip)
+        if blocked.exists():
+            blocked.delete()
+            BlockedIP.sync_to_nginx()
+        return JsonResponse({'status': 'whitelisted'})
+    return JsonResponse({'status': 'already_whitelisted'})
+
+
+@login_required
+@require_http_methods(["POST"])
+def remove_whitelist_ip_view(request):
+    """Remove an IP from the whitelist."""
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+
+    ip = request.POST.get('ip_address', '').strip()
+    deleted, _ = WhitelistedIP.objects.filter(ip_address=ip).delete()
+    if deleted:
+        log_activity(request, 'remove_whitelist', ip)
+        return JsonResponse({'status': 'removed'})
+    return JsonResponse({'error': 'Not found'}, status=404)
 
 
 @login_required
@@ -2081,6 +2141,10 @@ def block_ip_view(request):
         ipaddress.ip_address(ip)
     except ValueError:
         return JsonResponse({'error': 'Invalid IP address'}, status=400)
+
+    from .models import WhitelistedIP
+    if WhitelistedIP.is_whitelisted(ip):
+        return JsonResponse({'error': 'Cannot block a whitelisted IP'}, status=400)
 
     obj, created = BlockedIP.objects.get_or_create(
         ip_address=ip,

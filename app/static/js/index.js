@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var itemId = this.getAttribute('data-id');
             var icon = this;
             var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            fetch('favorite/' + itemId + '/', {
+            fetch('/favorite/' + itemId + '/', {
                 method: 'POST',
                 headers: { 'X-CSRFToken': csrfToken }
             }).then(function(r) { return r.json(); }).then(function(data) {
