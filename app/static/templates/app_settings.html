@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
+{% load tz %}
 {% block title %}- Settings{% endblock %}
 {% block content %}
+{% timezone app_timezone %}
 <div style="max-width: 650px;">
     <h3 class="mb-3">Settings</h3>
     {% if request.GET.tz_setup %}
@@ -225,7 +227,7 @@
                         <label for="archive" class="form-label">Backup</label>
                         <select name="archive" id="archive" class="form-select form-select-sm">
                             {% for backup in data_backups %}
-                            <option value="{{ backup.filename }}">{{ backup.label }}</option>
+                            <option value="{{ backup.filename }}">{{ backup.timestamp|date:app_timestamp_format|default:backup.filename }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -236,4 +238,5 @@
     </div>
     {% endif %}
 </div>
+{% endtimezone %}
 {% endblock %}

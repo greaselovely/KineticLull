@@ -1321,11 +1321,10 @@ def app_settings_view(request):
             # Parse timestamp from filename: backup_YYYYMMDDHHMMSS.tar.gz
             ts_str = f.stem.replace('backup_', '').replace('.tar', '')
             try:
-                ts = datetime.strptime(ts_str, '%Y%m%d%H%M%S')
-                label = ts.strftime('%Y-%m-%d %H:%M:%S')
+                ts = datetime.strptime(ts_str, '%Y%m%d%H%M%S').replace(tzinfo=timezone.utc)
             except ValueError:
-                label = f.name
-            backups.append({'filename': f.name, 'label': label})
+                ts = None
+            backups.append({'filename': f.name, 'timestamp': ts})
 
     return render(request, 'app_settings.html', {
         'app_settings': app_settings,
