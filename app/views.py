@@ -149,6 +149,19 @@ def log_activity(request, action, target='', detail='', user=None):
     update_db_checksum()
 
 
+def get_security_summary(user):
+    """Return security summary dict for superusers, or None."""
+    if not user.is_superuser:
+        return None
+    from django.utils import timezone as tz
+    twenty_four_hours_ago = tz.now() - timedelta(hours=24)
+    return {
+        'blocked_ips': BlockedIP.objects.count(),
+        'rejections_24h': NginxRejection.objects.filter(timestamp__gte=twenty_four_hours_ago).count(),
+        'auto_blocked_24h': BlockedIP.objects.filter(auto_blocked=True, blocked_at__gte=twenty_four_hours_ago).count(),
+    }
+
+
 def get_visible_edls(user):
     """Return EDLs visible to the user based on group membership. Superusers see all."""
     if user.is_superuser:
@@ -234,15 +247,9 @@ def index_view(request):
     context = {'items': items, 'page_obj': page_obj, 'per_page': per_page}
 
     # Security summary for superusers
-    if request.user.is_superuser:
-        from datetime import timedelta
-        from django.utils import timezone as tz
-        twenty_four_hours_ago = tz.now() - timedelta(hours=24)
-        context['security_summary'] = {
-            'blocked_ips': BlockedIP.objects.count(),
-            'rejections_24h': NginxRejection.objects.filter(timestamp__gte=twenty_four_hours_ago).count(),
-            'auto_blocked_24h': BlockedIP.objects.filter(auto_blocked=True, blocked_at__gte=twenty_four_hours_ago).count(),
-        }
+    summary = get_security_summary(request.user)
+    if summary:
+        context['security_summary'] = summary
 
     return render(request, 'index.html', context)
 
@@ -1073,6 +1080,9 @@ def favorites_view(request):
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
     context = {'items': items, 'page_obj': page_obj, 'per_page': per_page, 'favorites_view': True}
+    summary = get_security_summary(request.user)
+    if summary:
+        context['security_summary'] = summary
     return render(request, 'index.html', context)
 
 
@@ -1328,11 +1338,11 @@ def user_create_view(request):
         first_name = request.POST.get('first_name', '').strip()
         last_name = request.POST.get('last_name', '').strip()
         password = request.POST.get('password', '')
+        selected_groups = request.POST.getlist('groups')
         # Superuser/staff derived from group membership
         superuser_group = Group.objects.filter(name='Superuser').first()
         is_superuser = superuser_group and str(superuser_group.id) in selected_groups
         is_staff = is_superuser
-        selected_groups = request.POST.getlist('groups')
 
         if not email or not password:
             messages.error(request, 'Email and password are required.')
@@ -2440,10 +2450,14 @@ def short_urls_view(request):
     for url in page_obj:
         url.short_url = f"{base_url}/s/{url.short_code}"
 
-    return render(request, 'short_urls.html', {
+    context = {
         'page_obj': page_obj,
         'per_page': per_page,
-    })
+    }
+    summary = get_security_summary(request.user)
+    if summary:
+        context['security_summary'] = summary
+    return render(request, 'short_urls.html', context)
 
 
 @login_required

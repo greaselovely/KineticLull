@@ -11,6 +11,7 @@ deploy/migrate_to_nginx.sh
 ssl/
 .nginx_parse_state
 db.sqlite3
+.c*/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

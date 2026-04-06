@@ -10,12 +10,16 @@ KineticLull (http://kineticlull.com) is a web application for managing and deplo
 ## Key Features
 
 - **EDL Management**: Create, edit, clone, and delete EDLs through a clean web interface.
+- **URL Shortener**: Built-in URL shortening with per-user URLs, hit tracking, and notes. Short URLs use branded `.kl` codes and redirect via `/s/<code>/`.
 - **Access Control Lists (ACLs)**: Configurable per-EDL ACLs to restrict which IPs/networks can retrieve list contents.
 - **Group-Scoped Security**: EDLs are scoped to user groups. Users only see EDLs belonging to their groups. Superusers see everything.
-- **Favorites**: Star EDLs for quick access from the Favorites view.
+- **Favorites**: Star EDLs for quick access from the home page.
+- **IP Whitelisting**: Whitelist individual IPs or CIDR subnets to prevent them from being auto-blocked. Admin IPs are detected and can be whitelisted with one click.
+- **IP Auto-Blocking**: Automatically block IPs that exceed configurable request thresholds. Integrates with Nginx blocklists.
 - **API Integration**: Submit new FQDNs and update/overwrite existing EDLs programmatically via API with Bearer token auth.
 - **Activity Logging**: All user and device actions logged to the database with a searchable log viewer for staff/admins.
-- **In-App Upgrades**: Superusers can upgrade the application directly from the web UI — pulls latest code, installs dependencies, runs migrations, and reloads the app.
+- **In-App Upgrades**: Superusers can upgrade the application directly from the web UI — pulls latest code, installs dependencies, runs migrations, and restarts services. Includes a dedicated Restart Services button.
+- **Database Backups**: Automatic database backup before every upgrade (web UI and command line). Backups are retained for 30 days.
 - **API Key Management**: Generate and manage API keys from the user profile.
 - **Backup and Export**: Download EDL contents as text files.
 
