@@ -19,15 +19,15 @@
         </li>
         {% if user.is_authenticated %}
         <li>
-            <a href="{% url 'app:new_edl' %}" title="New EDL">
-                <i class="bi bi-plus-circle"></i>
-                <span class="nav-text">New EDL</span>
-            </a>
-        </li>
-        <li>
             <a href="{% url 'app:favorites' %}" title="Favorites">
                 <i class="bi bi-star"></i>
                 <span class="nav-text">Favorites</span>
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'app:new_edl' %}" title="New EDL">
+                <i class="bi bi-plus-circle"></i>
+                <span class="nav-text">New EDL</span>
             </a>
         </li>
         <li>
