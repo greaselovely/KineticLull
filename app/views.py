@@ -1729,6 +1729,20 @@ def upgrade_view(request):
 
 
 @login_required
+@require_http_methods(["POST"])
+def restart_services_view(request):
+    """Restart KineticLull and Nginx via the web UI."""
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    log_activity(request, 'restart_services', '', 'Manual restart from web UI')
+    subprocess.Popen(
+        ['bash', '-c', 'sleep 2 && sudo -n systemctl restart kineticlull; sudo -n systemctl restart nginx'],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return JsonResponse({'status': 'ok'})
+
+
+@login_required
 def deployment_status_view(request):
     if not request.user.is_superuser:
         raise PermissionDenied

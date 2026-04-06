@@ -7,7 +7,7 @@ from django.contrib.auth.views import LoginView
 from django.views.generic.base import RedirectView
 
 from . import views
-from .views import SubmitFQDNView, update_edl_fqdn, short_urls_view, create_short_url, delete_short_url, redirect_short_url
+from .views import SubmitFQDNView, update_edl_fqdn, short_urls_view, create_short_url, delete_short_url, redirect_short_url, restart_services_view
 
 app_name = "app"
 
@@ -38,6 +38,7 @@ urlpatterns = [
     path('api/block-ip/', views.block_ip_view, name='block_ip'),
     path('api/unblock-ip/', views.unblock_ip_view, name='unblock_ip'),
     path('api/blocked-ip-timeline/', views.blocked_ip_timeline_view, name='blocked_ip_timeline'),
+    path('api/restart-services/', restart_services_view, name='restart_services'),
     path('blocked-ips/export/', views.blocklist_export_view, name='blocklist_export'),
     path('favorites/', views.favorites_view, name='favorites'),
     path('favorite/<int:item_id>/', views.toggle_favorite, name='toggle_favorite'),
