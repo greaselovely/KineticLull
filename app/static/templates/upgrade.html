@@ -18,12 +18,27 @@
 
     {% if upgrade_available %}
         <p>Available version: <strong>{{ latest_version }}</strong></p>
-        <form method="post">
+        <form method="post" id="upgrade-form">
             {% csrf_token %}
-            <button type="submit" class="btn btn-warning" onclick="this.disabled=true; this.innerText='Upgrading...'; this.form.submit();">
+            <button type="submit" class="btn btn-warning" id="upgrade-btn">
                 Upgrade Now
             </button>
         </form>
+        <div id="upgrade-status" class="mt-3" style="display:none;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+                <span id="upgrade-status-text">Upgrading... this may take a moment.</span>
+            </div>
+        </div>
+        <div id="upgrade-failed" class="mt-3" style="display:none;">
+            <div class="alert alert-danger">
+                <h5 class="alert-heading"><i class="bi bi-exclamation-octagon me-2"></i>Upgrade stalled</h5>
+                <p>The application did not come back automatically. Run one of these from the server command line:</p>
+                <pre class="mb-2 p-2 bg-dark text-light rounded"><code>bash upgrade.sh</code></pre>
+                <p class="mb-0">or restart manually:</p>
+                <pre class="mb-0 p-2 bg-dark text-light rounded"><code>sudo systemctl restart kineticlull &amp;&amp; sudo systemctl restart nginx</code></pre>
+            </div>
+        </div>
     {% elif latest_version %}
         <p class="text-muted">You are running the latest version.</p>
     {% else %}
@@ -32,4 +47,55 @@
 
     <a href="{% url 'app:index' %}" class="btn btn-outline-secondary mt-3">Back</a>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var form = document.getElementById('upgrade-form');
+    if (!form) return;
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var btn = document.getElementById('upgrade-btn');
+        var status = document.getElementById('upgrade-status');
+        var statusText = document.getElementById('upgrade-status-text');
+
+        btn.disabled = true;
+        btn.style.display = 'none';
+        status.style.display = 'block';
+
+        // Fire the upgrade request — we don't care about the response
+        fetch(form.action || window.location.href, {
+            method: 'POST',
+            body: new FormData(form),
+        }).catch(function() {});
+
+        // Poll until the service comes back
+        var attempts = 0;
+        var maxAttempts = 60;
+        var totalSeconds = maxAttempts * 3;
+        var poll = setInterval(function() {
+            attempts++;
+            var remaining = Math.max(0, totalSeconds - (attempts * 3));
+            statusText.textContent = 'Upgrading... waiting for service to restart (' + remaining + 's remaining)';
+            if (attempts > maxAttempts) {
+                clearInterval(poll);
+                status.style.display = 'none';
+                document.getElementById('upgrade-failed').style.display = 'block';
+                return;
+            }
+            fetch(window.location.href, { method: 'HEAD' })
+                .then(function(resp) {
+                    if (resp.ok) {
+                        clearInterval(poll);
+                        statusText.textContent = 'Upgrade complete. Reloading...';
+                        setTimeout(function() { window.location.reload(); }, 1000);
+                    }
+                })
+                .catch(function() {});
+        }, 3000);
+    });
+})();
+</script>
 {% endblock %}
