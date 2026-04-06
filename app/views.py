@@ -1313,10 +1313,50 @@ def app_settings_view(request):
             messages.info(request, 'No changes.')
         return redirect('app:app_settings')
 
+    # List available data backups
+    backup_dir = Path(settings.BASE_DIR) / 'backups' / 'data'
+    backups = []
+    if backup_dir.exists():
+        for f in sorted(backup_dir.glob('backup_*.tar.gz'), reverse=True):
+            # Parse timestamp from filename: backup_YYYYMMDDHHMMSS.tar.gz
+            ts_str = f.stem.replace('backup_', '').replace('.tar', '')
+            try:
+                ts = datetime.strptime(ts_str, '%Y%m%d%H%M%S')
+                label = ts.strftime('%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                label = f.name
+            backups.append({'filename': f.name, 'label': label})
+
     return render(request, 'app_settings.html', {
         'app_settings': app_settings,
         'timezones': available_timezones,
+        'data_backups': backups,
     })
+
+
+@login_required
+@require_http_methods(["POST"])
+def restore_data_view(request):
+    """Restore EDLs and URLs from a backup archive."""
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    archive = request.POST.get('archive', '').strip()
+    if not archive or '/' in archive or '..' in archive:
+        messages.error(request, 'Invalid backup selection.')
+        return redirect('app:app_settings')
+
+    try:
+        from django.core.management import call_command
+        from io import StringIO
+        out = StringIO()
+        call_command('restore_data', archive, stdout=out)
+        log_activity(request, 'restore_data', archive, out.getvalue()[:500])
+        messages.success(request, f'Data restored from {archive}.')
+    except Exception as e:
+        messages.error(request, f'Restore failed: {e}')
+
+    return redirect('app:app_settings')
 
 
 @login_required
@@ -1373,6 +1413,41 @@ def user_create_view(request):
         return redirect('app:user_list')
 
     return render(request, 'user_form.html', {'groups': groups, 'mode': 'create'})
+
+
+@login_required
+@login_required
+@require_http_methods(["POST"])
+def user_delete_view(request, user_id):
+    """Delete a user, reassigning their EDLs and URLs to the next oldest account."""
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+
+    target_user = get_object_or_404(CustomUser, id=user_id)
+
+    # Can't delete yourself
+    if target_user == request.user:
+        return JsonResponse({'error': 'Cannot delete your own account'}, status=400)
+
+    # Find the next oldest user to reassign to (excluding the target)
+    reassign_to = CustomUser.objects.exclude(id=target_user.id).order_by('date_joined').first()
+    if not reassign_to:
+        return JsonResponse({'error': 'Cannot delete the last user'}, status=400)
+
+    # Reassign EDLs
+    edl_count = ExtDynLists.objects.filter(groups__in=target_user.groups.all()).count()
+
+    # Reassign shortened URLs
+    url_count = ShortenedURL.objects.filter(created_by=target_user).update(created_by=reassign_to)
+
+    # Reassign favorites
+    Favorite.objects.filter(user=target_user).update(user=reassign_to)
+
+    email = target_user.email
+    target_user.delete()
+
+    log_activity(request, 'delete_user', email, f'Reassigned {url_count} URLs to {reassign_to.email}')
+    return JsonResponse({'status': 'deleted', 'reassigned_to': reassign_to.email})
 
 
 @login_required

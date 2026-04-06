@@ -16,6 +16,7 @@
                 <th style="width: 20%;">Groups</th>
                 <th style="width: 8%;">Active</th>
                 <th style="width: 16%;">Joined</th>
+                <th style="width: 5%;"></th>
             </tr>
         </thead>
         <tbody>
@@ -26,10 +27,38 @@
                 <td>{% for g in u.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-muted">None</span>{% endfor %}</td>
                 <td>{% if u.is_active %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}</td>
                 <td>{{ u.date_joined|date:app_timestamp_format }}</td>
+                <td>
+                    {% if u != request.user %}
+                    <i class="bi bi-trash action-items text-danger" onclick="deleteUser('{{ u.id }}', '{{ u.email }}', event)" title="Delete"></i>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
 {% endtimezone %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteUser(userId, email, event) {
+    event.preventDefault();
+    showConfirmModal('Delete user ' + email + '? Their EDLs and URLs will be reassigned.', function() {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        fetch('{% url "app:user_delete" user_id=0 %}'.replace('/0/', '/' + userId + '/'), {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrfToken},
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'deleted') {
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to delete user');
+            }
+        });
+    });
+}
+</script>
 {% endblock %}

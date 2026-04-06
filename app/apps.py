@@ -8,6 +8,38 @@ class EdlConfig(AppConfig):
     def ready(self):
         from django.db.models.signals import post_migrate
         post_migrate.connect(ensure_superuser_group, sender=self)
+        _start_daily_backup_scheduler()
+
+
+def _start_daily_backup_scheduler():
+    """Run data backup daily in a background thread. Only starts once."""
+    import threading
+    import time
+    import os
+
+    # Don't run in manage.py commands (migrate, collectstatic, etc.)
+    # Only run in the main gunicorn/runserver process
+    if os.environ.get('RUN_MAIN') == 'true' or 'gunicorn' in os.environ.get('SERVER_SOFTWARE', ''):
+        pass  # OK to run
+    elif 'gunicorn' in (os.environ.get('_', '') or ''):
+        pass  # Also OK
+    else:
+        return
+
+    def _backup_loop():
+        # Wait 60 seconds after startup before first backup
+        time.sleep(60)
+        while True:
+            try:
+                from django.core.management import call_command
+                call_command('backup_data')
+            except Exception:
+                pass
+            # Sleep 24 hours
+            time.sleep(86400)
+
+    t = threading.Thread(target=_backup_loop, daemon=True)
+    t.start()
 
 
 def ensure_superuser_group(sender, **kwargs):
