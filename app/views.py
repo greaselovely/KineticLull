@@ -1276,7 +1276,7 @@ def app_settings_view(request):
             changes.append(f'autoblock_enabled={new_autoblock_enabled}')
 
         for field_name, min_val, max_val, default in [
-            ('autoblock_threshold', 5, 1000, 50),
+            ('autoblock_threshold', 3, 1000, 50),
             ('autoblock_window_seconds', 10, 3600, 60),
             ('autoblock_duration_minutes', 0, 525600, 0),
         ]:
