@@ -1763,11 +1763,20 @@ def upgrade_view(request):
     from app.models import AppSettings
     deployment_mode = AppSettings.load().deployment_mode
 
+    # Check if sudoers rules are complete
+    sudoers_ok = True
+    result = subprocess.run(
+        ['sudo', '-n', 'sed', '--version'], capture_output=True, text=True, timeout=5,
+    )
+    if result.returncode != 0:
+        sudoers_ok = False
+
     context = {
         'current_version': current_version,
         'latest_version': latest_version,
         'upgrade_available': upgrade_available,
         'legacy_deployment': deployment_mode == 'gunicorn_ssl',
+        'sudoers_incomplete': not sudoers_ok,
         'title': 'System Upgrade',
     }
 

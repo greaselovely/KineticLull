@@ -23,9 +23,9 @@ def app_settings(request):
             'app_timestamp_format': settings.timestamp_format,
             'otf_brand_name': settings.otf_brand_name or 'KineticLull Secure File Access',
             'otf_brand_bg_color': settings.otf_brand_bg_color or '#1a1d21',
-            'otf_brand_text_color': settings.otf_brand_text_color or '#ffffff',
-            'otf_brand_card_color': settings.otf_brand_card_color or '#ffffff',
-            'otf_brand_card_text_color': settings.otf_brand_card_text_color or '#212529',
+            'otf_brand_text_color': settings.otf_brand_text_color or '#a0a4ab',
+            'otf_brand_card_color': settings.otf_brand_card_color or '#1a1d21',
+            'otf_brand_card_text_color': settings.otf_brand_card_text_color or '#a0a4ab',
             'otf_brand_image': settings.otf_brand_image.url if settings.otf_brand_image else '',
         }
         # Lightweight integrity check for superusers

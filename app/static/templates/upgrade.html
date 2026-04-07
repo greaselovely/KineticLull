@@ -6,6 +6,14 @@
 
     <p class="mt-3">Current version: <strong>{{ current_version }}</strong></p>
 
+    {% if sudoers_incomplete %}
+    <div class="alert alert-danger mt-3">
+        <i class="bi bi-shield-exclamation me-2"></i>
+        <strong>Action required:</strong> System permissions need updating.
+        Run <code>bash upgrade.sh</code> once from the server command line to enable full web UI management (Nginx config updates, file sharing, service restarts).
+    </div>
+    {% endif %}
+
     {% if legacy_deployment %}
     <div class="alert alert-warning mt-3">
         <i class="bi bi-exclamation-triangle me-2"></i>
