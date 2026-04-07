@@ -10,12 +10,15 @@
         <h4 style="margin: 0;">{{ otf_brand_name }}</h4>
     </div>
     <div class="content-card" style="border-radius: 8px; background: {{ otf_brand_card_color }};">
+        {% if preview_mode %}
+        <div class="alert alert-info" style="font-size: 0.8rem;"><i class="bi bi-eye me-1"></i>This is a preview. No emails will be sent.</div>
+        {% endif %}
         <p class="text-muted">A verification code has been sent to your email. Enter it below to download the file.</p>
-        <form method="post" action="{% url 'app:otf_download' token %}">
+        <form {% if not preview_mode %}method="post" action="{% url 'app:otf_download' token %}"{% else %}onsubmit="return false;"{% endif %}>
             {% csrf_token %}
             <div class="mb-3">
                 <label for="otp" class="form-label">Verification Code</label>
-                <input type="text" name="otp" id="otp" class="form-control" maxlength="6" pattern="[0-9]{6}" placeholder="000000" required autofocus autocomplete="off" style="font-size: 1.5rem; letter-spacing: 8px; text-align: center;">
+                <input type="text" name="otp" id="otp" class="form-control" maxlength="6" pattern="[0-9]{6}" placeholder="000000" {% if not preview_mode %}required autofocus{% endif %} autocomplete="off" style="font-size: 1.5rem; letter-spacing: 8px; text-align: center;">
             </div>
             <button type="submit" class="btn btn-primary w-100">Verify & Download</button>
         </form>

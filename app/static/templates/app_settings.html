@@ -254,10 +254,13 @@
                 <div class="mb-3">
                     <label for="otf_brand_image" class="form-label">Logo Image</label>
                     {% if app_settings.otf_brand_image %}
-                    <div class="mb-2"><img src="{{ app_settings.otf_brand_image.url }}" alt="Current logo" style="max-height: 40px;"></div>
+                    <div class="mb-2"><img src="{{ app_settings.otf_brand_image.url }}" alt="Current logo" style="max-height: 40px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline'"><span style="display:none; font-size: 0.8rem;" class="text-muted">Logo not loading — update Nginx config to serve /media/branding/</span></div>
                     {% endif %}
                     <input type="file" name="otf_brand_image" id="otf_brand_image" class="form-control form-control-sm" accept="image/*">
-                    <div class="form-text">Optional. Displayed above the brand name on download pages.</div>
+                    <div class="form-text">Max 2MB. Recommended: 200x48px PNG or SVG with transparency. Auto-scaled on display.</div>
+                </div>
+                <div class="mb-3">
+                    <a href="{% url 'app:otf_brand_preview' %}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye me-1"></i>Preview Download Page</a>
                 </div>
             </div>
         </div>

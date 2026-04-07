@@ -1329,8 +1329,12 @@ def app_settings_view(request):
                 changes.append(f'{field}={new_val}')
 
         if 'otf_brand_image' in request.FILES:
-            app_settings.otf_brand_image = request.FILES['otf_brand_image']
-            changes.append('otf_brand_image=updated')
+            logo = request.FILES['otf_brand_image']
+            if logo.size > 2 * 1024 * 1024:  # 2MB
+                messages.error(request, 'Logo image must be under 2MB.')
+            else:
+                app_settings.otf_brand_image = logo
+                changes.append('otf_brand_image=updated')
 
         app_settings.save()
 
@@ -2695,6 +2699,14 @@ def otf_upload_view(request):
         return redirect('app:otf_list')
 
     return render(request, 'otf_upload.html', {'expiry_choices': OneTimeFile.EXPIRY_CHOICES})
+
+
+@login_required
+def otf_brand_preview(request):
+    """Preview the branded download page."""
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    return render(request, 'otf_verify.html', {'token': 'preview', 'preview_mode': True})
 
 
 @login_required

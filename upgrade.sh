@@ -492,6 +492,47 @@ if [ "$CURRENT_MODE" = "gunicorn_ssl" ] || [ "$CURRENT_MODE" = "unknown" ]; then
         restart_legacy_service
     fi
 else
+    # Patch Nginx config with new directives if missing
+    NGINX_CONF=""
+    if [ -f "/etc/nginx/sites-available/${PROJECT_NAME}" ]; then
+        NGINX_CONF="/etc/nginx/sites-available/${PROJECT_NAME}"
+    elif [ -f "/etc/nginx/conf.d/${PROJECT_NAME}.conf" ]; then
+        NGINX_CONF="/etc/nginx/conf.d/${PROJECT_NAME}.conf"
+    fi
+
+    if [ -n "$NGINX_CONF" ]; then
+        NGINX_CHANGED=false
+
+        # Add client_max_body_size if missing
+        if ! grep -q "client_max_body_size" "$NGINX_CONF" 2>/dev/null; then
+            sudo sed -i '/ssl_session_timeout/a\    client_max_body_size 260m;' "$NGINX_CONF"
+            log "Added client_max_body_size to Nginx config."
+            NGINX_CHANGED=true
+        fi
+
+        # Add media/branding location if missing
+        if ! grep -q "media/branding" "$NGINX_CONF" 2>/dev/null; then
+            sudo sed -i "/location \/static\//i\\
+    # Branding images\\
+    location /media/branding/ {\\
+        alias ${PROJECT_DIR}/media/branding/;\\
+        expires 1d;\\
+        access_log off;\\
+    }\\
+" "$NGINX_CONF"
+            log "Added /media/branding/ location to Nginx config."
+            NGINX_CHANGED=true
+        fi
+
+        if [ "$NGINX_CHANGED" = true ]; then
+            if sudo nginx -t 2>>"${LOGFILE}"; then
+                ok "Nginx config updated and tested OK."
+            else
+                warn "Nginx config test failed after patching. Check manually."
+            fi
+        fi
+    fi
+
     restart_nginx_services
 fi
 

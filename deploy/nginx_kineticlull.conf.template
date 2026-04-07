@@ -18,6 +18,9 @@ server {
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 10m;
 
+    # Max upload size (must match Django FILE_UPLOAD_MAX_MEMORY_SIZE)
+    client_max_body_size 260m;
+
     # IP blocklist (managed by KineticLull)
     include {{PROJECT_DIR}}/deploy/blocklist.conf;
 
