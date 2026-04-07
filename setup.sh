@@ -351,8 +351,10 @@ configure_nginx() {
     local SUDOERS_FILE="/etc/sudoers.d/kineticlull"
     cat <<SUDOEOF | sudo tee "${SUDOERS_FILE}" > /dev/null
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -t
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart kineticlull
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/sed -i *
 SUDOEOF
     sudo chmod 440 "${SUDOERS_FILE}"
     log "Sudoers rules added for service management."

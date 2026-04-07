@@ -455,8 +455,10 @@ SUDOERS_FILE="/etc/sudoers.d/kineticlull"
 sudo rm -f "/etc/sudoers.d/kineticlull-nginx" 2>/dev/null || true
 cat <<SUDOEOF | sudo tee "${SUDOERS_FILE}" > /dev/null
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -t
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart kineticlull
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/sed -i *
 SUDOEOF
 sudo chmod 440 "${SUDOERS_FILE}"
 ok "Sudoers rules updated."

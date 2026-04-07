@@ -1838,10 +1838,40 @@ def upgrade_view(request):
             # git pull/migrate/collectstatic had errors — return JSON so JS knows
             return JsonResponse({'status': 'error', 'message': 'Upgrade completed with errors. Check server logs.'})
 
-        # Step 5: restart services — this kills our own process, so respond first
-        # Use Popen so we don't block waiting for our own death
+        # Step 5: Patch Nginx config if needed, then restart
+        patch_cmds = ''
+        nginx_conf = None
+        for path_candidate in [
+            '/etc/nginx/sites-available/kineticlull',
+            '/etc/nginx/conf.d/kineticlull.conf',
+        ]:
+            if os.path.exists(path_candidate):
+                nginx_conf = path_candidate
+                break
+
+        if nginx_conf:
+            try:
+                with open(nginx_conf, 'r') as f:
+                    nginx_content = f.read()
+                if 'client_max_body_size' not in nginx_content:
+                    patch_cmds += f"sudo -n sed -i '/ssl_session_timeout/a\\\\    client_max_body_size 260m;' {nginx_conf}; "
+                if 'media/branding' not in nginx_content:
+                    media_block = (
+                        f"    # Branding images\\n"
+                        f"    location /media/branding/ {{\\n"
+                        f"        alias {base_dir}/media/branding/;\\n"
+                        f"        expires 1d;\\n"
+                        f"        access_log off;\\n"
+                        f"    }}\\n"
+                    )
+                    patch_cmds += f"sudo -n sed -i '/location \\/static\\//i\\{media_block}' {nginx_conf}; "
+            except Exception:
+                pass
+
+        os.makedirs(os.path.join(base_dir, 'media', 'branding'), exist_ok=True)
+
         subprocess.Popen(
-            ['bash', '-c', 'sleep 2 && sudo -n systemctl restart kineticlull; sudo -n systemctl restart nginx'],
+            ['bash', '-c', f'sleep 2 && {patch_cmds}sudo -n systemctl restart kineticlull; sudo -n systemctl restart nginx'],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
 
@@ -1879,6 +1909,57 @@ def restart_services_view(request):
     )
     if cs_result.returncode != 0:
         logger.error(f"collectstatic failed: {cs_result.stderr.strip()}")
+
+    # Patch Nginx config if needed (media/branding, client_max_body_size)
+    nginx_conf = None
+    for path_candidate in [
+        '/etc/nginx/sites-available/kineticlull',
+        '/etc/nginx/conf.d/kineticlull.conf',
+    ]:
+        if os.path.exists(path_candidate):
+            nginx_conf = path_candidate
+            break
+
+    if nginx_conf:
+        try:
+            with open(nginx_conf, 'r') as f:
+                nginx_content = f.read()
+
+            nginx_changed = False
+
+            if 'client_max_body_size' not in nginx_content:
+                subprocess.run(
+                    ['sudo', '-n', 'sed', '-i', '/ssl_session_timeout/a\\    client_max_body_size 260m;', nginx_conf],
+                    capture_output=True, text=True,
+                )
+                nginx_changed = True
+                logger.info("Patched Nginx: added client_max_body_size")
+
+            if 'media/branding' not in nginx_content:
+                media_block = (
+                    f"    # Branding images\\n"
+                    f"    location /media/branding/ {{\\n"
+                    f"        alias {base_dir}/media/branding/;\\n"
+                    f"        expires 1d;\\n"
+                    f"        access_log off;\\n"
+                    f"    }}\\n"
+                )
+                subprocess.run(
+                    ['sudo', '-n', 'sed', '-i', f'/location \\/static\\//i\\{media_block}', nginx_conf],
+                    capture_output=True, text=True,
+                )
+                nginx_changed = True
+                logger.info("Patched Nginx: added /media/branding/ location")
+
+            if nginx_changed:
+                result = subprocess.run(['sudo', '-n', 'nginx', '-t'], capture_output=True, text=True)
+                if result.returncode != 0:
+                    logger.error(f"Nginx config test failed after patching: {result.stderr.strip()}")
+        except Exception as e:
+            logger.error(f"Nginx config patching failed: {e}")
+
+    # Ensure media/branding directory exists
+    os.makedirs(os.path.join(base_dir, 'media', 'branding'), exist_ok=True)
 
     log_activity(request, 'restart_services', '', 'Manual restart from web UI')
     subprocess.Popen(
