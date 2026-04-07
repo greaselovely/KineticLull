@@ -29,14 +29,14 @@
         <h3>Files</h3>
         <a href="{% url 'app:otf_upload' %}" title="Share File"><i class="bi bi-plus-circle action-items"></i></a>
     </div>
-    <table class="table table-hover" style="font-size: 0.85rem;">
+    <table id="otf-table" class="table table-hover table-resizable" style="font-size: 0.85rem;">
         <thead>
             <tr>
-                <th>Filename</th>
-                <th>Recipient</th>
-                <th>Expires</th>
-                <th>Shared</th>
-                <th>Link</th>
+                <th data-col="0">Filename</th>
+                <th data-col="1">Recipient</th>
+                <th data-col="2">Expires</th>
+                <th data-col="3">Shared</th>
+                <th data-col="4">Actions</th>
             </tr>
         </thead>
         <tbody>

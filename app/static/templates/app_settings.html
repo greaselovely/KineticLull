@@ -220,6 +220,10 @@
                     <input type="password" name="resend_api_key" id="resend_api_key" class="form-control form-control-sm" value="{{ app_settings.resend_api_key }}" placeholder="re_...">
                 </div>
                 <div class="mb-3">
+                    <label for="resend_from_name" class="form-label">From Name</label>
+                    <input type="text" name="resend_from_name" id="resend_from_name" class="form-control form-control-sm" value="{{ app_settings.resend_from_name }}" placeholder="Shayne Sivley">
+                </div>
+                <div class="mb-3">
                     <label for="resend_from_email" class="form-label">From Email</label>
                     <input type="email" name="resend_from_email" id="resend_from_email" class="form-control form-control-sm" value="{{ app_settings.resend_from_email }}" placeholder="noreply@yourdomain.com">
                 </div>

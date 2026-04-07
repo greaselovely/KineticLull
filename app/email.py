@@ -14,7 +14,11 @@ def _get_resend():
         return None, None
     import resend
     resend.api_key = app_settings.resend_api_key
-    return resend, app_settings.resend_from_email
+    if app_settings.resend_from_name:
+        from_address = f'{app_settings.resend_from_name} <{app_settings.resend_from_email}>'
+    else:
+        from_address = app_settings.resend_from_email
+    return resend, from_address
 
 
 def send_file_shared_email(recipient_email, filename, share_url, sender_name):

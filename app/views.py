@@ -1307,6 +1307,11 @@ def app_settings_view(request):
             app_settings.resend_api_key = new_resend_key
             changes.append('resend_api_key=***')
 
+        new_from_name = request.POST.get('resend_from_name', '').strip()
+        if new_from_name != app_settings.resend_from_name:
+            app_settings.resend_from_name = new_from_name
+            changes.append(f'resend_from_name={new_from_name}')
+
         new_from_email = request.POST.get('resend_from_email', '').strip()
         if new_from_email != app_settings.resend_from_email:
             app_settings.resend_from_email = new_from_email

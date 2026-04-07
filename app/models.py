@@ -160,6 +160,7 @@ class AppSettings(models.Model):
 
     # Email (Resend)
     resend_api_key = models.CharField(max_length=255, blank=True, default='', verbose_name='Resend API Key')
+    resend_from_name = models.CharField(max_length=255, blank=True, default='', verbose_name='From Name')
     resend_from_email = models.EmailField(max_length=255, blank=True, default='', verbose_name='From Email Address')
 
     # File Sharing

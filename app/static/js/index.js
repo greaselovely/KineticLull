@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initResizableTable('edl-table');
     initResizableTable('short-url-table');
     initResizableTable('log-table');
+    initResizableTable('otf-table');
 
     // Admin submenu toggle
     var adminToggle = document.getElementById('admin-menu-toggle');
