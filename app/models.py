@@ -404,6 +404,10 @@ class OneTimeFile(models.Model):
             from django.utils import timezone
             from datetime import timedelta
             self.expires_at = timezone.now() + timedelta(hours=self.expiry_hours)
+        # Ensure upload directory exists
+        from django.conf import settings as django_settings
+        upload_dir = os.path.join(django_settings.MEDIA_ROOT, 'otf')
+        os.makedirs(upload_dir, exist_ok=True)
         super().save(*args, **kwargs)
 
     def __str__(self):
