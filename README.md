@@ -11,15 +11,18 @@ KineticLull (http://kineticlull.com) is a web application for managing and deplo
 
 - **EDL Management**: Create, edit, clone, and delete EDLs through a clean web interface.
 - **URL Shortener**: Built-in URL shortening with per-user URLs, hit tracking, and notes. Short URLs use branded `.kl` codes and redirect via `/s/<code>/`.
+- **One-Time File Sharing**: Secure file sharing with OTP email verification via Resend. Files are automatically deleted after download or expiration. Configurable expiration (1 hour to 7 days), 250MB default limit, and brandable download pages with custom colors, logo, and name.
 - **Access Control Lists (ACLs)**: Configurable per-EDL ACLs to restrict which IPs/networks can retrieve list contents.
 - **Group-Scoped Security**: EDLs are scoped to user groups. Users only see EDLs belonging to their groups. Superusers see everything.
 - **Favorites**: Star EDLs for quick access from the home page.
 - **IP Whitelisting**: Whitelist individual IPs or CIDR subnets to prevent them from being auto-blocked. Admin IPs are detected and can be whitelisted with one click.
-- **IP Auto-Blocking**: Automatically block IPs that exceed configurable request thresholds. Integrates with Nginx blocklists.
+- **IP Auto-Blocking**: Automatically block IPs that exceed configurable request thresholds (minimum 3 hits). Integrates with Nginx blocklists.
 - **API Integration**: Submit new FQDNs and update/overwrite existing EDLs programmatically via API with Bearer token auth.
 - **Activity Logging**: All user and device actions logged to the database with a searchable log viewer for staff/admins.
-- **In-App Upgrades**: Superusers can upgrade the application directly from the web UI — pulls latest code, installs dependencies, runs migrations, and restarts services. Includes a dedicated Restart Services button.
-- **Database Backups**: Automatic database backup before every upgrade (web UI and command line). Backups are retained for 30 days.
+- **In-App Upgrades**: Superusers can upgrade the application directly from the web UI — pulls latest code, installs dependencies, runs migrations, patches Nginx config, and restarts services. Includes a dedicated Restart Services button. Warns if system permissions need updating.
+- **Data Backups**: Automatic daily backup of all EDLs and URLs to gzipped archives with 30-day retention. Database backed up before every upgrade. Restore from Settings with exact URL preservation so firewalls don't need updating.
+- **User Management**: Create, edit, and delete users. Deleting a user reassigns their EDLs and URLs to the next oldest account.
+- **Timezone Setup**: First-login prompt for superusers to configure display timezone.
 - **API Key Management**: Generate and manage API keys from the user profile.
 - **Backup and Export**: Download EDL contents as text files.
 
