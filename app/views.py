@@ -1772,9 +1772,9 @@ def upgrade_view(request):
     # Check if sudoers rules are complete
     sudoers_ok = True
     result = subprocess.run(
-        ['sudo', '-n', 'sed', '--version'], capture_output=True, text=True, timeout=5,
+        ['sudo', '-n', 'nginx', '-t'], capture_output=True, text=True, timeout=5,
     )
-    if result.returncode != 0:
+    if result.returncode != 0 and 'password is required' in result.stderr.lower():
         sudoers_ok = False
 
     context = {
