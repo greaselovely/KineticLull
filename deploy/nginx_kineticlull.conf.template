@@ -36,6 +36,13 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
+    # Branding images only (NOT uploaded files — those go through Django for access control)
+    location /media/branding/ {
+        alias {{PROJECT_DIR}}/media/branding/;
+        expires 1d;
+        access_log off;
+    }
+
     # API endpoints - rate limited
     location /api/ {
         limit_req zone=kineticlull_api burst=20 nodelay;

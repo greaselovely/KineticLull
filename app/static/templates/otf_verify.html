@@ -1,14 +1,15 @@
 {% extends 'base.html' %}
 {% block title %} - Verify Download{% endblock %}
 {% block content %}
+<style>.main-content, .content-wrapper { background: {{ otf_brand_bg_color }} !important; }</style>
 <div style="max-width: 450px; margin: 40px auto;">
-    <div style="background: {{ otf_brand_bg_color }}; color: {{ otf_brand_text_color }}; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
+    <div style="text-align: center; padding: 24px 24px 16px; color: {{ otf_brand_text_color }};">
         {% if otf_brand_image %}
         <img src="{{ otf_brand_image }}" alt="" style="max-height: 48px; margin-bottom: 12px;">
         {% endif %}
         <h4 style="margin: 0;">{{ otf_brand_name }}</h4>
     </div>
-    <div class="content-card" style="border-radius: 0 0 8px 8px; margin-top: 0;">
+    <div class="content-card" style="border-radius: 8px; background: {{ otf_brand_card_color }};">
         <p class="text-muted">A verification code has been sent to your email. Enter it below to download the file.</p>
         <form method="post" action="{% url 'app:otf_download' token %}">
             {% csrf_token %}
