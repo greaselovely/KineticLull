@@ -8,13 +8,12 @@
     <div class="card-body py-2 px-3 d-flex align-items-center justify-content-between" style="font-size: 0.85rem;">
         <div>
             <i class="bi bi-shield-lock me-1 text-muted"></i>
-            <strong>24h:</strong>
-            <span class="ms-1">{{ security_summary.blocked_ips }} blocked IP{{ security_summary.blocked_ips|pluralize }}</span>
+            <span>{{ security_summary.blocked_ips }} blocked IP{{ security_summary.blocked_ips|pluralize }} total</span>
             <span class="text-muted mx-1">|</span>
-            <span>{{ security_summary.rejections_24h }} rejection{{ security_summary.rejections_24h|pluralize }}</span>
+            <span>{{ security_summary.rejections_24h }} rejection{{ security_summary.rejections_24h|pluralize }} (24h)</span>
             {% if security_summary.auto_blocked_24h > 0 %}
             <span class="text-muted mx-1">|</span>
-            <span class="text-warning">{{ security_summary.auto_blocked_24h }} auto-blocked</span>
+            <span class="text-warning">{{ security_summary.auto_blocked_24h }} auto-blocked (24h)</span>
             {% endif %}
         </div>
         <a href="{% url 'app:blocked_ips' %}" class="btn btn-sm btn-outline-secondary py-0">View</a>

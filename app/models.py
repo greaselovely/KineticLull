@@ -406,7 +406,7 @@ class OneTimeFile(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.token:
-            self.token = secrets.token_urlsafe(32)
+            self.token = secrets.token_urlsafe(32) + ".kl"
         if not self.expires_at:
             from django.utils import timezone
             from datetime import timedelta
