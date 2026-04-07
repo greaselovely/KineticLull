@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load tz %}
+{% block title %} - Files{% endblock %}
+{% block content %}
+{% timezone app_timezone %}
+
+{% if user.is_superuser and security_summary %}
+<div class="card mb-3">
+    <div class="card-body py-2 px-3 d-flex align-items-center justify-content-between" style="font-size: 0.85rem;">
+        <div>
+            <i class="bi bi-shield-lock me-1 text-muted"></i>
+            <strong>24h:</strong>
+            <span class="ms-1">{{ security_summary.blocked_ips }} blocked IP{{ security_summary.blocked_ips|pluralize }}</span>
+            <span class="text-muted mx-1">|</span>
+            <span>{{ security_summary.rejections_24h }} rejection{{ security_summary.rejections_24h|pluralize }}</span>
+            {% if security_summary.auto_blocked_24h > 0 %}
+            <span class="text-muted mx-1">|</span>
+            <span class="text-warning">{{ security_summary.auto_blocked_24h }} auto-blocked</span>
+            {% endif %}
+        </div>
+        <a href="{% url 'app:blocked_ips' %}" class="btn btn-sm btn-outline-secondary py-0">View</a>
+    </div>
+</div>
+{% endif %}
+
+<div class="content-card edl-card">
+    <div class="d-flex justify-content-between align-items-center">
+        <h3>Files</h3>
+        <a href="{% url 'app:otf_upload' %}" title="Share File"><i class="bi bi-plus-circle action-items"></i></a>
+    </div>
+    <table class="table table-hover" style="font-size: 0.85rem;">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Recipient</th>
+                <th>Expires</th>
+                <th>Shared</th>
+                <th>Link</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in files %}
+            <tr>
+                <td>{{ f.original_filename }}</td>
+                <td>{{ f.recipient_email }}</td>
+                <td>{{ f.expires_at|date:app_timestamp_format }}</td>
+                <td>{{ f.created_at|date:app_timestamp_format }}</td>
+                <td>
+                    <span class="actions-row">
+                        <i class="bi bi-clipboard action-items copy-url-btn" data-url="{{ f.share_url }}" title="Copy Link"></i>
+                    </span>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-muted">No active file shares. Click the + to share a file.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endtimezone %}
+{% endblock %}

@@ -212,6 +212,24 @@
             </div>
         </div>
 
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">Email (Resend)</h6>
+                <div class="mb-3">
+                    <label for="resend_api_key" class="form-label">Resend API Key</label>
+                    <input type="password" name="resend_api_key" id="resend_api_key" class="form-control form-control-sm" value="{{ app_settings.resend_api_key }}" placeholder="re_...">
+                </div>
+                <div class="mb-3">
+                    <label for="resend_from_email" class="form-label">From Email</label>
+                    <input type="email" name="resend_from_email" id="resend_from_email" class="form-control form-control-sm" value="{{ app_settings.resend_from_email }}" placeholder="noreply@yourdomain.com">
+                </div>
+                <div class="mb-3">
+                    <label for="max_file_size_mb" class="form-label">Max File Size (MB)</label>
+                    <input type="number" name="max_file_size_mb" id="max_file_size_mb" class="form-control form-control-sm" value="{{ app_settings.max_file_size_mb }}" min="1" max="1000" style="max-width: 120px;">
+                </div>
+            </div>
+        </div>
+
         <button type="submit" class="btn btn-primary btn-sm">Save Settings</button>
     </form>
 

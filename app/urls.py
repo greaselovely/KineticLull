@@ -61,6 +61,9 @@ urlpatterns = [
     path('urls/create/', create_short_url, name='create_short_url'),
     path('urls/<int:url_id>/edit/', edit_short_url, name='edit_short_url'),
     path('urls/delete/<int:url_id>/', delete_short_url, name='delete_short_url'),
+    path('files/', views.otf_list_view, name='otf_list'),
+    path('files/upload/', views.otf_upload_view, name='otf_upload'),
+    path('f/<str:token>/', views.otf_download_view, name='otf_download'),
     path('s/<str:short_code>/', redirect_short_url, name='redirect_short_url'),
     path('favicon.ico', RedirectView.as_view(url='/static/images/favicon.ico', permanent=True)),
     # keep this at the bottom

@@ -33,8 +33,9 @@ logger = logging.getLogger(__name__)
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
-from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP
+from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile
 from .forms import ExtDynListsForm, ProfileChangeForm, ShortenedURLForm
+from .email import send_otp_email, send_access_notification
 
 from users.models import CustomUser
 from django.contrib.auth.models import Group, Permission
@@ -1299,6 +1300,26 @@ def app_settings_view(request):
             if val != old_val:
                 setattr(app_settings, field_name, val)
                 changes.append(f'{field_name}={val}')
+
+        # Email / File settings
+        new_resend_key = request.POST.get('resend_api_key', '').strip()
+        if new_resend_key != app_settings.resend_api_key:
+            app_settings.resend_api_key = new_resend_key
+            changes.append('resend_api_key=***')
+
+        new_from_email = request.POST.get('resend_from_email', '').strip()
+        if new_from_email != app_settings.resend_from_email:
+            app_settings.resend_from_email = new_from_email
+            changes.append(f'resend_from_email={new_from_email}')
+
+        try:
+            new_max_file = int(request.POST.get('max_file_size_mb', 250))
+            new_max_file = max(1, min(new_max_file, 1000))
+        except (ValueError, TypeError):
+            new_max_file = 250
+        if new_max_file != app_settings.max_file_size_mb:
+            app_settings.max_file_size_mb = new_max_file
+            changes.append(f'max_file_size_mb={new_max_file}')
 
         app_settings.save()
 
@@ -2583,3 +2604,129 @@ def redirect_short_url(request, short_code):
     short_url = get_object_or_404(ShortenedURL, short_code=short_code)
     ShortenedURL.objects.filter(pk=short_url.pk).update(hit_count=models.F('hit_count') + 1)
     return HttpResponseRedirect(short_url.original_url)
+
+
+# ── One-Time File Sharing ──────────────────────────────────────
+
+@login_required
+def otf_list_view(request):
+    """List the current user's active (unburned, unexpired) one-time files."""
+    files = OneTimeFile.objects.filter(uploaded_by=request.user, burned=False, downloaded=False)
+    # Filter out expired ones in Python to also trigger cleanup
+    from django.utils import timezone as tz
+    active_files = []
+    for f in files:
+        if f.is_expired:
+            f.burn()
+        else:
+            active_files.append(f)
+
+    base_url = settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
+    for f in active_files:
+        f.share_url = f'{base_url}/f/{f.token}/'
+
+    context = {'files': active_files}
+    summary = get_security_summary(request.user)
+    if summary:
+        context['security_summary'] = summary
+    return render(request, 'otf_list.html', context)
+
+
+@login_required
+def otf_upload_view(request):
+    """Upload a file for one-time sharing."""
+    app_settings = AppSettings.load()
+
+    if not app_settings.resend_api_key or not app_settings.resend_from_email:
+        messages.error(request, 'Email is not configured. Set up Resend API key and From email in Settings before sharing files.')
+        return redirect('app:otf_list')
+
+    if request.method == 'POST':
+        uploaded_file = request.FILES.get('file')
+        recipient_email = request.POST.get('recipient_email', '').strip()
+        expiry_hours = request.POST.get('expiry_hours', '24')
+
+        if not uploaded_file or not recipient_email:
+            messages.error(request, 'File and recipient email are required.')
+            return render(request, 'otf_upload.html', {'expiry_choices': OneTimeFile.EXPIRY_CHOICES})
+
+        # Check file size
+        max_size = app_settings.max_file_size_mb * 1024 * 1024
+        if uploaded_file.size > max_size:
+            messages.error(request, f'File exceeds the {app_settings.max_file_size_mb}MB limit.')
+            return render(request, 'otf_upload.html', {'expiry_choices': OneTimeFile.EXPIRY_CHOICES})
+
+        try:
+            expiry_hours = int(expiry_hours)
+        except ValueError:
+            expiry_hours = 24
+
+        otf = OneTimeFile(
+            file=uploaded_file,
+            original_filename=uploaded_file.name,
+            uploaded_by=request.user,
+            recipient_email=recipient_email,
+            expiry_hours=expiry_hours,
+        )
+        otf.save()
+
+        base_url = settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
+        share_url = f'{base_url}/f/{otf.token}/'
+
+        log_activity(request, 'upload_otf', otf.original_filename, f'To: {recipient_email}, Expires: {expiry_hours}h')
+        messages.success(request, f'File shared. Link: {share_url}')
+        return redirect('app:otf_list')
+
+    return render(request, 'otf_upload.html', {'expiry_choices': OneTimeFile.EXPIRY_CHOICES})
+
+
+def otf_download_view(request, token):
+    """Public download endpoint — handles OTP verification and file delivery."""
+    otf = get_object_or_404(OneTimeFile, token=token)
+
+    # Check if burned or expired
+    if otf.burned or otf.downloaded:
+        return render(request, 'otf_burned.html')
+
+    if otf.is_expired:
+        otf.burn()
+        return render(request, 'otf_burned.html')
+
+    # Step 1: First visit — send OTP
+    if request.method == 'GET' and not request.GET.get('verify'):
+        otp = otf.generate_otp()
+        sent = send_otp_email(otf.recipient_email, otp, otf.original_filename)
+        if not sent:
+            return render(request, 'otf_error.html', {'message': 'Failed to send verification email. Contact the sender.'})
+        log_activity(request, 'otf_accessed', otf.original_filename, f'OTP sent to {otf.recipient_email}')
+        return render(request, 'otf_verify.html', {'token': token})
+
+    # Step 2: OTP verification
+    if request.method == 'POST':
+        code = request.POST.get('otp', '').strip()
+        if otf.verify_otp(code):
+            # Serve the file
+            from django.utils import timezone as tz
+            otf.downloaded = True
+            otf.downloaded_at = tz.now()
+            otf.save()
+
+            # Notify uploader
+            if otf.uploaded_by:
+                send_access_notification(otf.uploaded_by.email, otf.recipient_email, otf.original_filename)
+
+            log_activity(request, 'otf_downloaded', otf.original_filename, f'By: {otf.recipient_email}')
+
+            # Serve file then burn
+            response = HttpResponse(otf.file.read(), content_type='application/octet-stream')
+            response['Content-Disposition'] = f'attachment; filename="{otf.original_filename}"'
+
+            # Burn after serving
+            otf.burn()
+
+            return response
+        else:
+            messages.error(request, 'Invalid or expired code. A new code has been sent.')
+            otp = otf.generate_otp()
+            send_otp_email(otf.recipient_email, otp, otf.original_filename)
+            return render(request, 'otf_verify.html', {'token': token})

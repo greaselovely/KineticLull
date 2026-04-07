@@ -1,6 +1,7 @@
 logs/
 backups/
 staticfiles/
+media/
 *.json
 MM.jpeg
 *.pem

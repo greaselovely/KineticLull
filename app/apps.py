@@ -38,8 +38,24 @@ def _start_daily_backup_scheduler():
             # Sleep 24 hours
             time.sleep(86400)
 
+    def _cleanup_loop():
+        """Burn expired one-time files every 5 minutes."""
+        time.sleep(120)
+        while True:
+            try:
+                from app.models import OneTimeFile
+                from django.utils import timezone
+                expired = OneTimeFile.objects.filter(burned=False, expires_at__lte=timezone.now())
+                for otf in expired:
+                    otf.burn()
+            except Exception:
+                pass
+            time.sleep(300)
+
     t = threading.Thread(target=_backup_loop, daemon=True)
     t.start()
+    t2 = threading.Thread(target=_cleanup_loop, daemon=True)
+    t2.start()
 
 
 def ensure_superuser_group(sender, **kwargs):

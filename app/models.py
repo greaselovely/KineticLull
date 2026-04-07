@@ -158,6 +158,13 @@ class AppSettings(models.Model):
     autoblock_window_seconds = models.PositiveIntegerField(default=60, verbose_name='Auto-Block Window (seconds)')
     autoblock_duration_minutes = models.PositiveIntegerField(default=0, verbose_name='Auto-Block Duration (minutes, 0=permanent)')
 
+    # Email (Resend)
+    resend_api_key = models.CharField(max_length=255, blank=True, default='', verbose_name='Resend API Key')
+    resend_from_email = models.EmailField(max_length=255, blank=True, default='', verbose_name='From Email Address')
+
+    # File Sharing
+    max_file_size_mb = models.PositiveIntegerField(default=250, verbose_name='Max file size (MB)')
+
     # Deployment
     deployment_mode = models.CharField(
         max_length=20, default='gunicorn_ssl',
@@ -359,6 +366,89 @@ class ShortenedURL(models.Model):
 
     def __str__(self):
         return f"{self.short_code} -> {self.original_url}"
+
+
+class OneTimeFile(models.Model):
+    EXPIRY_CHOICES = [
+        (1, '1 hour'),
+        (6, '6 hours'),
+        (12, '12 hours'),
+        (24, '1 day'),
+        (72, '3 days'),
+        (168, '7 days'),
+    ]
+
+    file = models.FileField(upload_to='otf/', verbose_name='File')
+    original_filename = models.CharField(max_length=500, verbose_name='Original Filename')
+    token = models.CharField(max_length=64, unique=True, blank=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='uploaded_files')
+    recipient_email = models.EmailField(verbose_name='Recipient Email')
+    otp = models.CharField(max_length=6, blank=True)
+    otp_created_at = models.DateTimeField(null=True, blank=True)
+    expiry_hours = models.PositiveIntegerField(default=24, choices=EXPIRY_CHOICES, verbose_name='Expires After')
+    expires_at = models.DateTimeField(verbose_name='Expires At')
+    downloaded = models.BooleanField(default=False)
+    downloaded_at = models.DateTimeField(null=True, blank=True)
+    burned = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "One-Time File"
+        verbose_name_plural = "One-Time Files"
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = secrets.token_urlsafe(32)
+        if not self.expires_at:
+            from django.utils import timezone
+            from datetime import timedelta
+            self.expires_at = timezone.now() + timedelta(hours=self.expiry_hours)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.original_filename} ({self.token[:8]}...)"
+
+    @property
+    def is_expired(self):
+        from django.utils import timezone
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_available(self):
+        return not self.downloaded and not self.burned and not self.is_expired
+
+    def generate_otp(self):
+        """Generate a 6-digit OTP valid for 5 minutes."""
+        import random
+        from django.utils import timezone
+        self.otp = f'{random.randint(100000, 999999)}'
+        self.otp_created_at = timezone.now()
+        self.save(update_fields=['otp', 'otp_created_at'])
+        return self.otp
+
+    def verify_otp(self, code):
+        """Verify the OTP. Returns True if valid and not expired."""
+        from django.utils import timezone
+        from datetime import timedelta
+        if not self.otp or not self.otp_created_at:
+            return False
+        if timezone.now() > self.otp_created_at + timedelta(minutes=5):
+            return False
+        return self.otp == code.strip()
+
+    def burn(self):
+        """Mark as burned and delete the file from disk."""
+        from django.utils import timezone
+        self.burned = True
+        if not self.downloaded_at and self.downloaded:
+            self.downloaded_at = timezone.now()
+        self.save()
+        if self.file:
+            try:
+                self.file.delete(save=False)
+            except Exception:
+                pass
 
 
 class InboxEntry(models.Model):

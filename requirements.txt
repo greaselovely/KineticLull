@@ -22,5 +22,7 @@ sqlparse==0.5.5
     # via
     #   django
     #   django-debug-toolbar
+resend==2.7.0
+    # via -r requirements.in
 whitenoise==6.12.0
     # via -r requirements.in
