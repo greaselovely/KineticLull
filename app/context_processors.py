@@ -21,6 +21,10 @@ def app_settings(request):
         result = {
             'app_timezone': settings.timezone,
             'app_timestamp_format': settings.timestamp_format,
+            'otf_brand_name': settings.otf_brand_name or 'KineticLull Secure File Access',
+            'otf_brand_bg_color': settings.otf_brand_bg_color or '#1a1d21',
+            'otf_brand_text_color': settings.otf_brand_text_color or '#ffffff',
+            'otf_brand_image': settings.otf_brand_image.url if settings.otf_brand_image else '',
         }
         # Lightweight integrity check for superusers
         if request.user.is_authenticated and request.user.is_superuser and settings.db_checksum:

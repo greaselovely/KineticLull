@@ -35,7 +35,7 @@ from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
 from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile
 from .forms import ExtDynListsForm, ProfileChangeForm, ShortenedURLForm
-from .email import send_otp_email, send_access_notification
+from .email import send_file_shared_email, send_otp_email, send_access_notification
 
 from users.models import CustomUser
 from django.contrib.auth.models import Group, Permission
@@ -1320,6 +1320,17 @@ def app_settings_view(request):
         if new_max_file != app_settings.max_file_size_mb:
             app_settings.max_file_size_mb = new_max_file
             changes.append(f'max_file_size_mb={new_max_file}')
+
+        # Branding
+        for field in ['otf_brand_name', 'otf_brand_bg_color', 'otf_brand_text_color']:
+            new_val = request.POST.get(field, '').strip()
+            if new_val and new_val != getattr(app_settings, field):
+                setattr(app_settings, field, new_val)
+                changes.append(f'{field}={new_val}')
+
+        if 'otf_brand_image' in request.FILES:
+            app_settings.otf_brand_image = request.FILES['otf_brand_image']
+            changes.append('otf_brand_image=updated')
 
         app_settings.save()
 
@@ -2673,11 +2684,28 @@ def otf_upload_view(request):
         base_url = settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
         share_url = f'{base_url}/f/{otf.token}/'
 
+        sender_name = f'{request.user.first_name} {request.user.last_name}'.strip() or request.user.email
+        sent = send_file_shared_email(recipient_email, otf.original_filename, share_url, sender_name)
+
         log_activity(request, 'upload_otf', otf.original_filename, f'To: {recipient_email}, Expires: {expiry_hours}h')
-        messages.success(request, f'File shared. Link: {share_url}')
+        if sent:
+            messages.success(request, f'File shared and notification sent to {recipient_email}.')
+        else:
+            messages.warning(request, f'File shared but email failed to send. Share this link manually: {share_url}')
         return redirect('app:otf_list')
 
     return render(request, 'otf_upload.html', {'expiry_choices': OneTimeFile.EXPIRY_CHOICES})
+
+
+@login_required
+@require_http_methods(["POST"])
+def otf_delete_view(request, token):
+    """Delete a one-time file and burn the link."""
+    otf = get_object_or_404(OneTimeFile, token=token, uploaded_by=request.user)
+    filename = otf.original_filename
+    otf.burn()
+    log_activity(request, 'delete_otf', filename)
+    return JsonResponse({'status': 'deleted'})
 
 
 def otf_download_view(request, token):
@@ -2695,7 +2723,7 @@ def otf_download_view(request, token):
     # Step 1: First visit — send OTP
     if request.method == 'GET' and not request.GET.get('verify'):
         otp = otf.generate_otp()
-        sent = send_otp_email(otf.recipient_email, otp, otf.original_filename)
+        sent = send_otp_email(otf.recipient_email, otp)
         if not sent:
             return render(request, 'otf_error.html', {'message': 'Failed to send verification email. Contact the sender.'})
         log_activity(request, 'otf_accessed', otf.original_filename, f'OTP sent to {otf.recipient_email}')
@@ -2728,5 +2756,5 @@ def otf_download_view(request, token):
         else:
             messages.error(request, 'Invalid or expired code. A new code has been sent.')
             otp = otf.generate_otp()
-            send_otp_email(otf.recipient_email, otp, otf.original_filename)
+            send_otp_email(otf.recipient_email, otp)
             return render(request, 'otf_verify.html', {'token': token})

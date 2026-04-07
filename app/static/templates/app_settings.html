@@ -11,7 +11,7 @@
         <strong>Set your timezone.</strong> Please configure your display timezone below, then save.
     </div>
     {% endif %}
-    <form method="post">
+    <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
 
         <div class="card mb-3">
@@ -226,6 +226,34 @@
                 <div class="mb-3">
                     <label for="max_file_size_mb" class="form-label">Max File Size (MB)</label>
                     <input type="number" name="max_file_size_mb" id="max_file_size_mb" class="form-control form-control-sm" value="{{ app_settings.max_file_size_mb }}" min="1" max="1000" style="max-width: 120px;">
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">File Share Branding</h6>
+                <div class="mb-3">
+                    <label for="otf_brand_name" class="form-label">Brand Name</label>
+                    <input type="text" name="otf_brand_name" id="otf_brand_name" class="form-control form-control-sm" value="{{ app_settings.otf_brand_name }}" placeholder="KineticLull Secure File Access">
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="otf_brand_bg_color" class="form-label">Background Color</label>
+                        <input type="color" name="otf_brand_bg_color" id="otf_brand_bg_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_bg_color }}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="otf_brand_text_color" class="form-label">Text Color</label>
+                        <input type="color" name="otf_brand_text_color" id="otf_brand_text_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_text_color }}">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="otf_brand_image" class="form-label">Logo Image</label>
+                    {% if app_settings.otf_brand_image %}
+                    <div class="mb-2"><img src="{{ app_settings.otf_brand_image.url }}" alt="Current logo" style="max-height: 40px;"></div>
+                    {% endif %}
+                    <input type="file" name="otf_brand_image" id="otf_brand_image" class="form-control form-control-sm" accept="image/*">
+                    <div class="form-text">Optional. Displayed above the brand name on download pages.</div>
                 </div>
             </div>
         </div>

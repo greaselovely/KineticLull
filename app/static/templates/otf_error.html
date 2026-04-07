@@ -1,9 +1,17 @@
 {% extends 'base.html' %}
 {% block title %} - Error{% endblock %}
 {% block content %}
-<div class="content-card" style="max-width: 450px; margin: 60px auto; text-align: center;">
-    <i class="bi bi-exclamation-triangle" style="font-size: 3rem; color: #ffc107;"></i>
-    <h3 class="mt-3">Something went wrong</h3>
-    <p class="text-muted">{{ message }}</p>
+<div style="max-width: 450px; margin: 40px auto;">
+    <div style="background: {{ otf_brand_bg_color }}; color: {{ otf_brand_text_color }}; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
+        {% if otf_brand_image %}
+        <img src="{{ otf_brand_image }}" alt="" style="max-height: 48px; margin-bottom: 12px;">
+        {% endif %}
+        <h4 style="margin: 0;">{{ otf_brand_name }}</h4>
+    </div>
+    <div class="content-card" style="border-radius: 0 0 8px 8px; margin-top: 0; text-align: center;">
+        <i class="bi bi-exclamation-triangle" style="font-size: 3rem; color: #ffc107;"></i>
+        <h3 class="mt-3">Something went wrong</h3>
+        <p class="text-muted">{{ message }}</p>
+    </div>
 </div>
 {% endblock %}

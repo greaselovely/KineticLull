@@ -164,6 +164,10 @@ class AppSettings(models.Model):
 
     # File Sharing
     max_file_size_mb = models.PositiveIntegerField(default=250, verbose_name='Max file size (MB)')
+    otf_brand_name = models.CharField(max_length=255, blank=True, default='KineticLull Secure File Access', verbose_name='File Share Brand Name')
+    otf_brand_bg_color = models.CharField(max_length=7, blank=True, default='#1a1d21', verbose_name='Brand Background Color')
+    otf_brand_text_color = models.CharField(max_length=7, blank=True, default='#ffffff', verbose_name='Brand Text Color')
+    otf_brand_image = models.FileField(upload_to='branding/', blank=True, verbose_name='Brand Logo')
 
     # Deployment
     deployment_mode = models.CharField(

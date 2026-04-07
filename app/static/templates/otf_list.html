@@ -48,6 +48,7 @@
                 <td>{{ f.created_at|date:app_timestamp_format }}</td>
                 <td>
                     <span class="actions-row">
+                        <i class="bi bi-trash action-items text-danger" onclick="deleteOtf('{{ f.token }}', event)" title="Delete"></i>
                         <i class="bi bi-clipboard action-items copy-url-btn" data-url="{{ f.share_url }}" title="Copy Link"></i>
                     </span>
                 </td>
@@ -61,4 +62,27 @@
     </table>
 </div>
 {% endtimezone %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteOtf(token, event) {
+    event.preventDefault();
+    showConfirmModal('Delete this file and burn the link?', function() {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        fetch('{% url "app:otf_delete" token="PLACEHOLDER" %}'.replace('PLACEHOLDER', token), {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrfToken},
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'deleted') {
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to delete');
+            }
+        });
+    });
+}
+</script>
 {% endblock %}
