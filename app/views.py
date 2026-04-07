@@ -1333,6 +1333,12 @@ def app_settings_view(request):
             if logo.size > 2 * 1024 * 1024:  # 2MB
                 messages.error(request, 'Logo image must be under 2MB.')
             else:
+                # Delete old logo file before saving new one
+                if app_settings.otf_brand_image:
+                    try:
+                        app_settings.otf_brand_image.delete(save=False)
+                    except Exception:
+                        pass
                 app_settings.otf_brand_image = logo
                 changes.append('otf_brand_image=updated')
 

@@ -20,7 +20,7 @@
         <form {% if not preview_mode %}method="post" action="{% url 'app:otf_download' token %}"{% else %}onsubmit="return false;"{% endif %}>
             {% csrf_token %}
             <div class="mb-3">
-                <label for="otp" class="form-label">Verification Code</label>
+                <label for="otp" class="form-label" style="text-align: center; display: block;">Verification Code</label>
                 <input type="text" name="otp" id="otp" class="form-control" maxlength="6" pattern="[0-9]{6}" placeholder="000000" {% if not preview_mode %}required autofocus{% endif %} autocomplete="off" style="font-size: 1.5rem; letter-spacing: 8px; text-align: center;">
             </div>
             <button type="submit" class="btn btn-primary w-100">Verify & Download</button>

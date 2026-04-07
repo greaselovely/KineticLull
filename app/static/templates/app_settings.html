@@ -238,22 +238,24 @@
                     <input type="text" name="otf_brand_name" id="otf_brand_name" class="form-control form-control-sm" value="{{ app_settings.otf_brand_name }}" placeholder="KineticLull Secure File Access">
                 </div>
                 <div class="row">
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 mb-3">
                         <label for="otf_brand_bg_color" class="form-label">Background Color</label>
                         <input type="color" name="otf_brand_bg_color" id="otf_brand_bg_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_bg_color }}">
                     </div>
-                    <div class="col-md-4 mb-3">
-                        <label for="otf_brand_text_color" class="form-label">Text Color</label>
-                        <input type="color" name="otf_brand_text_color" id="otf_brand_text_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_text_color }}">
-                    </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 mb-3">
                         <label for="otf_brand_card_color" class="form-label">Card Color</label>
                         <input type="color" name="otf_brand_card_color" id="otf_brand_card_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_card_color }}">
                     </div>
                 </div>
-                <div class="mb-3">
-                    <label for="otf_brand_card_text_color" class="form-label">Card Text Color</label>
-                    <input type="color" name="otf_brand_card_text_color" id="otf_brand_card_text_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_card_text_color }}">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="otf_brand_text_color" class="form-label">Header Text Color</label>
+                        <input type="color" name="otf_brand_text_color" id="otf_brand_text_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_text_color }}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="otf_brand_card_text_color" class="form-label">Card Text Color</label>
+                        <input type="color" name="otf_brand_card_text_color" id="otf_brand_card_text_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_card_text_color }}">
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label for="otf_brand_image" class="form-label">Logo Image</label>
