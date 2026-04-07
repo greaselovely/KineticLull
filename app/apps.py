@@ -9,6 +9,7 @@ class EdlConfig(AppConfig):
         from django.db.models.signals import post_migrate
         post_migrate.connect(ensure_superuser_group, sender=self)
         _start_daily_backup_scheduler()
+        _patch_nginx_config()
 
 
 def _start_daily_backup_scheduler():
@@ -56,6 +57,69 @@ def _start_daily_backup_scheduler():
     t.start()
     t2 = threading.Thread(target=_cleanup_loop, daemon=True)
     t2.start()
+
+
+def _patch_nginx_config():
+    """Patch Nginx config on startup if needed — adds media/branding and client_max_body_size."""
+    import subprocess
+    import os
+    from django.conf import settings
+
+    # Only run in gunicorn/runserver, not manage.py commands
+    if not (os.environ.get('RUN_MAIN') == 'true' or 'gunicorn' in (os.environ.get('SERVER_SOFTWARE', '') + os.environ.get('_', ''))):
+        return
+
+    nginx_conf = None
+    for path_candidate in [
+        '/etc/nginx/sites-available/kineticlull',
+        '/etc/nginx/conf.d/kineticlull.conf',
+    ]:
+        if os.path.exists(path_candidate):
+            nginx_conf = path_candidate
+            break
+
+    if not nginx_conf:
+        return
+
+    try:
+        with open(nginx_conf, 'r') as f:
+            content = f.read()
+
+        changed = False
+        base_dir = str(settings.BASE_DIR)
+
+        if 'client_max_body_size' not in content:
+            subprocess.run(
+                ['sudo', '-n', 'sed', '-i', '/ssl_session_timeout/a\\    client_max_body_size 260m;', nginx_conf],
+                capture_output=True, text=True, timeout=5,
+            )
+            changed = True
+
+        if 'media/branding' not in content:
+            media_block = (
+                f"    # Branding images\\n"
+                f"    location /media/branding/ {{\\n"
+                f"        alias {base_dir}/media/branding/;\\n"
+                f"        expires 1d;\\n"
+                f"        access_log off;\\n"
+                f"    }}\\n"
+            )
+            subprocess.run(
+                ['sudo', '-n', 'sed', '-i', f'/location \\/static\\//i\\{media_block}', nginx_conf],
+                capture_output=True, text=True, timeout=5,
+            )
+            changed = True
+
+        if changed:
+            subprocess.run(['sudo', '-n', 'nginx', '-t'], capture_output=True, text=True, timeout=5)
+            subprocess.run(['sudo', '-n', 'nginx', '-s', 'reload'], capture_output=True, text=True, timeout=5)
+
+        # Ensure media directories exist
+        os.makedirs(os.path.join(base_dir, 'media', 'branding'), exist_ok=True)
+        os.makedirs(os.path.join(base_dir, 'media', 'otf'), exist_ok=True)
+
+    except Exception:
+        pass  # Don't crash the app if Nginx patching fails
 
 
 def ensure_superuser_group(sender, **kwargs):
