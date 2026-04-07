@@ -1322,7 +1322,7 @@ def app_settings_view(request):
             changes.append(f'max_file_size_mb={new_max_file}')
 
         # Branding
-        for field in ['otf_brand_name', 'otf_brand_bg_color', 'otf_brand_text_color', 'otf_brand_card_color']:
+        for field in ['otf_brand_name', 'otf_brand_bg_color', 'otf_brand_text_color', 'otf_brand_card_color', 'otf_brand_card_text_color']:
             new_val = request.POST.get(field, '').strip()
             if new_val and new_val != getattr(app_settings, field):
                 setattr(app_settings, field, new_val)
