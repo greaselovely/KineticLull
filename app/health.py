@@ -117,23 +117,48 @@ def check_sudoers():
 
 
 def _resolve_cert_path():
-    """Find the actual SSL cert file by parsing the active nginx config, with project ssl/ as fallback."""
+    """Find the actual SSL cert file by parsing any readable nginx config, with project ssl/ as fallback."""
     import re
-    for conf in ('/etc/nginx/sites-enabled/kineticlull',
-                 '/etc/nginx/sites-available/kineticlull',
-                 '/etc/nginx/conf.d/kineticlull.conf'):
+    cert_re = re.compile(r'^\s*ssl_certificate\s+([^;]+);', re.MULTILINE)
+
+    # Pass 1: known config locations.
+    known = [
+        '/etc/nginx/sites-enabled/kineticlull',
+        '/etc/nginx/sites-available/kineticlull',
+        '/etc/nginx/conf.d/kineticlull.conf',
+        '/etc/nginx/nginx.conf',
+    ]
+    for conf in known:
         try:
             with open(conf) as f:
                 text = f.read()
-        except (FileNotFoundError, PermissionError):
+        except (FileNotFoundError, PermissionError, IsADirectoryError):
             continue
-        m = re.search(r'^\s*ssl_certificate\s+([^;]+);', text, re.MULTILINE)
+        m = cert_re.search(text)
         if m:
             path = m.group(1).strip()
-            # Resolve symlinks and return the real path if it exists.
             if os.path.exists(path):
                 return path, conf
-    # Fallback: legacy gunicorn_ssl mode uses <project>/ssl/cert.pem directly
+
+    # Pass 2: walk /etc/nginx/ for anything with an ssl_certificate directive.
+    try:
+        for root, _dirs, files in os.walk('/etc/nginx'):
+            for name in files:
+                fpath = os.path.join(root, name)
+                try:
+                    with open(fpath) as f:
+                        text = f.read()
+                except (PermissionError, OSError):
+                    continue
+                m = cert_re.search(text)
+                if m:
+                    path = m.group(1).strip()
+                    if os.path.exists(path):
+                        return path, fpath
+    except (PermissionError, OSError):
+        pass
+
+    # Fallback: legacy gunicorn_ssl mode uses <project>/ssl/cert.pem directly.
     fallback = os.path.join(settings.BASE_DIR, 'ssl', 'cert.pem')
     if os.path.exists(fallback):
         return fallback, 'ssl/cert.pem'
@@ -145,7 +170,12 @@ def check_ssl_cert():
     if not cert_path:
         return _check(
             'ssl_cert', 'SSL certificate', True, 'info',
-            'No cert found. Nginx may not be configured with SSL on this install.',
+            'No ssl_certificate directive found in /etc/nginx/ and no fallback at ssl/cert.pem. '
+            'If this install uses SSL, the app user may lack read permission on the nginx config.',
+            fix_commands=[
+                'sudo grep -r "ssl_certificate" /etc/nginx/ | head -5  # confirm the real path',
+                'ls -la /etc/nginx/sites-enabled/  # check readability',
+            ],
         )
     try:
         r = subprocess.run(
