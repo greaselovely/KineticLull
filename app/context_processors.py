@@ -13,11 +13,18 @@ def inbox_count(request):
 def health_summary(request):
     if request.user.is_authenticated and request.user.is_superuser:
         try:
-            from .health import count_issues
-            return {'health_issues_count': count_issues()}
+            from .health import run_all
+            results = run_all()
+            issues = [c for c in results if not c['ok'] and c['severity'] in ('warning', 'error')]
+            max_sev = None
+            if any(c['severity'] == 'error' for c in issues):
+                max_sev = 'error'
+            elif issues:
+                max_sev = 'warning'
+            return {'health_issues_count': len(issues), 'health_max_severity': max_sev}
         except Exception:
-            return {'health_issues_count': 0}
-    return {'health_issues_count': 0}
+            return {'health_issues_count': 0, 'health_max_severity': None}
+    return {'health_issues_count': 0, 'health_max_severity': None}
 
 
 def app_settings(request):

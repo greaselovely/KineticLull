@@ -121,12 +121,13 @@
                     </a>
                 </li>
                 <li>
-                    <a href="{% url 'app:system_health' %}" title="System Health">
+                    <a href="{% url 'app:system_health' %}" title="System Health"
+                       {% if health_max_severity == 'error' %}style="color: #dc3545;"{% elif health_max_severity == 'warning' %}style="color: #ffc107;"{% endif %}>
                         <i class="bi bi-heart-pulse"></i>
                         <span class="nav-text">
                             Health
                             {% if health_issues_count > 0 %}
-                            <span class="badge bg-danger rounded-pill ms-1">{{ health_issues_count }}</span>
+                            <span class="badge {% if health_max_severity == 'error' %}bg-danger{% else %}bg-warning text-dark{% endif %} rounded-pill ms-1">{{ health_issues_count }}</span>
                             {% endif %}
                         </span>
                     </a>
