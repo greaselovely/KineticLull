@@ -116,121 +116,54 @@ def check_sudoers():
     )
 
 
-def _resolve_cert_path():
-    """Find the actual SSL cert file.
-
-    Strategy (in order):
-    1. `sudo -n nginx -T` — dumps the full resolved config regardless of file perms.
-       Requires a sudoers entry (installed by upgrade.sh).
-    2. Direct reads of known config file paths (works if files are world-readable).
-    3. Recursive walk of /etc/nginx/ (works if any single file is readable).
-    4. Project-local fallback at <base>/ssl/cert.pem (legacy gunicorn_ssl mode).
-    """
-    import re
-    cert_re = re.compile(r'^\s*ssl_certificate\s+([^;]+);', re.MULTILINE)
-
-    # Pass 0: sudo -n nginx -T — authoritative and perm-independent.
-    try:
-        r = subprocess.run(
-            ['sudo', '-n', '/usr/sbin/nginx', '-T'],
-            capture_output=True, text=True, timeout=5,
-        )
-        if r.returncode == 0 and r.stdout:
-            for m in cert_re.finditer(r.stdout):
-                path = m.group(1).strip()
-                # Skip the Debian snakeoil default cert if referenced.
-                if 'snakeoil' in path:
-                    continue
-                if os.path.exists(path):
-                    return path, 'nginx -T (active config)'
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-
-    # Pass 1: known config locations.
-    known = [
-        '/etc/nginx/sites-enabled/kineticlull',
-        '/etc/nginx/sites-available/kineticlull',
-        '/etc/nginx/conf.d/kineticlull.conf',
-        '/etc/nginx/nginx.conf',
-    ]
-    for conf in known:
-        try:
-            with open(conf) as f:
-                text = f.read()
-        except (FileNotFoundError, PermissionError, IsADirectoryError):
-            continue
-        m = cert_re.search(text)
-        if m:
-            path = m.group(1).strip()
-            if os.path.exists(path):
-                return path, conf
-
-    # Pass 2: walk /etc/nginx/ for anything with an ssl_certificate directive.
-    try:
-        for root, _dirs, files in os.walk('/etc/nginx'):
-            for name in files:
-                fpath = os.path.join(root, name)
-                try:
-                    with open(fpath) as f:
-                        text = f.read()
-                except (PermissionError, OSError):
-                    continue
-                m = cert_re.search(text)
-                if m:
-                    path = m.group(1).strip()
-                    if os.path.exists(path):
-                        return path, fpath
-    except (PermissionError, OSError):
-        pass
-
-    # Fallback: legacy gunicorn_ssl mode uses <project>/ssl/cert.pem directly.
-    fallback = os.path.join(settings.BASE_DIR, 'ssl', 'cert.pem')
-    if os.path.exists(fallback):
-        return fallback, 'ssl/cert.pem'
-    return None, None
-
-
 def check_ssl_cert():
-    cert_path, source = _resolve_cert_path()
-    if not cert_path:
+    """Check the cert nginx is actually serving by opening a TLS connection to 127.0.0.1:443.
+
+    Reads the cert from the live handshake — no filesystem access needed, no
+    permission changes required, works for every cert type (LE, self-signed,
+    symlinked, etc.). Also catches the case where the config path doesn't
+    match what's actually being served.
+    """
+    import socket
+    import ssl as ssl_mod
+    from urllib.parse import urlparse
+
+    url = getattr(settings, 'KINETICLULL_URL', os.environ.get('KINETICLULL_URL', ''))
+    hostname = (urlparse(url).hostname if url else None) or 'localhost'
+
+    try:
+        ctx = ssl_mod.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl_mod.CERT_NONE
+        with socket.create_connection(('127.0.0.1', 443), timeout=3) as raw:
+            with ctx.wrap_socket(raw, server_hostname=hostname) as tls:
+                der = tls.getpeercert(binary_form=True)
+    except (ConnectionRefusedError, socket.timeout, OSError) as e:
         return _check(
             'ssl_cert', 'SSL certificate', True, 'info',
-            'No ssl_certificate directive found in /etc/nginx/ and no fallback at ssl/cert.pem. '
-            'If this install uses SSL, the app user may lack read permission on the nginx config.',
-            fix_commands=[
-                'sudo grep -r "ssl_certificate" /etc/nginx/ | head -5  # confirm the real path',
-                'ls -la /etc/nginx/sites-enabled/  # check readability',
-            ],
+            f'Could not reach 127.0.0.1:443 ({type(e).__name__}). Nginx may not be configured with SSL on this install.',
         )
+
     try:
-        r = subprocess.run(
-            ['openssl', 'x509', '-in', cert_path, '-noout', '-enddate'],
-            capture_output=True, text=True, timeout=3,
-        )
-        if r.returncode != 0:
-            raise RuntimeError((r.stderr or '').strip())
-        line = r.stdout.strip()
-        if '=' not in line:
-            raise ValueError(f'unexpected openssl output: {line!r}')
-        date_str = line.split('=', 1)[1]
-        expiry = datetime.strptime(date_str, '%b %d %H:%M:%S %Y %Z')
-        days_left = (expiry - datetime.utcnow()).days
-    except FileNotFoundError:
-        return _check(
-            'ssl_cert', 'SSL certificate', False, 'warning',
-            'openssl binary not found — cannot check cert expiry.',
-            fix_commands=['sudo apt-get install -y openssl  # Debian/Ubuntu',
-                          'sudo dnf install -y openssl  # RHEL/Fedora'],
-        )
+        from cryptography import x509
+        cert = x509.load_der_x509_certificate(der)
+        expiry = cert.not_valid_after_utc
+        now = datetime.now(tz=expiry.tzinfo)
+        days_left = (expiry - now).days
+        issuer_cn = ''
+        for attr in cert.issuer:
+            if attr.oid._name == 'commonName':
+                issuer_cn = attr.value
+                break
     except Exception as e:
         return _check('ssl_cert', 'SSL certificate', False, 'warning',
-                      f'Could not parse cert expiry: {e}')
+                      f'Could not parse served cert: {e}')
 
-    path_note = f' Using {cert_path}.'
+    issuer_note = f' Issuer: {issuer_cn}.' if issuer_cn else ''
     if days_left < 0:
         return _check(
             'ssl_cert', 'SSL certificate', False, 'error',
-            f'Expired {-days_left} days ago.' + path_note,
+            f'Expired {-days_left} days ago.' + issuer_note,
             why='Browsers reject the connection. If HSTS is enabled the site is effectively unreachable until renewed.',
             fix_commands=[
                 'sudo certbot renew  # Let\'s Encrypt',
@@ -240,10 +173,10 @@ def check_ssl_cert():
     if days_left < 7:
         return _check(
             'ssl_cert', 'SSL certificate', False, 'warning',
-            f'Expires in {days_left} days.' + path_note,
+            f'Expires in {days_left} days.' + issuer_note,
             fix_commands=['sudo certbot renew'],
         )
-    return _check('ssl_cert', 'SSL certificate', True, 'ok', f'Valid ({days_left} days remaining).' + path_note)
+    return _check('ssl_cert', 'SSL certificate', True, 'ok', f'Valid ({days_left} days remaining).' + issuer_note)
 
 
 def check_code_stale():

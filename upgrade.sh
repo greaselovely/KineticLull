@@ -495,7 +495,6 @@ sudo rm -f "/etc/sudoers.d/kineticlull-nginx" 2>/dev/null || true
 cat <<SUDOEOF | sudo tee "${SUDOERS_FILE}" > /dev/null
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -t
-${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -T
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart kineticlull
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/usermod -aG adm ${CURRENT_USER}
