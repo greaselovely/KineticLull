@@ -101,6 +101,39 @@ def check_cryptography():
         )
 
 
+def check_restart_helper():
+    """Ensure /usr/local/bin/kl-restart exists and is sudoable.
+
+    The web UI's Upgrade and Restart Services buttons depend on this helper.
+    Without it, those actions silently do nothing because the subprocess they
+    spawn gets killed by systemd when it kills the kineticlull cgroup.
+    """
+    path = '/usr/local/bin/kl-restart'
+    if not os.path.exists(path):
+        return _check(
+            'restart_helper', 'Restart helper', False, 'error',
+            f'{path} is missing.',
+            why='The Upgrade page and the Restart Services button depend on this helper. Without it, those buttons appear to work but nothing actually restarts (systemd kills the subprocess they spawn).',
+            fix_commands=['bash upgrade.sh  # installs the helper and its sudoers rule'],
+        )
+    # Verify we can actually sudo it (sudoers entry present).
+    try:
+        r = subprocess.run(
+            ['sudo', '-n', '-l', path],
+            capture_output=True, text=True, timeout=3,
+        )
+        if r.returncode != 0:
+            return _check(
+                'restart_helper', 'Restart helper', False, 'warning',
+                f'{path} exists but the app user cannot sudo it.',
+                why='Missing sudoers entry for this path. Upgrade/Restart buttons will fail.',
+                fix_commands=['bash upgrade.sh  # rewrites the sudoers file with the correct entries'],
+            )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return _check('restart_helper', 'Restart helper', True, 'ok', 'Installed and sudoable.')
+
+
 def check_sudoers():
     try:
         r = subprocess.run(['sudo', '-n', 'nginx', '-t'], capture_output=True, timeout=3)
@@ -222,6 +255,7 @@ def check_version_up_to_date():
 CHECKS = [
     check_code_stale,
     check_version_up_to_date,
+    check_restart_helper,
     check_nginx_log_readable,
     check_cryptography,
     check_sudoers,

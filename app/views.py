@@ -1972,11 +1972,20 @@ def upgrade_view(request):
         # uses `systemd-run` to launch the actual restart commands in a NEW
         # transient unit with its own cgroup. This survives systemd killing
         # the kineticlull cgroup we're currently running in.
-        subprocess.run(
+        if not os.path.exists('/usr/local/bin/kl-restart'):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Restart helper missing at /usr/local/bin/kl-restart. Run `bash upgrade.sh` on the server once to install it, then try again.',
+            })
+        r = subprocess.run(
             ['sudo', '-n', '/usr/local/bin/kl-restart'],
             capture_output=True, text=True, timeout=5,
         )
-
+        if r.returncode != 0:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Restart helper failed (rc={r.returncode}). Run `bash upgrade.sh` on the server to reinstall the sudoers rule, then try again.\n\n{(r.stderr or "").strip()}',
+            })
         return JsonResponse({'status': 'ok', 'message': 'Restarting...'})
 
     return render(request, 'upgrade.html', context)
@@ -2064,10 +2073,20 @@ def restart_services_view(request):
     os.makedirs(os.path.join(base_dir, 'media', 'branding'), exist_ok=True)
 
     log_activity(request, 'restart_services', '', 'Manual restart from web UI')
-    subprocess.run(
+    if not os.path.exists('/usr/local/bin/kl-restart'):
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Restart helper missing at /usr/local/bin/kl-restart. Run `bash upgrade.sh` on the server once to install it.',
+        })
+    r = subprocess.run(
         ['sudo', '-n', '/usr/local/bin/kl-restart'],
         capture_output=True, text=True, timeout=5,
     )
+    if r.returncode != 0:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Restart failed (rc={r.returncode}). {(r.stderr or "").strip()}',
+        })
     return JsonResponse({'status': 'ok'})
 
 
