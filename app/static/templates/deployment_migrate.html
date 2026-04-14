@@ -24,7 +24,7 @@
             <ul class="small text-muted mb-0">
                 <li>Backs up your current systemd service and authbind config</li>
                 <li>Installs Nginx (if not already installed)</li>
-                <li>Moves or generates self-signed SSL certificates</li>
+                <li>Moves existing certs, generates self-signed, or obtains a Let's Encrypt certificate</li>
                 <li>Writes Nginx config with SSL, security headers, and rate limiting</li>
                 <li>Updates the Gunicorn systemd service to bind to 127.0.0.1:8000</li>
                 <li>Restarts both services and runs a health check</li>
@@ -69,14 +69,40 @@
             <p class="small text-success mb-0">
                 <i class="bi bi-check-circle"></i> Certs found in <code>ssl/</code> directory. Will be reused.
             </p>
+            <input type="hidden" name="ssl_mode" value="existing">
             {% elif has_legacy_certs %}
             <p class="small text-info mb-0">
                 <i class="bi bi-info-circle"></i> Legacy certs found in project root. Will be moved to <code>ssl/</code>.
             </p>
+            <input type="hidden" name="ssl_mode" value="existing">
             {% else %}
-            <p class="small text-muted mb-0">
-                <i class="bi bi-info-circle"></i> No certs found. A new self-signed certificate will be generated.
-            </p>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="ssl_mode" id="ssl_selfsigned" value="selfsigned" checked>
+                <label class="form-check-label" for="ssl_selfsigned">
+                    Self-signed (internal/private networks)
+                </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="ssl_mode" id="ssl_letsencrypt" value="letsencrypt">
+                <label class="form-check-label" for="ssl_letsencrypt">
+                    Let's Encrypt (public FQDN, ports 80/443 reachable from internet)
+                </label>
+            </div>
+            <div id="letsencrypt_opts" class="mt-2 ms-4" style="display:none;">
+                <label for="letsencrypt_email" class="form-label small mb-1">Contact email (optional)</label>
+                <input type="email" name="letsencrypt_email" id="letsencrypt_email" class="form-control form-control-sm" placeholder="admin@example.com">
+                <div class="form-text">Used for renewal notices. Leave blank to register without an email.</div>
+            </div>
+            <script>
+                (function() {
+                    var opts = document.getElementById('letsencrypt_opts');
+                    document.querySelectorAll('input[name="ssl_mode"]').forEach(function(el) {
+                        el.addEventListener('change', function() {
+                            opts.style.display = (this.value === 'letsencrypt' && this.checked) ? 'block' : 'none';
+                        });
+                    });
+                })();
+            </script>
             {% endif %}
         </div>
 
