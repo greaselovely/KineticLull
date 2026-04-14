@@ -18,17 +18,30 @@ def _regenerate_blocklist():
     """Regenerate deploy/blocklist.conf from BlockedIP rows on startup.
 
     The file is NOT tracked in git (it's operator state that varies per install).
-    Re-creating it from the DB on every boot guarantees it exists after a pull
-    that would otherwise have removed the working-tree copy.
+    Re-creating it on every boot guarantees it exists after a pull that would
+    otherwise have removed the working-tree copy — nginx `include`s it and will
+    fail to start if it's missing.
+
+    Guarantees the file exists even if the DB isn't ready (e.g., during
+    migrations) by writing an empty file first, then attempting the sync.
     """
     import os
-    if not (os.environ.get('RUN_MAIN') == 'true' or 'gunicorn' in (os.environ.get('SERVER_SOFTWARE', '') + os.environ.get('_', ''))):
-        return
+    from django.conf import settings
+
+    blocklist_path = os.path.join(settings.BASE_DIR, 'deploy', 'blocklist.conf')
+    try:
+        os.makedirs(os.path.dirname(blocklist_path), exist_ok=True)
+        if not os.path.exists(blocklist_path):
+            with open(blocklist_path, 'w') as f:
+                pass  # empty file — valid nginx include target
+    except Exception:
+        pass
+
     try:
         from app.models import BlockedIP
         BlockedIP.sync_to_nginx()
     except Exception:
-        pass  # Don't crash startup if the DB isn't ready yet
+        pass  # DB may not be ready yet (e.g., mid-migration); empty file is enough
 
 
 def _start_daily_backup_scheduler():

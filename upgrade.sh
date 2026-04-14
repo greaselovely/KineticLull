@@ -105,6 +105,8 @@ restart_legacy_service() {
 
 restart_nginx_services() {
     ensure_nginx_traversal
+    # Ensure blocklist file exists — nginx config `include`s it. Missing file = failed restart.
+    [ -f "${PROJECT_DIR}/deploy/blocklist.conf" ] || touch "${PROJECT_DIR}/deploy/blocklist.conf"
     log "Restarting services..."
     if systemctl is-active --quiet "$PROJECT_NAME" 2>/dev/null; then
         sudo systemctl restart "$PROJECT_NAME"

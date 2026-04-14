@@ -1957,6 +1957,12 @@ def upgrade_view(request):
 
         os.makedirs(os.path.join(base_dir, 'media', 'branding'), exist_ok=True)
 
+        # Ensure blocklist file exists — nginx config `include`s it.
+        blocklist_file = os.path.join(base_dir, 'deploy', 'blocklist.conf')
+        if not os.path.exists(blocklist_file):
+            os.makedirs(os.path.dirname(blocklist_file), exist_ok=True)
+            open(blocklist_file, 'a').close()
+
         subprocess.Popen(
             ['bash', '-c', f'sleep 2 && {patch_cmds}sudo -n systemctl restart kineticlull; sudo -n systemctl restart nginx'],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
