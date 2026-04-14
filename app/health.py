@@ -117,9 +117,34 @@ def check_sudoers():
 
 
 def _resolve_cert_path():
-    """Find the actual SSL cert file by parsing any readable nginx config, with project ssl/ as fallback."""
+    """Find the actual SSL cert file.
+
+    Strategy (in order):
+    1. `sudo -n nginx -T` — dumps the full resolved config regardless of file perms.
+       Requires a sudoers entry (installed by upgrade.sh).
+    2. Direct reads of known config file paths (works if files are world-readable).
+    3. Recursive walk of /etc/nginx/ (works if any single file is readable).
+    4. Project-local fallback at <base>/ssl/cert.pem (legacy gunicorn_ssl mode).
+    """
     import re
     cert_re = re.compile(r'^\s*ssl_certificate\s+([^;]+);', re.MULTILINE)
+
+    # Pass 0: sudo -n nginx -T — authoritative and perm-independent.
+    try:
+        r = subprocess.run(
+            ['sudo', '-n', '/usr/sbin/nginx', '-T'],
+            capture_output=True, text=True, timeout=5,
+        )
+        if r.returncode == 0 and r.stdout:
+            for m in cert_re.finditer(r.stdout):
+                path = m.group(1).strip()
+                # Skip the Debian snakeoil default cert if referenced.
+                if 'snakeoil' in path:
+                    continue
+                if os.path.exists(path):
+                    return path, 'nginx -T (active config)'
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
 
     # Pass 1: known config locations.
     known = [
