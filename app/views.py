@@ -1963,15 +1963,18 @@ def upgrade_view(request):
             os.makedirs(os.path.dirname(blocklist_file), exist_ok=True)
             open(blocklist_file, 'a').close()
 
-        # IMPORTANT: start_new_session=True detaches the restart subprocess from
-        # the gunicorn worker's process group. Otherwise when systemd SIGTERMs the
-        # kineticlull cgroup during `systemctl restart`, the bash child dies too
-        # and the restart of nginx (and possibly kineticlull itself) never fires.
-        subprocess.Popen(
-            ['bash', '-c', f'sleep 2 && {patch_cmds}sudo -n systemctl restart kineticlull; sleep 3; sudo -n systemctl restart nginx'],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True,
-            close_fds=True,
+        # Apply any nginx config patches first (runs in our own process, before
+        # the cgroup gets SIGTERM'd).
+        if patch_cmds:
+            subprocess.run(['bash', '-c', patch_cmds], capture_output=True)
+
+        # Hand the restart off to systemd via /usr/local/bin/kl-restart, which
+        # uses `systemd-run` to launch the actual restart commands in a NEW
+        # transient unit with its own cgroup. This survives systemd killing
+        # the kineticlull cgroup we're currently running in.
+        subprocess.run(
+            ['sudo', '-n', '/usr/local/bin/kl-restart'],
+            capture_output=True, text=True, timeout=5,
         )
 
         return JsonResponse({'status': 'ok', 'message': 'Restarting...'})
@@ -2061,11 +2064,9 @@ def restart_services_view(request):
     os.makedirs(os.path.join(base_dir, 'media', 'branding'), exist_ok=True)
 
     log_activity(request, 'restart_services', '', 'Manual restart from web UI')
-    subprocess.Popen(
-        ['bash', '-c', 'sleep 2 && sudo -n systemctl restart kineticlull; sleep 3; sudo -n systemctl restart nginx'],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        start_new_session=True,
-        close_fds=True,
+    subprocess.run(
+        ['sudo', '-n', '/usr/local/bin/kl-restart'],
+        capture_output=True, text=True, timeout=5,
     )
     return JsonResponse({'status': 'ok'})
 

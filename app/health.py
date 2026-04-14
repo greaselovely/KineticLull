@@ -281,21 +281,29 @@ def _fix_nginx_log_add_user():
 
 
 def _fix_restart_kineticlull():
-    """Restart the kineticlull systemd service via the allowed sudoers rule.
+    """Trigger a full restart of kineticlull + nginx via the cgroup-escaping helper.
 
-    Detach from the gunicorn cgroup so the SIGTERM systemd sends during restart
-    doesn't kill this subprocess before it gets to run the command.
+    The helper (installed by upgrade.sh) uses systemd-run to launch the restart
+    in a new transient unit, so it survives systemd killing our own cgroup.
     """
     try:
-        subprocess.Popen(
-            ['bash', '-c', 'sleep 1 && sudo -n /usr/bin/systemctl restart kineticlull'],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True,
-            close_fds=True,
+        r = subprocess.run(
+            ['sudo', '-n', '/usr/local/bin/kl-restart'],
+            capture_output=True, text=True, timeout=5,
         )
-        return True, 'Restart triggered. Page will reconnect in a few seconds.'
-    except Exception as e:
-        return False, f'Failed to trigger restart: {e}'
+        if r.returncode == 0:
+            return True, 'Restart triggered. Page will reconnect in a few seconds.'
+        stderr = (r.stderr or '').strip()
+        return False, (
+            f'Restart helper failed (rc={r.returncode}).\n\n'
+            f'Most likely the helper isn\'t installed yet — run `bash upgrade.sh` once on the server '
+            f'to install /usr/local/bin/kl-restart and the matching sudoers entry.\n\n'
+            f'stderr:\n{stderr}'
+        )
+    except FileNotFoundError:
+        return False, 'sudo not found on PATH.'
+    except subprocess.TimeoutExpired:
+        return False, 'Restart helper timed out.'
 
 
 FIXES = {
