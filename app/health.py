@@ -96,12 +96,36 @@ def check_sudoers():
     )
 
 
+def _resolve_cert_path():
+    """Find the actual SSL cert file by parsing the active nginx config, with project ssl/ as fallback."""
+    import re
+    for conf in ('/etc/nginx/sites-enabled/kineticlull',
+                 '/etc/nginx/sites-available/kineticlull',
+                 '/etc/nginx/conf.d/kineticlull.conf'):
+        try:
+            with open(conf) as f:
+                text = f.read()
+        except (FileNotFoundError, PermissionError):
+            continue
+        m = re.search(r'^\s*ssl_certificate\s+([^;]+);', text, re.MULTILINE)
+        if m:
+            path = m.group(1).strip()
+            # Resolve symlinks and return the real path if it exists.
+            if os.path.exists(path):
+                return path, conf
+    # Fallback: legacy gunicorn_ssl mode uses <project>/ssl/cert.pem directly
+    fallback = os.path.join(settings.BASE_DIR, 'ssl', 'cert.pem')
+    if os.path.exists(fallback):
+        return fallback, 'ssl/cert.pem'
+    return None, None
+
+
 def check_ssl_cert():
-    cert_path = os.path.join(settings.BASE_DIR, 'ssl', 'cert.pem')
-    if not os.path.exists(cert_path):
+    cert_path, source = _resolve_cert_path()
+    if not cert_path:
         return _check(
             'ssl_cert', 'SSL certificate', True, 'info',
-            'No cert found at ssl/cert.pem.',
+            'No cert found. Nginx may not be configured with SSL on this install.',
         )
     try:
         r = subprocess.run(
@@ -127,10 +151,11 @@ def check_ssl_cert():
         return _check('ssl_cert', 'SSL certificate', False, 'warning',
                       f'Could not parse cert expiry: {e}')
 
+    path_note = f' Using {cert_path}.'
     if days_left < 0:
         return _check(
             'ssl_cert', 'SSL certificate', False, 'error',
-            f'Expired {-days_left} days ago.',
+            f'Expired {-days_left} days ago.' + path_note,
             why='Browsers reject the connection. If HSTS is enabled the site is effectively unreachable until renewed.',
             fix_commands=[
                 'sudo certbot renew  # Let\'s Encrypt',
@@ -140,10 +165,10 @@ def check_ssl_cert():
     if days_left < 7:
         return _check(
             'ssl_cert', 'SSL certificate', False, 'warning',
-            f'Expires in {days_left} days.',
+            f'Expires in {days_left} days.' + path_note,
             fix_commands=['sudo certbot renew'],
         )
-    return _check('ssl_cert', 'SSL certificate', True, 'ok', f'Valid ({days_left} days remaining).')
+    return _check('ssl_cert', 'SSL certificate', True, 'ok', f'Valid ({days_left} days remaining).' + path_note)
 
 
 CHECKS = [
