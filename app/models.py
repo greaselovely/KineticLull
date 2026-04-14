@@ -271,7 +271,7 @@ class BlockedIP(models.Model):
         window_start = timezone.now() - timedelta(seconds=app_settings.autoblock_window_seconds)
         hit_count = ActivityLog.objects.filter(
             ip_address=ip_address,
-            action__in=['not_found', 'edl_not_found', 'edl_access'],
+            action__in=['not_found', 'edl_not_found', 'edl_access', 'login_failed'],
             created_at__gte=window_start,
         ).count()
 

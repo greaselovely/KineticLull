@@ -8,6 +8,7 @@ class EdlConfig(AppConfig):
     def ready(self):
         from django.db.models.signals import post_migrate
         post_migrate.connect(ensure_superuser_group, sender=self)
+        from . import signals  # noqa: F401 — registers auth signal receivers
         _start_daily_backup_scheduler()
         _patch_nginx_config()
 

@@ -416,10 +416,37 @@ ENVEOF
 fi
 
 # Step 1: Pull latest code
+# Protect db and .env from git operations — older installs may still track these
 log "Pulling latest code..."
+DB_PROTECTED=false
+if [ -f "db.sqlite3" ]; then
+    cp "db.sqlite3" "db.sqlite3.upgrade_protect"
+    DB_PROTECTED=true
+fi
+ENV_PROTECTED=false
+if [ -f "project/.env" ]; then
+    cp "project/.env" "project/.env.upgrade_protect"
+    ENV_PROTECTED=true
+fi
+
+# Drop any local tracked-file changes so pull can't conflict
+git checkout -- . 2>>"${LOGFILE}" || true
 if ! git pull 2>>"${LOGFILE}"; then
+    # Restore protected files before exiting
+    $DB_PROTECTED && mv "db.sqlite3.upgrade_protect" "db.sqlite3"
+    $ENV_PROTECTED && mv "project/.env.upgrade_protect" "project/.env"
     warn "git pull failed. Resolve conflicts and try again."
     exit 1
+fi
+
+# Restore protected files — git pull may have deleted them
+if $DB_PROTECTED; then
+    mv "db.sqlite3.upgrade_protect" "db.sqlite3"
+    ok "Database preserved."
+fi
+if $ENV_PROTECTED; then
+    mv "project/.env.upgrade_protect" "project/.env"
+    ok "Environment config preserved."
 fi
 
 # Step 2: Install/update dependencies

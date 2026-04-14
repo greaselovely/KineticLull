@@ -1817,10 +1817,29 @@ def upgrade_view(request):
                 if f.stat().st_mtime < cutoff_ts:
                     f.unlink()
 
-        # Step 1: git pull
+        # Step 1: git pull — protect db and .env from older installs that still track them
+        db_protect = os.path.join(base_dir, 'db.sqlite3.upgrade_protect')
+        env_protect = os.path.join(base_dir, 'project', '.env.upgrade_protect')
+        if db_path.exists():
+            import shutil as _shutil
+            _shutil.copy2(db_path, db_protect)
+        env_path = Path(base_dir) / 'project' / '.env'
+        if env_path.exists():
+            import shutil as _shutil
+            _shutil.copy2(env_path, env_protect)
+
+        # Drop local tracked-file changes so pull can't conflict
+        subprocess.run(['git', 'checkout', '--', '.'], cwd=base_dir, capture_output=True)
         result = subprocess.run(
             ['git', 'pull'], cwd=base_dir, capture_output=True, text=True,
         )
+
+        # Restore protected files regardless of pull outcome
+        if os.path.exists(db_protect):
+            os.replace(db_protect, db_path)
+        if os.path.exists(env_protect):
+            os.replace(env_protect, env_path)
+
         if result.returncode != 0:
             messages.error(request, 'Upgrade failed. Please try again or upgrade manually.')
             logger.error(f"Upgrade git pull failed for {request.user.email}: {result.stderr.strip()}")
