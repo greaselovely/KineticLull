@@ -8,6 +8,7 @@ MM.jpeg
 *.bak
 test.sh
 deploy/migrate_to_nginx.sh
+deploy/blocklist.conf
 .migration_backup_*/
 ssl/
 .nginx_parse_state

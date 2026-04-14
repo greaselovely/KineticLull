@@ -11,6 +11,24 @@ class EdlConfig(AppConfig):
         from . import signals  # noqa: F401 — registers auth signal receivers
         _start_daily_backup_scheduler()
         _patch_nginx_config()
+        _regenerate_blocklist()
+
+
+def _regenerate_blocklist():
+    """Regenerate deploy/blocklist.conf from BlockedIP rows on startup.
+
+    The file is NOT tracked in git (it's operator state that varies per install).
+    Re-creating it from the DB on every boot guarantees it exists after a pull
+    that would otherwise have removed the working-tree copy.
+    """
+    import os
+    if not (os.environ.get('RUN_MAIN') == 'true' or 'gunicorn' in (os.environ.get('SERVER_SOFTWARE', '') + os.environ.get('_', ''))):
+        return
+    try:
+        from app.models import BlockedIP
+        BlockedIP.sync_to_nginx()
+    except Exception:
+        pass  # Don't crash startup if the DB isn't ready yet
 
 
 def _start_daily_backup_scheduler():

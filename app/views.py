@@ -1858,16 +1858,21 @@ def upgrade_view(request):
                 if f.stat().st_mtime < cutoff_ts:
                     f.unlink()
 
-        # Step 1: git pull — protect db and .env from older installs that still track them
+        # Step 1: git pull — protect state files (db, env, blocklist.conf) from older
+        # installs that still track them. These files represent operator state and
+        # must not be touched by the pull.
         db_protect = os.path.join(base_dir, 'db.sqlite3.upgrade_protect')
         env_protect = os.path.join(base_dir, 'project', '.env.upgrade_protect')
-        if db_path.exists():
-            import shutil as _shutil
+        blocklist_path = os.path.join(base_dir, 'deploy', 'blocklist.conf')
+        blocklist_protect = os.path.join(base_dir, 'deploy', 'blocklist.conf.upgrade_protect')
+        import shutil as _shutil
+        if Path(db_path).exists():
             _shutil.copy2(db_path, db_protect)
         env_path = Path(base_dir) / 'project' / '.env'
         if env_path.exists():
-            import shutil as _shutil
             _shutil.copy2(env_path, env_protect)
+        if os.path.exists(blocklist_path):
+            _shutil.copy2(blocklist_path, blocklist_protect)
 
         # Drop local tracked-file changes so pull can't conflict
         subprocess.run(['git', 'checkout', '--', '.'], cwd=base_dir, capture_output=True)
@@ -1880,6 +1885,8 @@ def upgrade_view(request):
             os.replace(db_protect, db_path)
         if os.path.exists(env_protect):
             os.replace(env_protect, env_path)
+        if os.path.exists(blocklist_protect):
+            os.replace(blocklist_protect, blocklist_path)
 
         if result.returncode != 0:
             messages.error(request, 'Upgrade failed. Please try again or upgrade manually.')

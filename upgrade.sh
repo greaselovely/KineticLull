@@ -428,6 +428,11 @@ if [ -f "project/.env" ]; then
     cp "project/.env" "project/.env.upgrade_protect"
     ENV_PROTECTED=true
 fi
+BLOCKLIST_PROTECTED=false
+if [ -f "deploy/blocklist.conf" ]; then
+    cp "deploy/blocklist.conf" "deploy/blocklist.conf.upgrade_protect"
+    BLOCKLIST_PROTECTED=true
+fi
 
 # Drop any local tracked-file changes so pull can't conflict
 git checkout -- . 2>>"${LOGFILE}" || true
@@ -435,6 +440,7 @@ if ! git pull 2>>"${LOGFILE}"; then
     # Restore protected files before exiting
     $DB_PROTECTED && mv "db.sqlite3.upgrade_protect" "db.sqlite3"
     $ENV_PROTECTED && mv "project/.env.upgrade_protect" "project/.env"
+    $BLOCKLIST_PROTECTED && mv "deploy/blocklist.conf.upgrade_protect" "deploy/blocklist.conf"
     warn "git pull failed. Resolve conflicts and try again."
     exit 1
 fi
@@ -447,6 +453,10 @@ fi
 if $ENV_PROTECTED; then
     mv "project/.env.upgrade_protect" "project/.env"
     ok "Environment config preserved."
+fi
+if $BLOCKLIST_PROTECTED; then
+    mv "deploy/blocklist.conf.upgrade_protect" "deploy/blocklist.conf"
+    ok "Blocklist preserved."
 fi
 
 # Step 2: Install/update dependencies
