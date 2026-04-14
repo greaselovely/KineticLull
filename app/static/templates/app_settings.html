@@ -214,10 +214,47 @@
 
         <div class="card mb-3">
             <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">Failed-Login Block</h6>
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="failed_login_block_enabled" id="failed_login_block_enabled"
+                            {% if app_settings.failed_login_block_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="failed_login_block_enabled">Enable Failed-Login Block</label>
+                    </div>
+                    <div class="form-text">Block IPs with repeated failed logins. A successful login resets the counter for that IP.</div>
+                </div>
+                <div class="row g-3">
+                    <div class="col-4">
+                        <label for="failed_login_block_threshold" class="form-label">Block After</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" name="failed_login_block_threshold" id="failed_login_block_threshold" class="form-control" value="{{ app_settings.failed_login_block_threshold }}" min="1" max="100">
+                            <span class="input-group-text">fails</span>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <label for="failed_login_warning_threshold" class="form-label">Warn After</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" name="failed_login_warning_threshold" id="failed_login_warning_threshold" class="form-control" value="{{ app_settings.failed_login_warning_threshold }}" min="1" max="100">
+                            <span class="input-group-text">fails</span>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <label for="failed_login_window_hours" class="form-label">Window</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" name="failed_login_window_hours" id="failed_login_window_hours" class="form-control" value="{{ app_settings.failed_login_window_hours }}" min="1" max="720">
+                            <span class="input-group-text">hrs</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
                 <h6 class="text-muted text-uppercase mb-3">Email (Resend)</h6>
                 <div class="mb-3">
-                    <label for="resend_api_key" class="form-label">Resend API Key</label>
-                    <input type="password" name="resend_api_key" id="resend_api_key" class="form-control form-control-sm" value="{{ app_settings.resend_api_key }}" placeholder="re_...">
+                    <label for="mail_service_token" class="form-label">Resend API Key</label>
+                    <input type="password" name="mail_service_token" id="mail_service_token" class="form-control form-control-sm" value="{{ app_settings.resend_api_key }}" placeholder="re_..." autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
                 </div>
                 <div class="mb-3">
                     <label for="resend_from_name" class="form-label">From Name</label>

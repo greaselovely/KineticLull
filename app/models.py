@@ -4,6 +4,7 @@ import secrets
 
 from django.db import models
 from django.conf import settings
+from .crypto import EncryptedCharField
 from django.contrib.auth.models import Group
 
 class ExtDynLists(models.Model):
@@ -158,8 +159,14 @@ class AppSettings(models.Model):
     autoblock_window_seconds = models.PositiveIntegerField(default=60, verbose_name='Auto-Block Window (seconds)')
     autoblock_duration_minutes = models.PositiveIntegerField(default=0, verbose_name='Auto-Block Duration (minutes, 0=permanent)')
 
+    # Failed-login block (separate rule from general auto-block)
+    failed_login_block_enabled = models.BooleanField(default=True, verbose_name='Enable Failed-Login Block')
+    failed_login_block_threshold = models.PositiveIntegerField(default=3, verbose_name='Failed-Login Block Threshold')
+    failed_login_warning_threshold = models.PositiveIntegerField(default=2, verbose_name='Failed-Login Warning Threshold')
+    failed_login_window_hours = models.PositiveIntegerField(default=24, verbose_name='Failed-Login Window (hours)')
+
     # Email (Resend)
-    resend_api_key = models.CharField(max_length=255, blank=True, default='', verbose_name='Resend API Key')
+    resend_api_key = EncryptedCharField(max_length=512, blank=True, default='', verbose_name='Resend API Key')
     resend_from_name = models.CharField(max_length=255, blank=True, default='', verbose_name='From Name')
     resend_from_email = models.EmailField(max_length=255, blank=True, default='', verbose_name='From Email Address')
 
@@ -271,7 +278,7 @@ class BlockedIP(models.Model):
         window_start = timezone.now() - timedelta(seconds=app_settings.autoblock_window_seconds)
         hit_count = ActivityLog.objects.filter(
             ip_address=ip_address,
-            action__in=['not_found', 'edl_not_found', 'edl_access', 'login_failed'],
+            action__in=['not_found', 'edl_not_found', 'edl_access'],
             created_at__gte=window_start,
         ).count()
 
@@ -289,6 +296,57 @@ class BlockedIP(models.Model):
             cls.sync_to_nginx()
             return True
         return False
+
+    @classmethod
+    def count_recent_failed_logins(cls, ip_address):
+        """Count login_failed events from an IP since the later of: window start, or last successful login from that IP."""
+        from django.utils import timezone
+        from datetime import timedelta
+
+        app_settings = AppSettings.load()
+        cutoff = timezone.now() - timedelta(hours=app_settings.failed_login_window_hours)
+
+        last_success = (
+            ActivityLog.objects.filter(action='login', ip_address=ip_address)
+            .order_by('-created_at')
+            .values_list('created_at', flat=True)
+            .first()
+        )
+        if last_success and last_success > cutoff:
+            cutoff = last_success
+
+        return ActivityLog.objects.filter(
+            action='login_failed',
+            ip_address=ip_address,
+            created_at__gte=cutoff,
+        ).count()
+
+    @classmethod
+    def check_failed_login_block(cls, ip_address):
+        """Apply the failed-login block rule. Returns 'blocked', 'warning', or None."""
+        app_settings = AppSettings.load()
+        if not app_settings.failed_login_block_enabled:
+            return None
+        if WhitelistedIP.is_whitelisted(ip_address):
+            return None
+        if cls.objects.filter(ip_address=ip_address).exists():
+            return None
+
+        count = cls.count_recent_failed_logins(ip_address)
+
+        if count >= app_settings.failed_login_block_threshold:
+            cls.objects.create(
+                ip_address=ip_address,
+                reason=f'Auto-blocked: {count} failed logins in {app_settings.failed_login_window_hours}h',
+                auto_blocked=True,
+            )
+            cls.sync_to_nginx()
+            return 'blocked'
+
+        if count >= app_settings.failed_login_warning_threshold:
+            return 'warning'
+
+        return None
 
 
 class WhitelistedIP(models.Model):

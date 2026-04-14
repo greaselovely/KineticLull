@@ -121,6 +121,17 @@
                     </a>
                 </li>
                 <li>
+                    <a href="{% url 'app:system_health' %}" title="System Health">
+                        <i class="bi bi-heart-pulse"></i>
+                        <span class="nav-text">
+                            Health
+                            {% if health_issues_count > 0 %}
+                            <span class="badge bg-danger rounded-pill ms-1">{{ health_issues_count }}</span>
+                            {% endif %}
+                        </span>
+                    </a>
+                </li>
+                <li>
                     <a href="{% url 'app:upgrade' %}" title="Upgrade">
                         <i class="bi bi-arrow-up-circle"></i>
                         <span class="nav-text">Upgrade</span>

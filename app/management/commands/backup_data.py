@@ -21,6 +21,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db.models.fields.files import FieldFile
 
+from app.crypto import EncryptedCharField, encrypt as _encrypt_secret
+
 
 class Command(BaseCommand):
     help = 'Export a full data backup (users, EDLs, URLs, OTFs, settings, etc.)'
@@ -139,7 +141,10 @@ class Command(BaseCommand):
             if field.name == 'id':
                 continue
             value = getattr(s, field.name)
-            if isinstance(value, FieldFile):
+            if isinstance(field, EncryptedCharField):
+                # Store ciphertext so the backup doesn't leak the plaintext secret.
+                settings_dict[field.name] = _encrypt_secret(value or '')
+            elif isinstance(value, FieldFile):
                 settings_dict[field.name] = value.name or ''
             elif hasattr(value, 'isoformat'):
                 settings_dict[field.name] = value.isoformat()

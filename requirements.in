@@ -3,3 +3,5 @@ django-debug_toolbar
 whitenoise
 python-dotenv
 gunicorn>=22.0
+cryptography
+resend

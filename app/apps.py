@@ -54,10 +54,23 @@ def _start_daily_backup_scheduler():
                 pass
             time.sleep(300)
 
+    def _rejection_parser_loop():
+        """Parse nginx access log for 403s every 5 minutes."""
+        time.sleep(30)
+        while True:
+            try:
+                from django.core.management import call_command
+                call_command('parse_nginx_rejections')
+            except Exception:
+                pass
+            time.sleep(300)
+
     t = threading.Thread(target=_backup_loop, daemon=True)
     t.start()
     t2 = threading.Thread(target=_cleanup_loop, daemon=True)
     t2.start()
+    t3 = threading.Thread(target=_rejection_parser_loop, daemon=True)
+    t3.start()
 
 
 def _patch_nginx_config():

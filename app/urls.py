@@ -3,7 +3,7 @@ from django.urls import re_path
 from django.conf import settings
 from django.views.static import serve
 from django.conf.urls.static import static
-from django.contrib.auth.views import LoginView
+from .views import KineticLullLoginView
 from django.views.generic.base import RedirectView
 
 from . import views
@@ -21,7 +21,7 @@ urlpatterns = [
     path('add/', views.create_new_edl, name="new_edl"),
     path('delete/<int:item_id>/', views.delete_item, name='delete_item'),
     path('download_ip_fqdn/<int:item_id>/', views.download_ip_fqdn, name='download_ip_fqdn'),
-    path('login/', LoginView.as_view(template_name='login.html'), name='login'),
+    path('login/', KineticLullLoginView.as_view(template_name='login.html'), name='login'),
     path('accounts/profile/', views.profile_view, name='profile'),
     path('edit-profile/', views.edit_profile_view, name='edit_profile'),
     path('logout/', views.logout_view, name='logout'),
@@ -67,6 +67,7 @@ urlpatterns = [
     path('files/<str:token>/delete/', views.otf_delete_view, name='otf_delete'),
     path('f/<str:token>/', views.otf_download_view, name='otf_download'),
     path('s/<str:short_code>/', redirect_short_url, name='redirect_short_url'),
+    path('system-health/', views.system_health_view, name='system_health'),
     path('favicon.ico', RedirectView.as_view(url='/static/images/favicon.ico', permanent=True)),
     # keep this at the bottom
     re_path(r'^(?P<auto_url>[\w.-]+)/?$', views.show_ip_fqdn, name='show_ip_fqdn'),

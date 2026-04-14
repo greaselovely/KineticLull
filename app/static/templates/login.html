@@ -11,6 +11,10 @@
         <div class="alert alert-danger">Your email and password didn't match. Please try again.</div>
         {% endif %}
 
+        {% if failed_login_warning %}
+        <div class="alert alert-warning">Warning</div>
+        {% endif %}
+
         <form method="post" action="{% url 'app:login' %}">
             {% csrf_token %}
             <div class="mb-3">

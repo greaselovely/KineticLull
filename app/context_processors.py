@@ -10,6 +10,16 @@ def inbox_count(request):
     return {'message_count': 0}
 
 
+def health_summary(request):
+    if request.user.is_authenticated and request.user.is_superuser:
+        try:
+            from .health import count_issues
+            return {'health_issues_count': count_issues()}
+        except Exception:
+            return {'health_issues_count': 0}
+    return {'health_issues_count': 0}
+
+
 def app_settings(request):
     try:
         from django.conf import settings as django_settings

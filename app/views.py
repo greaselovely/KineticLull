@@ -12,6 +12,7 @@ from django.core.exceptions import PermissionDenied
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import LoginView
 from django.views.decorators.http import require_http_methods
 from django.shortcuts import render, redirect, get_object_or_404
 
@@ -51,6 +52,25 @@ def safe_referer_or_index(request):
         if parsed.hostname == allowed_host:
             return referer
     return reverse('app:index')
+
+
+class KineticLullLoginView(LoginView):
+    """Login view that exposes a warning flag when the client IP is near the failed-login block threshold."""
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from .models import AppSettings, BlockedIP
+        app_settings = AppSettings.load()
+        show_warning = False
+        if app_settings.failed_login_block_enabled:
+            ip = get_client_ip(self.request)
+            if ip:
+                count = BlockedIP.count_recent_failed_logins(ip)
+                if (count >= app_settings.failed_login_warning_threshold
+                        and count < app_settings.failed_login_block_threshold):
+                    show_warning = True
+        context['failed_login_warning'] = show_warning
+        return context
 
 
 def compute_db_checksum():
@@ -1301,8 +1321,29 @@ def app_settings_view(request):
                 setattr(app_settings, field_name, val)
                 changes.append(f'{field_name}={val}')
 
+        # Failed-login block settings
+        new_fl_enabled = request.POST.get('failed_login_block_enabled') == 'on'
+        if new_fl_enabled != app_settings.failed_login_block_enabled:
+            app_settings.failed_login_block_enabled = new_fl_enabled
+            changes.append(f'failed_login_block_enabled={new_fl_enabled}')
+
+        for field_name, min_val, max_val, default in [
+            ('failed_login_block_threshold', 1, 100, 3),
+            ('failed_login_warning_threshold', 1, 100, 2),
+            ('failed_login_window_hours', 1, 720, 24),
+        ]:
+            try:
+                val = int(request.POST.get(field_name, default))
+                val = max(min_val, min(val, max_val))
+            except (ValueError, TypeError):
+                val = default
+            old_val = getattr(app_settings, field_name)
+            if val != old_val:
+                setattr(app_settings, field_name, val)
+                changes.append(f'{field_name}={val}')
+
         # Email / File settings
-        new_resend_key = request.POST.get('resend_api_key', '').strip()
+        new_resend_key = request.POST.get('mail_service_token', '').strip()
         if new_resend_key != app_settings.resend_api_key:
             app_settings.resend_api_key = new_resend_key
             changes.append('resend_api_key=***')
@@ -2087,6 +2128,20 @@ def deployment_status_view(request):
 
 
 @login_required
+def system_health_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    from . import health
+    if request.method == 'POST':
+        fix_id = request.POST.get('fix_id', '').strip()
+        ok, output = health.run_fix(fix_id)
+        log_activity(request, 'system_health_fix', target=fix_id, detail=('ok' if ok else 'failed'))
+        return JsonResponse({'ok': ok, 'output': output})
+    checks = health.run_all(force=True)
+    return render(request, 'system_health.html', {'checks': checks})
+
+
+@login_required
 def deployment_migrate_view(request):
     if not request.user.is_superuser:
         raise PermissionDenied
@@ -2182,6 +2237,7 @@ def deployment_migrate_view(request):
             python_path=python_path,
             ssl_mode=ssl_mode,
             letsencrypt_email=letsencrypt_email,
+            app_user=current_user,
         )
 
         os.makedirs(deploy_dir, exist_ok=True)
@@ -2430,7 +2486,7 @@ def unblock_ip_view(request):
     return JsonResponse({'status': 'unblocked', 'ip': ip})
 
 
-def _generate_migration_script(base_dir, server_name, cert_dir, nginx_config, svc_config, python_path, ssl_mode='selfsigned', letsencrypt_email=''):
+def _generate_migration_script(base_dir, server_name, cert_dir, nginx_config, svc_config, python_path, ssl_mode='selfsigned', letsencrypt_email='', app_user=''):
     """Generate a self-contained bash script for Nginx migration."""
     le_email_arg = f'--email {letsencrypt_email}' if letsencrypt_email else '--register-unsafely-without-email'
     return f'''#!/bin/bash
@@ -2445,6 +2501,7 @@ PROJECT_NAME="kineticlull"
 CERT_DIR="{cert_dir}"
 SERVER_NAME="{server_name}"
 SSL_MODE="{ssl_mode}"
+APP_USER="{app_user}"
 SERVICE_FILE="/etc/systemd/system/${{PROJECT_NAME}}.service"
 PYTHON="{python_path}"
 LOGFILE="${{PROJECT_DIR}}/migration.log"
@@ -2656,6 +2713,16 @@ cat > "$SERVICE_FILE" << 'SVCEOF'
 {svc_config}
 SVCEOF
 ok "Systemd service updated."
+
+# ── Step 5.5: Grant app user read access to nginx access log (for rejection counter) ──
+if [ -n "$APP_USER" ] && getent group adm >/dev/null 2>&1; then
+    if id -nG "$APP_USER" 2>/dev/null | tr ' ' '\\n' | grep -qx adm; then
+        log "App user $APP_USER already in adm group."
+    else
+        log "Adding $APP_USER to adm group for nginx log access..."
+        usermod -aG adm "$APP_USER" 2>>"${{LOGFILE}}" || warn "Could not add $APP_USER to adm — rejection counter may not populate."
+    fi
+fi
 
 # ── Step 6: Restart services ──
 log "Restarting services..."

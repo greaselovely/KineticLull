@@ -485,10 +485,22 @@ ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/nginx -t
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart kineticlull
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx
+${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/sbin/usermod -aG adm ${CURRENT_USER}
 ${CURRENT_USER} ALL=(ALL) NOPASSWD: /usr/bin/sed -i *
 SUDOEOF
 sudo chmod 440 "${SUDOERS_FILE}"
 ok "Sudoers rules updated."
+
+# Step 5.5: Ensure app user can read nginx access log (for rejection counter)
+if getent group adm >/dev/null 2>&1; then
+    if id -nG "${CURRENT_USER}" 2>/dev/null | tr ' ' '\n' | grep -qx adm; then
+        :
+    else
+        log "Adding ${CURRENT_USER} to adm group for nginx log access..."
+        sudo usermod -aG adm "${CURRENT_USER}" 2>>"${LOGFILE}" || warn "Could not add ${CURRENT_USER} to adm — rejection counter may not populate."
+        ok "Added ${CURRENT_USER} to adm. Restart required for group change to take effect."
+    fi
+fi
 
 # Step 6: Detect deployment mode & offer Nginx migration
 CURRENT_MODE=$(detect_deployment_mode)

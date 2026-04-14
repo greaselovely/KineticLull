@@ -27,4 +27,4 @@ def handle_user_login_failed(sender, credentials, request=None, **kwargs):
     log_activity(request, 'login_failed', target=attempted, detail='Invalid credentials')
     ip = get_client_ip(request)
     if ip:
-        BlockedIP.check_autoblock(ip)
+        BlockedIP.check_failed_login_block(ip)

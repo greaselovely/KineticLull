@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% block title %}- System Health{% endblock %}
+{% block content %}
+<div class="content-card" style="max-width: 900px;">
+    <h3>System Health</h3>
+    <p class="text-muted small mt-2 mb-3">Conditions the app cannot auto-remediate. Each warning lists the exact command to run — and, where safe, a one-click fix.</p>
+
+    {% for check in checks %}
+    <div class="card mb-3 {% if check.severity == 'error' %}border-danger{% elif check.severity == 'warning' %}border-warning{% elif check.severity == 'ok' %}border-success{% endif %}">
+        <div class="card-body">
+            <div class="d-flex align-items-start justify-content-between">
+                <div>
+                    <h6 class="mb-1">
+                        {% if check.ok %}
+                            {% if check.severity == 'info' %}
+                            <i class="bi bi-info-circle text-muted me-1"></i>
+                            {% else %}
+                            <i class="bi bi-check-circle text-success me-1"></i>
+                            {% endif %}
+                        {% elif check.severity == 'error' %}
+                            <i class="bi bi-exclamation-octagon text-danger me-1"></i>
+                        {% else %}
+                            <i class="bi bi-exclamation-triangle text-warning me-1"></i>
+                        {% endif %}
+                        {{ check.name }}
+                    </h6>
+                    <div class="small">{{ check.message }}</div>
+                    {% if check.why %}
+                    <div class="small text-muted mt-1">{{ check.why }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if check.fix_commands %}
+            <div class="mt-3">
+                <div class="small text-muted mb-1">Run on the server:</div>
+                {% for cmd in check.fix_commands %}
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <pre class="flex-grow-1 mb-0 p-2 bg-dark text-light rounded" style="font-size: 0.85rem;"><code>{{ cmd }}</code></pre>
+                    <button type="button" class="btn btn-sm btn-outline-secondary copy-btn" data-cmd="{{ cmd }}" title="Copy">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+                {% endfor %}
+
+                {% if check.runnable_fix_id %}
+                <div class="mt-2">
+                    <button type="button" class="btn btn-sm btn-warning run-fix-btn" data-fix-id="{{ check.runnable_fix_id }}" data-check-id="{{ check.id }}">
+                        <i class="bi bi-lightning-charge me-1"></i>Run Fix
+                    </button>
+                    <span class="small text-muted ms-2">Executes the commands above via the app's sudoers rules.</span>
+                </div>
+                <div class="mt-2 fix-output small" id="fix-output-{{ check.id }}" style="display:none;"></div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <a href="{% url 'app:index' %}" class="btn btn-outline-secondary btn-sm mt-2">Back</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    document.querySelectorAll('.copy-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            navigator.clipboard.writeText(btn.getAttribute('data-cmd') || '').then(function() {
+                var orig = btn.innerHTML;
+                btn.innerHTML = '<i class="bi bi-check2"></i>';
+                setTimeout(function() { btn.innerHTML = orig; }, 1200);
+            });
+        });
+    });
+
+    document.querySelectorAll('.run-fix-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var fixId = btn.getAttribute('data-fix-id');
+            var checkId = btn.getAttribute('data-check-id');
+            var outEl = document.getElementById('fix-output-' + checkId);
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Running...';
+            outEl.style.display = 'block';
+            outEl.innerHTML = '<div class="text-muted">Running...</div>';
+
+            var formData = new FormData();
+            formData.append('fix_id', fixId);
+
+            fetch('{% url "app:system_health" %}', {
+                method: 'POST',
+                headers: {'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')},
+                body: formData,
+            }).then(function(r) { return r.json(); }).then(function(data) {
+                var cls = data.ok ? 'alert-success' : 'alert-danger';
+                var icon = data.ok ? 'check2-circle' : 'exclamation-octagon';
+                outEl.innerHTML = '<div class="alert ' + cls + ' mb-0"><i class="bi bi-' + icon + ' me-1"></i><pre class="mb-0" style="white-space: pre-wrap;">' + (data.output || '(no output)') + '</pre></div>';
+                btn.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Run Fix';
+                btn.disabled = false;
+                if (data.ok) {
+                    setTimeout(function() { window.location.reload(); }, 2500);
+                }
+            }).catch(function(e) {
+                outEl.innerHTML = '<div class="alert alert-danger mb-0">Request failed: ' + e + '</div>';
+                btn.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Run Fix';
+                btn.disabled = false;
+            });
+        });
+    });
+})();
+</script>
+{% endblock %}
