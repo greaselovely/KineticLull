@@ -13,8 +13,28 @@ import os
 import subprocess
 import time
 from datetime import datetime
+from pathlib import Path
 
 from django.conf import settings
+
+
+# Captured at app.ready() — see app/apps.py. Used to detect when code on disk
+# diverges from what the running workers imported (stale workers after a pull).
+BOOT_VERSION = None
+BOOT_TIME = None
+
+
+def _current_version():
+    try:
+        return (Path(settings.BASE_DIR) / 'VERSION').read_text().strip()
+    except Exception:
+        return 'unknown'
+
+
+def set_boot_snapshot():
+    global BOOT_VERSION, BOOT_TIME
+    BOOT_VERSION = _current_version()
+    BOOT_TIME = time.time()
 
 
 _cache = {'results': None, 'ts': 0.0}
@@ -171,6 +191,23 @@ def check_ssl_cert():
     return _check('ssl_cert', 'SSL certificate', True, 'ok', f'Valid ({days_left} days remaining).' + path_note)
 
 
+def check_code_stale():
+    """Detect when code on disk is newer than what the running workers imported."""
+    if BOOT_VERSION is None:
+        return _check('code_stale', 'Running code', True, 'info', 'Boot snapshot not yet recorded.')
+    current = _current_version()
+    if current == BOOT_VERSION:
+        return _check('code_stale', 'Running code', True, 'ok', f'Workers running {current}.')
+    return _check(
+        'code_stale', 'Running code', False, 'error',
+        f'Workers running {BOOT_VERSION} but {current} is on disk.',
+        why='The code was updated after the last restart. Workers are still serving old Python. Restart required for the new code to take effect.',
+        fix_commands=['sudo systemctl restart kineticlull'],
+        runnable_fix_id='restart_kineticlull',
+        post_fix_note='Service restarted. The new code is now live. Your browser session will reconnect.',
+    )
+
+
 def check_version_up_to_date():
     """Flag when the installed VERSION doesn't match origin/main's VERSION."""
     from .views import get_current_version, get_remote_version
@@ -195,6 +232,7 @@ def check_version_up_to_date():
 
 
 CHECKS = [
+    check_code_stale,
     check_version_up_to_date,
     check_nginx_log_readable,
     check_cryptography,
@@ -254,8 +292,27 @@ def _fix_nginx_log_add_user():
         return False, 'Command timed out.'
 
 
+def _fix_restart_kineticlull():
+    """Restart the kineticlull systemd service via the allowed sudoers rule.
+
+    Detach from the gunicorn cgroup so the SIGTERM systemd sends during restart
+    doesn't kill this subprocess before it gets to run the command.
+    """
+    try:
+        subprocess.Popen(
+            ['bash', '-c', 'sleep 1 && sudo -n /usr/bin/systemctl restart kineticlull'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True,
+        )
+        return True, 'Restart triggered. Page will reconnect in a few seconds.'
+    except Exception as e:
+        return False, f'Failed to trigger restart: {e}'
+
+
 FIXES = {
     'nginx_log_add_user': _fix_nginx_log_add_user,
+    'restart_kineticlull': _fix_restart_kineticlull,
 }
 
 

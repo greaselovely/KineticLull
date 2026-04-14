@@ -1963,9 +1963,15 @@ def upgrade_view(request):
             os.makedirs(os.path.dirname(blocklist_file), exist_ok=True)
             open(blocklist_file, 'a').close()
 
+        # IMPORTANT: start_new_session=True detaches the restart subprocess from
+        # the gunicorn worker's process group. Otherwise when systemd SIGTERMs the
+        # kineticlull cgroup during `systemctl restart`, the bash child dies too
+        # and the restart of nginx (and possibly kineticlull itself) never fires.
         subprocess.Popen(
-            ['bash', '-c', f'sleep 2 && {patch_cmds}sudo -n systemctl restart kineticlull; sudo -n systemctl restart nginx'],
+            ['bash', '-c', f'sleep 2 && {patch_cmds}sudo -n systemctl restart kineticlull; sleep 3; sudo -n systemctl restart nginx'],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True,
         )
 
         return JsonResponse({'status': 'ok', 'message': 'Restarting...'})
@@ -2056,8 +2062,10 @@ def restart_services_view(request):
 
     log_activity(request, 'restart_services', '', 'Manual restart from web UI')
     subprocess.Popen(
-        ['bash', '-c', 'sleep 2 && sudo -n systemctl restart kineticlull; sudo -n systemctl restart nginx'],
+        ['bash', '-c', 'sleep 2 && sudo -n systemctl restart kineticlull; sleep 3; sudo -n systemctl restart nginx'],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        start_new_session=True,
+        close_fds=True,
     )
     return JsonResponse({'status': 'ok'})
 
