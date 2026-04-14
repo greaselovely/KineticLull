@@ -171,7 +171,31 @@ def check_ssl_cert():
     return _check('ssl_cert', 'SSL certificate', True, 'ok', f'Valid ({days_left} days remaining).' + path_note)
 
 
+def check_version_up_to_date():
+    """Flag when the installed VERSION doesn't match origin/main's VERSION."""
+    from .views import get_current_version, get_remote_version
+    try:
+        current = get_current_version()
+        latest = get_remote_version()
+    except Exception:
+        return _check('version', 'Version', True, 'info', 'Could not determine version state.')
+    if not latest:
+        return _check('version', 'Version', True, 'info', f'Version {current} — could not reach origin to check for updates.')
+    if current == latest:
+        return _check('version', 'Version', True, 'ok', f'Up to date ({current}).')
+    return _check(
+        'version', 'Version', False, 'warning',
+        f'Installed: {current} — available: {latest}.',
+        why='The code on disk is behind origin/main. Fixes and features you see in documentation or screenshots will not appear until you upgrade.',
+        fix_commands=[
+            'bash upgrade.sh  # CLI path',
+            '# Or: open the Upgrade page in the web UI and click Upgrade Now',
+        ],
+    )
+
+
 CHECKS = [
+    check_version_up_to_date,
     check_nginx_log_readable,
     check_cryptography,
     check_sudoers,
