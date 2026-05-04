@@ -96,11 +96,37 @@
                 var cls = data.ok ? 'alert-success' : 'alert-danger';
                 var icon = data.ok ? 'check2-circle' : 'exclamation-octagon';
                 outEl.innerHTML = '<div class="alert ' + cls + ' mb-0"><i class="bi bi-' + icon + ' me-1"></i><pre class="mb-0" style="white-space: pre-wrap;">' + (data.output || '(no output)') + '</pre></div>';
-                btn.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Run Fix';
-                btn.disabled = false;
-                if (data.ok) {
-                    setTimeout(function() { window.location.reload(); }, 2500);
+                if (!data.ok) {
+                    btn.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Run Fix';
+                    btn.disabled = false;
+                    return;
                 }
+                // Some fixes restart the service. Poll until it answers
+                // before reloading, so the user never sees a transient 502.
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Waiting for service...';
+                var attempts = 0;
+                var maxAttempts = 60;             // ~3 minutes of polling
+                var totalSeconds = maxAttempts * 3;
+                setTimeout(function() {
+                    var poll = setInterval(function() {
+                        attempts++;
+                        if (attempts > maxAttempts) {
+                            clearInterval(poll);
+                            outEl.innerHTML = '<div class="alert alert-warning mb-0">Service did not come back within ' + totalSeconds + 's. Reload manually once it is back.</div>';
+                            btn.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Run Fix';
+                            btn.disabled = false;
+                            return;
+                        }
+                        fetch(window.location.href, { method: 'HEAD' })
+                            .then(function(resp) {
+                                if (resp.ok) {
+                                    clearInterval(poll);
+                                    window.location.reload();
+                                }
+                            })
+                            .catch(function() {});
+                    }, 3000);
+                }, 5000);  // 5s grace before first poll — restart needs a beat to actually go down
             }).catch(function(e) {
                 outEl.innerHTML = '<div class="alert alert-danger mb-0">Request failed: ' + e + '</div>';
                 btn.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Run Fix';
