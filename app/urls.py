@@ -49,6 +49,7 @@ urlpatterns = [
     path('logs/export/', views.activity_log_export, name='activity_log_export'),
     path('settings/', views.app_settings_view, name='app_settings'),
     path('settings/restore/', views.restore_data_view, name='restore_data'),
+    path('settings/backup-to-b2/', views.backup_to_b2_view, name='backup_to_b2'),
     path('integrity/', views.integrity_check_view, name='integrity_check'),
     path('users/', views.user_list_view, name='user_list'),
     path('users/create/', views.user_create_view, name='user_create'),

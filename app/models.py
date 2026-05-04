@@ -179,6 +179,16 @@ class AppSettings(models.Model):
     otf_brand_card_text_color = models.CharField(max_length=7, blank=True, default='#a0a4ab', verbose_name='Card Text Color')
     otf_brand_image = models.FileField(upload_to='branding/', blank=True, verbose_name='Brand Logo')
 
+    # Backups (Backblaze B2)
+    b2_enabled = models.BooleanField(default=False, verbose_name='Enable B2 Offsite Backup')
+    b2_application_key_id = models.CharField(max_length=64, blank=True, default='', verbose_name='B2 Application Key ID')
+    b2_application_key = EncryptedCharField(max_length=512, blank=True, default='', verbose_name='B2 Application Key')
+    b2_bucket_name = models.CharField(max_length=255, blank=True, default='', verbose_name='B2 Bucket Name')
+    b2_last_upload_at = models.DateTimeField(null=True, blank=True, verbose_name='B2 Last Upload')
+    b2_last_upload_status = models.CharField(max_length=16, blank=True, default='', verbose_name='B2 Last Upload Status')
+    b2_last_upload_filename = models.CharField(max_length=255, blank=True, default='', verbose_name='B2 Last Uploaded File')
+    b2_last_upload_error = models.TextField(blank=True, default='', verbose_name='B2 Last Upload Error')
+
     # Deployment
     deployment_mode = models.CharField(
         max_length=20, default='gunicorn_ssl',

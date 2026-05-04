@@ -1374,6 +1374,27 @@ def app_settings_view(request):
                 setattr(app_settings, field, new_val)
                 changes.append(f'{field}={new_val}')
 
+        # Backblaze B2
+        new_b2_enabled = request.POST.get('b2_enabled') == 'on'
+        if new_b2_enabled != app_settings.b2_enabled:
+            app_settings.b2_enabled = new_b2_enabled
+            changes.append(f'b2_enabled={new_b2_enabled}')
+
+        new_b2_key_id = request.POST.get('b2_application_key_id', '').strip()
+        if new_b2_key_id != app_settings.b2_application_key_id:
+            app_settings.b2_application_key_id = new_b2_key_id
+            changes.append(f'b2_application_key_id={new_b2_key_id}')
+
+        new_b2_key = request.POST.get('b2_application_key', '').strip()
+        if new_b2_key and new_b2_key != app_settings.b2_application_key:
+            app_settings.b2_application_key = new_b2_key
+            changes.append('b2_application_key=***')
+
+        new_b2_bucket = request.POST.get('b2_bucket_name', '').strip()
+        if new_b2_bucket != app_settings.b2_bucket_name:
+            app_settings.b2_bucket_name = new_b2_bucket
+            changes.append(f'b2_bucket_name={new_b2_bucket}')
+
         if 'otf_brand_image' in request.FILES:
             logo = request.FILES['otf_brand_image']
             if logo.size > 2 * 1024 * 1024:  # 2MB
@@ -1443,6 +1464,35 @@ def restore_data_view(request):
     except Exception as e:
         messages.error(request, f'Restore failed: {e}')
 
+    return redirect('app:app_settings')
+
+
+@login_required
+@require_http_methods(["POST"])
+def backup_to_b2_view(request):
+    """Upload the most recent local backup tarball to Backblaze B2."""
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    from . import b2_backup
+    app_settings = AppSettings.objects.get(pk=1)
+
+    if not app_settings.b2_enabled:
+        messages.error(request, 'B2 backup is not enabled. Configure it in Settings first.')
+        return redirect('app:app_settings')
+
+    latest = b2_backup.latest_backup_path(settings.BASE_DIR)
+    if not latest:
+        messages.error(request, 'No local backup found to upload. Run a backup first.')
+        return redirect('app:app_settings')
+
+    success, message = b2_backup.upload_file(latest, app_settings)
+    app_settings.save()
+    log_activity(request, 'backup_to_b2', latest.name, message[:500])
+    if success:
+        messages.success(request, message)
+    else:
+        messages.error(request, f'B2 upload failed: {message}')
     return redirect('app:app_settings')
 
 

@@ -68,6 +68,7 @@ def _start_daily_backup_scheduler():
             try:
                 from django.core.management import call_command
                 call_command('backup_data')
+                _maybe_upload_to_b2()
             except Exception:
                 pass
             # Sleep 24 hours
@@ -104,6 +105,22 @@ def _start_daily_backup_scheduler():
     t2.start()
     t3 = threading.Thread(target=_rejection_parser_loop, daemon=True)
     t3.start()
+
+
+def _maybe_upload_to_b2():
+    """If B2 backup is configured, push the latest local tarball offsite."""
+    from django.conf import settings
+    from app.models import AppSettings
+    from app import b2_backup
+
+    app_settings = AppSettings.objects.filter(pk=1).first()
+    if not app_settings or not app_settings.b2_enabled:
+        return
+    latest = b2_backup.latest_backup_path(settings.BASE_DIR)
+    if not latest:
+        return
+    b2_backup.upload_file(latest, app_settings)
+    app_settings.save()
 
 
 def _patch_nginx_config():
