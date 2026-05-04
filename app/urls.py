@@ -36,6 +36,7 @@ urlpatterns = [
     path('deployment/', views.deployment_status_view, name='deployment_status'),
     path('deployment/migrate/', views.deployment_migrate_view, name='deployment_migrate'),
     path('blocked-ips/', views.blocked_ips_view, name='blocked_ips'),
+    path('whitelisted-ips/', views.whitelisted_ips_view, name='whitelisted_ips'),
     path('api/block-ip/', views.block_ip_view, name='block_ip'),
     path('api/unblock-ip/', views.unblock_ip_view, name='unblock_ip'),
     path('api/blocked-ip-timeline/', views.blocked_ip_timeline_view, name='blocked_ip_timeline'),

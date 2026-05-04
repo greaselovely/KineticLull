@@ -2406,19 +2406,25 @@ def blocked_ips_view(request):
             'top_paths': top_paths.get(entry.ip_address, []),
         })
 
-    # Get current user's IP for auto-whitelist suggestion
-    user_ip = get_client_ip(request)
-    user_ip_whitelisted = WhitelistedIP.is_whitelisted(user_ip) if user_ip else False
-
     context = {
         'title': 'Blocked IPs',
         'blocked_data': blocked_data,
         'total_rejections': sum(rejection_counts.values()),
+    }
+    return render(request, 'blocked_ips.html', context)
+
+
+@login_required
+def whitelisted_ips_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    user_ip = get_client_ip(request)
+    user_ip_whitelisted = WhitelistedIP.is_whitelisted(user_ip) if user_ip else False
+    return render(request, 'whitelisted_ips.html', {
         'whitelisted_ips': WhitelistedIP.objects.all(),
         'user_ip': user_ip,
         'user_ip_whitelisted': user_ip_whitelisted,
-    }
-    return render(request, 'blocked_ips.html', context)
+    })
 
 
 @login_required
