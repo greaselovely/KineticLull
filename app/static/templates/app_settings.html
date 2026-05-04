@@ -438,10 +438,10 @@
                         </p>
                         <p class="text-muted mb-3" style="font-size: 0.8rem;">Daily snapshots written to <code>backups/data/</code> on this box, kept for 30 days.</p>
                         <div class="mb-2">
-                            {% if data_backups %}
-                            <button type="button" id="restore-local-btn" class="btn btn-warning btn-sm kl-action-btn">Restore</button>
-                            {% endif %}
                             <button type="submit" form="take-local-backup-form" class="btn btn-sm kl-backup-btn kl-action-btn">Backup Now</button>
+                            {% if data_backups %}
+                            <button type="button" id="restore-local-btn" class="btn btn-sm kl-restore-btn kl-action-btn">Restore</button>
+                            {% endif %}
                         </div>
                         {% if data_backups %}
                         <select name="archive" class="form-select form-select-sm w-75" form="restore-form">
@@ -470,10 +470,10 @@
                         </p>
                         <p class="text-muted mb-3" style="font-size: 0.8rem;">Mirror of the latest local snapshot. Retention is governed by your B2 bucket lifecycle rules.</p>
                         <div class="mb-2">
-                            {% if b2_versions %}
-                            <button type="button" id="restore-b2-btn" class="btn btn-warning btn-sm kl-action-btn">Restore</button>
-                            {% endif %}
                             <button type="submit" form="b2-upload-form" class="btn btn-sm kl-backup-btn kl-action-btn">Backup Now</button>
+                            {% if b2_versions %}
+                            <button type="button" id="restore-b2-btn" class="btn btn-sm kl-restore-btn kl-action-btn">Restore</button>
+                            {% endif %}
                         </div>
                         {% if b2_versions %}
                         <select name="file_id" class="form-select form-select-sm w-75" form="restore-from-b2-form">
@@ -536,20 +536,33 @@ html.sidebar-is-collapsed .settings-save-bar,
     left: var(--sidebar-collapsed);
 }
 
-/* Backups tab — uniform action buttons */
+/* Backups tab — uniform action buttons.
+   Colors picked for WCAG AA contrast against their text color:
+     Backup Now:  #15803d (emerald-700) + white  → ~4.6 contrast
+     Restore:     #f59e0b (amber-500)   + #1f2937 → ~9 contrast */
 .kl-action-btn {
     width: 140px;
     margin-right: 6px;
 }
 .kl-backup-btn {
-    background: #28a745;
-    color: #000;
-    border-color: #28a745;
+    background: #15803d;
+    color: #fff;
+    border-color: #15803d;
 }
 .kl-backup-btn:hover, .kl-backup-btn:focus {
-    background: #218838;
-    color: #000;
-    border-color: #1e7e34;
+    background: #166534;
+    color: #fff;
+    border-color: #14532d;
+}
+.kl-restore-btn {
+    background: #f59e0b;
+    color: #1f2937;
+    border-color: #f59e0b;
+}
+.kl-restore-btn:hover, .kl-restore-btn:focus {
+    background: #d97706;
+    color: #1f2937;
+    border-color: #b45309;
 }
 </style>
 {% endtimezone %}
