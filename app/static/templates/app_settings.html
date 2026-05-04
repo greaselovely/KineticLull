@@ -3,7 +3,7 @@
 {% block title %}- Settings{% endblock %}
 {% block content %}
 {% timezone app_timezone %}
-<div style="max-width: 650px;">
+<div style="max-width: 800px; padding-bottom: 80px;">
     <h3 class="mb-3">Settings</h3>
     {% if request.GET.tz_setup %}
     <div class="alert alert-info">
@@ -11,388 +11,492 @@
         <strong>Set your timezone.</strong> Please configure your display timezone below, then save.
     </div>
     {% endif %}
-    <form method="post" enctype="multipart/form-data">
+
+    <ul class="nav nav-tabs mb-3" id="settingsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-btn-general" data-bs-toggle="tab" data-bs-target="#tab-general" type="button" role="tab">General</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-btn-customization" data-bs-toggle="tab" data-bs-target="#tab-customization" type="button" role="tab">Customization</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-btn-integrations" data-bs-toggle="tab" data-bs-target="#tab-integrations" type="button" role="tab">Integrations</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-btn-security" data-bs-toggle="tab" data-bs-target="#tab-security" type="button" role="tab">Security</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-btn-limits" data-bs-toggle="tab" data-bs-target="#tab-limits" type="button" role="tab">Limits</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-btn-backups" data-bs-toggle="tab" data-bs-target="#tab-backups" type="button" role="tab">Backups</button>
+        </li>
+    </ul>
+
+    <form id="settings-form" method="post" enctype="multipart/form-data" action="{% url 'app:app_settings' %}">
         {% csrf_token %}
+        <div class="tab-content">
 
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase mb-3">Display</h6>
-                <div class="mb-3">
-                    <label for="timezone" class="form-label">Timezone</label>
-                    <select name="timezone" id="timezone" class="form-select form-select-sm">
-                        {% for tz in timezones %}
-                        <option value="{{ tz }}" {% if tz == app_settings.timezone %}selected{% endif %}>{{ tz }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label for="timestamp_format" class="form-label">Timestamp Format</label>
-                    <select name="timestamp_format" id="timestamp_format" class="form-select form-select-sm">
-                        {% for value, label in app_settings.TIMESTAMP_CHOICES %}
-                        <option value="{{ value }}" {% if value == app_settings.timestamp_format %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="row g-3">
-                    <div class="col-4">
-                        <label for="edl_preview_entries" class="form-label">Preview Entries</label>
-                        <input type="number" name="edl_preview_entries" id="edl_preview_entries" class="form-control form-control-sm" value="{{ app_settings.edl_preview_entries }}" min="1" max="10">
-                    </div>
-                    <div class="col-4">
-                        <label for="default_edl_per_page" class="form-label">EDLs / Page</label>
-                        <input type="number" name="default_edl_per_page" id="default_edl_per_page" class="form-control form-control-sm" value="{{ app_settings.default_edl_per_page }}" min="5" max="50">
-                    </div>
-                    <div class="col-4">
-                        <label for="default_log_per_page" class="form-label">Logs / Page</label>
-                        <input type="number" name="default_log_per_page" id="default_log_per_page" class="form-control form-control-sm" value="{{ app_settings.default_log_per_page }}" min="5" max="100">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase mb-3">API Limits</h6>
-                <div class="row g-3">
-                    <div class="col-6">
-                        <label for="max_fqdns_per_submission" class="form-label">Max FQDNs / Submission</label>
-                        <input type="number" name="max_fqdns_per_submission" id="max_fqdns_per_submission" class="form-control form-control-sm" value="{{ app_settings.max_fqdns_per_submission }}" min="1" max="500">
-                    </div>
-                    <div class="col-6">
-                        <label for="max_fqdns_per_update" class="form-label">Max FQDNs / Update</label>
-                        <input type="number" name="max_fqdns_per_update" id="max_fqdns_per_update" class="form-control form-control-sm" value="{{ app_settings.max_fqdns_per_update }}" min="1" max="500">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase mb-3">Data Limits</h6>
-                <div class="row g-3">
-                    <div class="col-4">
-                        <label for="max_edls_per_group" class="form-label">EDLs / Group</label>
-                        <input type="number" name="max_edls_per_group" id="max_edls_per_group" class="form-control form-control-sm" value="{{ app_settings.max_edls_per_group }}" min="1" max="500">
-                    </div>
-                    <div class="col-4">
-                        <label for="max_entries_per_edl" class="form-label">Entries / EDL</label>
-                        <input type="number" name="max_entries_per_edl" id="max_entries_per_edl" class="form-control form-control-sm" value="{{ app_settings.max_entries_per_edl }}" min="100" max="150000">
-                    </div>
-                    <div class="col-4">
-                        <label for="max_inbox_per_user" class="form-label">Inbox / User</label>
-                        <input type="number" name="max_inbox_per_user" id="max_inbox_per_user" class="form-control form-control-sm" value="{{ app_settings.max_inbox_per_user }}" min="5" max="100">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase mb-3">EDL Protection</h6>
-                <div class="mb-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="edl_delete_protection" id="edl_delete_protection"
-                            {% if app_settings.edl_delete_protection %}checked{% endif %}>
-                        <label class="form-check-label" for="edl_delete_protection">Prevent deletion of actively polled EDLs</label>
-                    </div>
-                </div>
-                <div class="row g-3">
-                    <div class="col-6">
-                        <label for="edl_delete_threshold" class="form-label">Min Accesses to Protect</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="edl_delete_threshold" id="edl_delete_threshold" class="form-control" value="{{ app_settings.edl_delete_threshold }}" min="1" max="100">
-                            <span class="input-group-text">hits</span>
+            {# ────────────── GENERAL ────────────── #}
+            <div class="tab-pane fade show active" id="tab-general" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Display</h6>
+                        <div class="mb-3">
+                            <label for="timezone" class="form-label">Timezone</label>
+                            <select name="timezone" id="timezone" class="form-select form-select-sm">
+                                {% for tz in timezones %}
+                                <option value="{{ tz }}" {% if tz == app_settings.timezone %}selected{% endif %}>{{ tz }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
-                    </div>
-                    <div class="col-6">
-                        <label for="edl_delete_window_minutes" class="form-label">Look-back Window</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="edl_delete_window_minutes" id="edl_delete_window_minutes" class="form-control" value="{{ app_settings.edl_delete_window_minutes }}" min="5" max="1440">
-                            <span class="input-group-text">min</span>
+                        <div class="mb-3">
+                            <label for="timestamp_format" class="form-label">Timestamp Format</label>
+                            <select name="timestamp_format" id="timestamp_format" class="form-select form-select-sm">
+                                {% for value, label in app_settings.TIMESTAMP_CHOICES %}
+                                <option value="{{ value }}" {% if value == app_settings.timestamp_format %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-4">
+                                <label for="edl_preview_entries" class="form-label">Preview Entries</label>
+                                <input type="number" name="edl_preview_entries" id="edl_preview_entries" class="form-control form-control-sm" value="{{ app_settings.edl_preview_entries }}" min="1" max="10">
+                            </div>
+                            <div class="col-4">
+                                <label for="default_edl_per_page" class="form-label">EDLs / Page</label>
+                                <input type="number" name="default_edl_per_page" id="default_edl_per_page" class="form-control form-control-sm" value="{{ app_settings.default_edl_per_page }}" min="5" max="50">
+                            </div>
+                            <div class="col-4">
+                                <label for="default_log_per_page" class="form-label">Logs / Page</label>
+                                <input type="number" name="default_log_per_page" id="default_log_per_page" class="form-control form-control-sm" value="{{ app_settings.default_log_per_page }}" min="5" max="100">
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase mb-3">Security</h6>
-                <div class="row g-3">
-                    <div class="col-4">
-                        <label for="log_retention_days" class="form-label">Log Retention</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="log_retention_days" id="log_retention_days" class="form-control" value="{{ app_settings.log_retention_days }}" min="1" max="180">
-                            <span class="input-group-text">days</span>
+            {# ────────────── CUSTOMIZATION ────────────── #}
+            <div class="tab-pane fade" id="tab-customization" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">File Share Branding</h6>
+                        <div class="mb-3">
+                            <label for="otf_brand_name" class="form-label">Brand Name</label>
+                            <input type="text" name="otf_brand_name" id="otf_brand_name" class="form-control form-control-sm" value="{{ app_settings.otf_brand_name }}" placeholder="KineticLull Secure File Access">
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="otf_brand_bg_color" class="form-label">Background Color</label>
+                                <input type="color" name="otf_brand_bg_color" id="otf_brand_bg_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_bg_color }}">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="otf_brand_card_color" class="form-label">Card Color</label>
+                                <input type="color" name="otf_brand_card_color" id="otf_brand_card_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_card_color }}">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="otf_brand_text_color" class="form-label">Header Text Color</label>
+                                <input type="color" name="otf_brand_text_color" id="otf_brand_text_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_text_color }}">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="otf_brand_card_text_color" class="form-label">Card Text Color</label>
+                                <input type="color" name="otf_brand_card_text_color" id="otf_brand_card_text_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_card_text_color }}">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="otf_brand_image" class="form-label">Logo Image</label>
+                            {% if app_settings.otf_brand_image %}
+                            <div class="mb-2"><img src="{{ app_settings.otf_brand_image.url }}" alt="Current logo" style="max-height: 40px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline'"><span style="display:none; font-size: 0.8rem;" class="text-muted">Logo not loading. Update Nginx config to serve /media/branding/.</span></div>
+                            {% endif %}
+                            <input type="file" name="otf_brand_image" id="otf_brand_image" class="form-control form-control-sm" accept="image/*">
+                            <div class="form-text">Max 2MB. Recommended: 200x48px PNG or SVG with transparency. Auto-scaled on display.</div>
+                        </div>
+                        <div class="mb-3">
+                            <a href="{% url 'app:otf_brand_preview' %}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye me-1"></i>Preview Download Page</a>
                         </div>
                     </div>
-                    <div class="col-4">
-                        <label for="session_timeout_minutes" class="form-label">Inactivity Timeout</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="session_timeout_minutes" id="session_timeout_minutes" class="form-control" value="{{ app_settings.session_timeout_minutes }}" min="5" max="480">
-                            <span class="input-group-text">min</span>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">robots.txt</h6>
+                        <p style="font-size: 0.85rem;" class="text-muted mb-2">Served verbatim at <code>/robots.txt</code>. Edit freely. The default ships with a base64 easter egg pointing back to you.</p>
+                        <textarea name="robots_txt" id="robots_txt" class="form-control form-control-sm" rows="14" style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8rem;">{{ app_settings.robots_txt }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            {# ────────────── INTEGRATIONS ────────────── #}
+            <div class="tab-pane fade" id="tab-integrations" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Email (Resend)</h6>
+                        <div class="mb-3">
+                            <label for="mail_service_token" class="form-label">Resend API Key</label>
+                            <input type="password" name="mail_service_token" id="mail_service_token" class="form-control form-control-sm" value="{{ app_settings.resend_api_key }}" placeholder="re_..." autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
+                        </div>
+                        <div class="mb-3">
+                            <label for="resend_from_name" class="form-label">From Name</label>
+                            <input type="text" name="resend_from_name" id="resend_from_name" class="form-control form-control-sm" value="{{ app_settings.resend_from_name }}" placeholder="IT Department">
+                        </div>
+                        <div class="mb-3">
+                            <label for="resend_from_email" class="form-label">From Email</label>
+                            <input type="email" name="resend_from_email" id="resend_from_email" class="form-control form-control-sm" value="{{ app_settings.resend_from_email }}" placeholder="noreply@yourdomain.com">
                         </div>
                     </div>
-                    <div class="col-4">
-                        <label for="api_key_expiration_days" class="form-label">API Key Expiry</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="api_key_expiration_days" id="api_key_expiration_days" class="form-control" value="{{ app_settings.api_key_expiration_days }}" min="14" max="365">
-                            <span class="input-group-text">days</span>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Syslog Forwarding</h6>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="syslog_enabled" id="syslog_enabled"
+                                    {% if app_settings.syslog_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="syslog_enabled">Enable Syslog Forwarding</label>
+                            </div>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-5">
+                                <label for="syslog_host" class="form-label">Syslog Host</label>
+                                <input type="text" name="syslog_host" id="syslog_host" class="form-control form-control-sm" value="{{ app_settings.syslog_host }}" placeholder="siem.example.com">
+                            </div>
+                            <div class="col-3">
+                                <label for="syslog_port" class="form-label">Port</label>
+                                <input type="number" name="syslog_port" id="syslog_port" class="form-control form-control-sm" value="{{ app_settings.syslog_port }}" min="1" max="65535">
+                            </div>
+                            <div class="col-4">
+                                <label for="syslog_protocol" class="form-label">Protocol</label>
+                                <select name="syslog_protocol" id="syslog_protocol" class="form-select form-select-sm">
+                                    <option value="udp" {% if app_settings.syslog_protocol == 'udp' %}selected{% endif %}>UDP</option>
+                                    <option value="tcp" {% if app_settings.syslog_protocol == 'tcp' %}selected{% endif %}>TCP</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase mb-3">Syslog Forwarding</h6>
-                <div class="mb-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="syslog_enabled" id="syslog_enabled"
-                            {% if app_settings.syslog_enabled %}checked{% endif %}>
-                        <label class="form-check-label" for="syslog_enabled">Enable Syslog Forwarding</label>
-                    </div>
-                </div>
-                <div class="row g-3">
-                    <div class="col-5">
-                        <label for="syslog_host" class="form-label">Syslog Host</label>
-                        <input type="text" name="syslog_host" id="syslog_host" class="form-control form-control-sm" value="{{ app_settings.syslog_host }}" placeholder="siem.example.com">
-                    </div>
-                    <div class="col-3">
-                        <label for="syslog_port" class="form-label">Port</label>
-                        <input type="number" name="syslog_port" id="syslog_port" class="form-control form-control-sm" value="{{ app_settings.syslog_port }}" min="1" max="65535">
-                    </div>
-                    <div class="col-4">
-                        <label for="syslog_protocol" class="form-label">Protocol</label>
-                        <select name="syslog_protocol" id="syslog_protocol" class="form-select form-select-sm">
-                            <option value="udp" {% if app_settings.syslog_protocol == 'udp' %}selected{% endif %}>UDP</option>
-                            <option value="tcp" {% if app_settings.syslog_protocol == 'tcp' %}selected{% endif %}>TCP</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase mb-3">Auto-Block</h6>
-                <div class="mb-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="autoblock_enabled" id="autoblock_enabled"
-                            {% if app_settings.autoblock_enabled %}checked{% endif %}>
-                        <label class="form-check-label" for="autoblock_enabled">Enable Auto-Block</label>
-                    </div>
-                    <div class="form-text">Automatically block IPs that exceed the request threshold.</div>
-                </div>
-                <div class="row g-3">
-                    <div class="col-4">
-                        <label for="autoblock_threshold" class="form-label">Threshold</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="autoblock_threshold" id="autoblock_threshold" class="form-control" value="{{ app_settings.autoblock_threshold }}" min="3" max="1000">
-                            <span class="input-group-text">hits</span>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <label for="autoblock_window_seconds" class="form-label">Window</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="autoblock_window_seconds" id="autoblock_window_seconds" class="form-control" value="{{ app_settings.autoblock_window_seconds }}" min="10" max="3600">
-                            <span class="input-group-text">sec</span>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <label for="autoblock_duration_minutes" class="form-label">Block Duration</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="autoblock_duration_minutes" id="autoblock_duration_minutes" class="form-control" value="{{ app_settings.autoblock_duration_minutes }}" min="0" max="525600">
-                            <span class="input-group-text">min</span>
-                        </div>
-                        <div class="form-text">0 = permanent</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase mb-3">Failed-Login Block</h6>
-                <div class="mb-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="failed_login_block_enabled" id="failed_login_block_enabled"
-                            {% if app_settings.failed_login_block_enabled %}checked{% endif %}>
-                        <label class="form-check-label" for="failed_login_block_enabled">Enable Failed-Login Block</label>
-                    </div>
-                    <div class="form-text">Block IPs with repeated failed logins. A successful login resets the counter for that IP.</div>
-                </div>
-                <div class="row g-3">
-                    <div class="col-4">
-                        <label for="failed_login_block_threshold" class="form-label">Block After</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="failed_login_block_threshold" id="failed_login_block_threshold" class="form-control" value="{{ app_settings.failed_login_block_threshold }}" min="1" max="100">
-                            <span class="input-group-text">fails</span>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <label for="failed_login_warning_threshold" class="form-label">Warn After</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="failed_login_warning_threshold" id="failed_login_warning_threshold" class="form-control" value="{{ app_settings.failed_login_warning_threshold }}" min="1" max="100">
-                            <span class="input-group-text">fails</span>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <label for="failed_login_window_hours" class="form-label">Window</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" name="failed_login_window_hours" id="failed_login_window_hours" class="form-control" value="{{ app_settings.failed_login_window_hours }}" min="1" max="720">
-                            <span class="input-group-text">hrs</span>
+            {# ────────────── SECURITY ────────────── #}
+            <div class="tab-pane fade" id="tab-security" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Sessions &amp; API Keys</h6>
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <label for="session_timeout_minutes" class="form-label">Inactivity Timeout</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="session_timeout_minutes" id="session_timeout_minutes" class="form-control" value="{{ app_settings.session_timeout_minutes }}" min="5" max="480">
+                                    <span class="input-group-text">min</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label for="api_key_expiration_days" class="form-label">API Key Expiry</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="api_key_expiration_days" id="api_key_expiration_days" class="form-control" value="{{ app_settings.api_key_expiration_days }}" min="14" max="365">
+                                    <span class="input-group-text">days</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase mb-3">Email (Resend)</h6>
-                <div class="mb-3">
-                    <label for="mail_service_token" class="form-label">Resend API Key</label>
-                    <input type="password" name="mail_service_token" id="mail_service_token" class="form-control form-control-sm" value="{{ app_settings.resend_api_key }}" placeholder="re_..." autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
-                </div>
-                <div class="mb-3">
-                    <label for="resend_from_name" class="form-label">From Name</label>
-                    <input type="text" name="resend_from_name" id="resend_from_name" class="form-control form-control-sm" value="{{ app_settings.resend_from_name }}" placeholder="IT Department">
-                </div>
-                <div class="mb-3">
-                    <label for="resend_from_email" class="form-label">From Email</label>
-                    <input type="email" name="resend_from_email" id="resend_from_email" class="form-control form-control-sm" value="{{ app_settings.resend_from_email }}" placeholder="noreply@yourdomain.com">
-                </div>
-                <div class="mb-3">
-                    <label for="max_file_size_mb" class="form-label">Max File Size (MB)</label>
-                    <input type="number" name="max_file_size_mb" id="max_file_size_mb" class="form-control form-control-sm" value="{{ app_settings.max_file_size_mb }}" min="1" max="1000" style="max-width: 120px;">
-                </div>
-            </div>
-        </div>
-
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase mb-3">File Share Branding</h6>
-                <div class="mb-3">
-                    <label for="otf_brand_name" class="form-label">Brand Name</label>
-                    <input type="text" name="otf_brand_name" id="otf_brand_name" class="form-control form-control-sm" value="{{ app_settings.otf_brand_name }}" placeholder="KineticLull Secure File Access">
-                </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="otf_brand_bg_color" class="form-label">Background Color</label>
-                        <input type="color" name="otf_brand_bg_color" id="otf_brand_bg_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_bg_color }}">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="otf_brand_card_color" class="form-label">Card Color</label>
-                        <input type="color" name="otf_brand_card_color" id="otf_brand_card_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_card_color }}">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">EDL Protection</h6>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="edl_delete_protection" id="edl_delete_protection"
+                                    {% if app_settings.edl_delete_protection %}checked{% endif %}>
+                                <label class="form-check-label" for="edl_delete_protection">Prevent deletion of actively polled EDLs</label>
+                            </div>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <label for="edl_delete_threshold" class="form-label">Min Accesses to Protect</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="edl_delete_threshold" id="edl_delete_threshold" class="form-control" value="{{ app_settings.edl_delete_threshold }}" min="1" max="100">
+                                    <span class="input-group-text">hits</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label for="edl_delete_window_minutes" class="form-label">Look-back Window</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="edl_delete_window_minutes" id="edl_delete_window_minutes" class="form-control" value="{{ app_settings.edl_delete_window_minutes }}" min="5" max="1440">
+                                    <span class="input-group-text">min</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="otf_brand_text_color" class="form-label">Header Text Color</label>
-                        <input type="color" name="otf_brand_text_color" id="otf_brand_text_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_text_color }}">
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Auto-Block</h6>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="autoblock_enabled" id="autoblock_enabled"
+                                    {% if app_settings.autoblock_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="autoblock_enabled">Enable Auto-Block</label>
+                            </div>
+                            <div class="form-text">Automatically block IPs that exceed the request threshold or hit known scanner paths.</div>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-4">
+                                <label for="autoblock_threshold" class="form-label">Threshold</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="autoblock_threshold" id="autoblock_threshold" class="form-control" value="{{ app_settings.autoblock_threshold }}" min="3" max="1000">
+                                    <span class="input-group-text">hits</span>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <label for="autoblock_window_seconds" class="form-label">Window</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="autoblock_window_seconds" id="autoblock_window_seconds" class="form-control" value="{{ app_settings.autoblock_window_seconds }}" min="10" max="3600">
+                                    <span class="input-group-text">sec</span>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <label for="autoblock_duration_minutes" class="form-label">Block Duration</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="autoblock_duration_minutes" id="autoblock_duration_minutes" class="form-control" value="{{ app_settings.autoblock_duration_minutes }}" min="0" max="525600">
+                                    <span class="input-group-text">min</span>
+                                </div>
+                                <div class="form-text">0 = permanent</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="otf_brand_card_text_color" class="form-label">Card Text Color</label>
-                        <input type="color" name="otf_brand_card_text_color" id="otf_brand_card_text_color" class="form-control form-control-sm form-control-color" value="{{ app_settings.otf_brand_card_text_color }}">
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Failed-Login Block</h6>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="failed_login_block_enabled" id="failed_login_block_enabled"
+                                    {% if app_settings.failed_login_block_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="failed_login_block_enabled">Enable Failed-Login Block</label>
+                            </div>
+                            <div class="form-text">Block IPs with repeated failed logins. A successful login resets the counter for that IP.</div>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-4">
+                                <label for="failed_login_block_threshold" class="form-label">Block After</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="failed_login_block_threshold" id="failed_login_block_threshold" class="form-control" value="{{ app_settings.failed_login_block_threshold }}" min="1" max="100">
+                                    <span class="input-group-text">fails</span>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <label for="failed_login_warning_threshold" class="form-label">Warn After</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="failed_login_warning_threshold" id="failed_login_warning_threshold" class="form-control" value="{{ app_settings.failed_login_warning_threshold }}" min="1" max="100">
+                                    <span class="input-group-text">fails</span>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <label for="failed_login_window_hours" class="form-label">Window</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="failed_login_window_hours" id="failed_login_window_hours" class="form-control" value="{{ app_settings.failed_login_window_hours }}" min="1" max="720">
+                                    <span class="input-group-text">hrs</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="mb-3">
-                    <label for="otf_brand_image" class="form-label">Logo Image</label>
-                    {% if app_settings.otf_brand_image %}
-                    <div class="mb-2"><img src="{{ app_settings.otf_brand_image.url }}" alt="Current logo" style="max-height: 40px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline'"><span style="display:none; font-size: 0.8rem;" class="text-muted">Logo not loading — update Nginx config to serve /media/branding/</span></div>
-                    {% endif %}
-                    <input type="file" name="otf_brand_image" id="otf_brand_image" class="form-control form-control-sm" accept="image/*">
-                    <div class="form-text">Max 2MB. Recommended: 200x48px PNG or SVG with transparency. Auto-scaled on display.</div>
+            </div>
+
+            {# ────────────── LIMITS ────────────── #}
+            <div class="tab-pane fade" id="tab-limits" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">API Limits</h6>
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <label for="max_fqdns_per_submission" class="form-label">Max FQDNs / Submission</label>
+                                <input type="number" name="max_fqdns_per_submission" id="max_fqdns_per_submission" class="form-control form-control-sm" value="{{ app_settings.max_fqdns_per_submission }}" min="1" max="500">
+                            </div>
+                            <div class="col-6">
+                                <label for="max_fqdns_per_update" class="form-label">Max FQDNs / Update</label>
+                                <input type="number" name="max_fqdns_per_update" id="max_fqdns_per_update" class="form-control form-control-sm" value="{{ app_settings.max_fqdns_per_update }}" min="1" max="500">
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <a href="{% url 'app:otf_brand_preview' %}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye me-1"></i>Preview Download Page</a>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Data Limits</h6>
+                        <div class="row g-3">
+                            <div class="col-4">
+                                <label for="max_edls_per_group" class="form-label">EDLs / Group</label>
+                                <input type="number" name="max_edls_per_group" id="max_edls_per_group" class="form-control form-control-sm" value="{{ app_settings.max_edls_per_group }}" min="1" max="500">
+                            </div>
+                            <div class="col-4">
+                                <label for="max_entries_per_edl" class="form-label">Entries / EDL</label>
+                                <input type="number" name="max_entries_per_edl" id="max_entries_per_edl" class="form-control form-control-sm" value="{{ app_settings.max_entries_per_edl }}" min="100" max="150000">
+                            </div>
+                            <div class="col-4">
+                                <label for="max_inbox_per_user" class="form-label">Inbox / User</label>
+                                <input type="number" name="max_inbox_per_user" id="max_inbox_per_user" class="form-control form-control-sm" value="{{ app_settings.max_inbox_per_user }}" min="5" max="100">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Retention &amp; File Size</h6>
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <label for="log_retention_days" class="form-label">Log Retention</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="log_retention_days" id="log_retention_days" class="form-control" value="{{ app_settings.log_retention_days }}" min="1" max="180">
+                                    <span class="input-group-text">days</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label for="max_file_size_mb" class="form-label">Max File Size</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="max_file_size_mb" id="max_file_size_mb" class="form-control" value="{{ app_settings.max_file_size_mb }}" min="1" max="1000">
+                                    <span class="input-group-text">MB</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase mb-3">robots.txt</h6>
-                <p style="font-size: 0.85rem;" class="text-muted mb-2">Served verbatim at <code>/robots.txt</code>. Edit freely. The default ships with a base64 easter egg pointing back to you.</p>
-                <textarea name="robots_txt" id="robots_txt" class="form-control form-control-sm" rows="14" style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8rem;">{{ app_settings.robots_txt }}</textarea>
+            {# ────────────── BACKUPS ────────────── #}
+            <div class="tab-pane fade" id="tab-backups" role="tabpanel">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Backblaze B2 Offsite Backup</h6>
+                        <p style="font-size: 0.85rem;" class="text-muted mb-3">Push the daily backup tarball to a Backblaze B2 bucket. Create an application key restricted to a single bucket at <a href="https://secure.backblaze.com/app_keys.htm" target="_blank" rel="noopener">backblaze.com/app_keys.htm</a>.</p>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="b2_enabled" id="b2_enabled" {% if app_settings.b2_enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="b2_enabled">Enable B2 uploads (daily, after each local backup)</label>
+                        </div>
+                        <div class="mb-3">
+                            <label for="b2_bucket_name" class="form-label">Bucket Name</label>
+                            <input type="text" name="b2_bucket_name" id="b2_bucket_name" class="form-control form-control-sm" value="{{ app_settings.b2_bucket_name }}" placeholder="my-kineticlull-backups">
+                        </div>
+                        <div class="mb-3">
+                            <label for="b2_application_key_id" class="form-label">keyID</label>
+                            <input type="text" name="b2_application_key_id" id="b2_application_key_id" class="form-control form-control-sm" value="{{ app_settings.b2_application_key_id }}" placeholder="00417fd16d7b4d2..." autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
+                        </div>
+                        <div class="mb-3">
+                            <label for="b2_application_key" class="form-label">applicationKey</label>
+                            <input type="password" name="b2_application_key" id="b2_application_key" class="form-control form-control-sm" value="{{ app_settings.b2_application_key }}" placeholder="K004TDomPWYwiha..." autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
+                        </div>
+                    </div>
+                </div>
+
+                {% if app_settings.b2_enabled or app_settings.b2_last_upload_at %}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">B2 Backup Status</h6>
+                        {% if app_settings.b2_last_upload_at %}
+                            <p style="font-size: 0.85rem;" class="mb-2">
+                                {% if app_settings.b2_last_upload_status == 'success' %}
+                                    <i class="bi bi-check-circle text-success me-1"></i>Last upload: <strong>{{ app_settings.b2_last_upload_at|date:app_timestamp_format }}</strong> &middot; {{ app_settings.b2_last_upload_filename }}
+                                {% else %}
+                                    <i class="bi bi-exclamation-triangle text-danger me-1"></i>Last upload <strong>failed</strong> at {{ app_settings.b2_last_upload_at|date:app_timestamp_format }}: {{ app_settings.b2_last_upload_error }}
+                                {% endif %}
+                            </p>
+                        {% else %}
+                            <p style="font-size: 0.85rem;" class="text-muted mb-2">No upload attempted yet.</p>
+                        {% endif %}
+                        <button type="submit" form="b2-upload-form" class="btn btn-outline-primary btn-sm" {% if not app_settings.b2_enabled %}disabled title="Enable B2 in settings first"{% endif %}>
+                            <i class="bi bi-cloud-upload me-1"></i>Upload latest backup to B2 now
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if data_backups %}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Data Restore</h6>
+                        <p style="font-size: 0.85rem;" class="text-muted">Restore EDLs and URLs from a daily backup. Original URLs are preserved so firewalls do not need to be updated.</p>
+                        <div class="d-flex gap-2 align-items-end">
+                            <div class="flex-grow-1">
+                                <label for="archive" class="form-label">Backup</label>
+                                <select name="archive" id="archive" class="form-select form-select-sm" form="restore-form">
+                                    {% for backup in data_backups %}
+                                    <option value="{{ backup.filename }}">{{ backup.timestamp|date:app_timestamp_format|default:backup.filename }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button type="button" id="restore-btn" class="btn btn-warning btn-sm">Restore</button>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
-        </div>
 
-        <div class="card mb-3">
-            <div class="card-body">
-                <h6 class="text-muted text-uppercase mb-3">Backblaze B2 Offsite Backup</h6>
-                <p style="font-size: 0.85rem;" class="text-muted mb-3">Push the daily backup tarball to a Backblaze B2 bucket. Create an application key restricted to a single bucket at <a href="https://secure.backblaze.com/app_keys.htm" target="_blank" rel="noopener">backblaze.com/app_keys.htm</a>.</p>
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" name="b2_enabled" id="b2_enabled" {% if app_settings.b2_enabled %}checked{% endif %}>
-                    <label class="form-check-label" for="b2_enabled">Enable B2 uploads (daily, after each local backup)</label>
-                </div>
-                <div class="mb-3">
-                    <label for="b2_bucket_name" class="form-label">Bucket Name</label>
-                    <input type="text" name="b2_bucket_name" id="b2_bucket_name" class="form-control form-control-sm" value="{{ app_settings.b2_bucket_name }}" placeholder="my-kineticlull-backups">
-                </div>
-                <div class="mb-3">
-                    <label for="b2_application_key_id" class="form-label">keyID</label>
-                    <input type="text" name="b2_application_key_id" id="b2_application_key_id" class="form-control form-control-sm" value="{{ app_settings.b2_application_key_id }}" placeholder="00417fd16d7b4d2..." autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
-                </div>
-                <div class="mb-3">
-                    <label for="b2_application_key" class="form-label">applicationKey</label>
-                    <input type="password" name="b2_application_key" id="b2_application_key" class="form-control form-control-sm" value="{{ app_settings.b2_application_key }}" placeholder="K004TDomPWYwiha..." autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
-                </div>
-            </div>
         </div>
-
-        <button type="submit" class="btn btn-primary btn-sm">Save Settings</button>
     </form>
 
-    {% if app_settings.b2_enabled or app_settings.b2_last_upload_at %}
-    <div class="card mb-3 mt-4">
-        <div class="card-body">
-            <h6 class="text-muted text-uppercase mb-3">B2 Backup Status</h6>
-            {% if app_settings.b2_last_upload_at %}
-                <p style="font-size: 0.85rem;" class="mb-2">
-                    {% if app_settings.b2_last_upload_status == 'success' %}
-                        <i class="bi bi-check-circle text-success me-1"></i>Last upload: <strong>{{ app_settings.b2_last_upload_at|date:app_timestamp_format }}</strong> &mdash; {{ app_settings.b2_last_upload_filename }}
-                    {% else %}
-                        <i class="bi bi-exclamation-triangle text-danger me-1"></i>Last upload <strong>failed</strong> at {{ app_settings.b2_last_upload_at|date:app_timestamp_format }}: {{ app_settings.b2_last_upload_error }}
-                    {% endif %}
-                </p>
-            {% else %}
-                <p style="font-size: 0.85rem;" class="text-muted mb-2">No upload attempted yet.</p>
-            {% endif %}
-            <form method="post" action="{% url 'app:backup_to_b2' %}">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-outline-primary btn-sm" {% if not app_settings.b2_enabled %}disabled title="Enable B2 in settings first"{% endif %}>
-                    <i class="bi bi-cloud-upload me-1"></i>Upload latest backup to B2 now
-                </button>
-            </form>
-        </div>
-    </div>
-    {% endif %}
+    {# Sibling forms: B2 manual upload + Data Restore. Inputs/buttons inside the Backups tab use form="..." to associate with these. #}
+    <form id="b2-upload-form" method="post" action="{% url 'app:backup_to_b2' %}" style="display:none;">{% csrf_token %}</form>
+    <form id="restore-form" method="post" action="{% url 'app:restore_data' %}" style="display:none;">{% csrf_token %}</form>
 
-    {% if data_backups %}
-    <div class="card mb-3 mt-4">
-        <div class="card-body">
-            <h6 class="text-muted text-uppercase mb-3">Data Restore</h6>
-            <p style="font-size: 0.85rem;" class="text-muted">Restore EDLs and URLs from a daily backup. Original URLs are preserved so firewalls do not need to be updated.</p>
-            <form method="post" action="{% url 'app:restore_data' %}" onsubmit="event.preventDefault(); var f=this; showConfirmModal('Restore data from this backup? Existing EDLs and URLs with matching identifiers will be overwritten.', function(){ f.submit(); });">
-                {% csrf_token %}
-                <div class="d-flex gap-2 align-items-end">
-                    <div class="flex-grow-1">
-                        <label for="archive" class="form-label">Backup</label>
-                        <select name="archive" id="archive" class="form-select form-select-sm">
-                            {% for backup in data_backups %}
-                            <option value="{{ backup.filename }}">{{ backup.timestamp|date:app_timestamp_format|default:backup.filename }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-warning btn-sm">Restore</button>
-                </div>
-            </form>
-        </div>
+    {# Sticky save bar #}
+    <div class="settings-save-bar">
+        <button type="submit" form="settings-form" class="btn btn-primary btn-sm">Save Settings</button>
     </div>
-    {% endif %}
 </div>
+
+<style>
+.settings-save-bar {
+    position: sticky;
+    bottom: 0;
+    margin-top: 1rem;
+    padding: 12px 0;
+    background: var(--bs-body-bg, #fff);
+    border-top: 1px solid #dee2e6;
+    z-index: 10;
+}
+</style>
 {% endtimezone %}
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Tab persistence — URL hash takes priority, then localStorage, then default (General)
+    var STORAGE_KEY = 'kl-settings-active-tab';
+    var hash = window.location.hash;
+    var saved = localStorage.getItem(STORAGE_KEY);
+    var target = null;
+    if (hash && document.querySelector('[data-bs-target="' + hash + '"]')) {
+        target = hash;
+    } else if (saved && document.querySelector('[data-bs-target="' + saved + '"]')) {
+        target = saved;
+    }
+    if (target) {
+        var btn = document.querySelector('[data-bs-target="' + target + '"]');
+        if (btn) new bootstrap.Tab(btn).show();
+    }
+    document.querySelectorAll('#settingsTabs button[data-bs-toggle="tab"]').forEach(function(btn) {
+        btn.addEventListener('shown.bs.tab', function(e) {
+            var t = e.target.getAttribute('data-bs-target');
+            localStorage.setItem(STORAGE_KEY, t);
+            history.replaceState(null, '', window.location.pathname + t);
+        });
+    });
+
+    // Restore button: confirm, then submit the restore-form
+    var restoreBtn = document.getElementById('restore-btn');
+    if (restoreBtn) {
+        restoreBtn.addEventListener('click', function() {
+            showConfirmModal('Restore data from this backup? Existing EDLs and URLs with matching identifiers will be overwritten.', function() {
+                document.getElementById('restore-form').submit();
+            });
+        });
+    }
+});
+</script>
 {% endblock %}
