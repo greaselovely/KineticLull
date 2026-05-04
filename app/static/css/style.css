@@ -263,6 +263,11 @@ html.admin-menu-is-open .submenu-toggle#admin-menu-toggle .submenu-arrow {
     flex: 0 1 auto;
 }
 
+/* Listing-page tables share a denser body font, matching the existing 0.85rem header. */
+.edl-card table {
+    font-size: 0.85rem;
+}
+
 .edl-footer {
     margin-top: auto;
     padding-top: 16px;
