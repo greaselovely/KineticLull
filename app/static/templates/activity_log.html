@@ -102,20 +102,21 @@
 
 <!-- Log Detail Modal -->
 <div class="modal fade" id="logModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Log Entry</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body log-table" style="font-size: 0.85rem;">
-                <table class="table table-sm table-borderless mb-0">
-                    <tr><td class="text-muted" style="width:100px;">Timestamp</td><td id="modal-timestamp"></td></tr>
+            <div class="modal-body" style="font-size: 0.85rem;">
+                <table class="table table-sm table-borderless mb-0" style="table-layout: fixed; width: 100%;">
+                    <colgroup><col style="width: 110px;"><col></colgroup>
+                    <tr><td class="text-muted">Timestamp</td><td id="modal-timestamp"></td></tr>
                     <tr><td class="text-muted">User</td><td id="modal-user"></td></tr>
                     <tr><td class="text-muted">Action</td><td id="modal-action"></td></tr>
-                    <tr><td class="text-muted">Target</td><td id="modal-target"></td></tr>
+                    <tr><td class="text-muted align-top">Target</td><td id="modal-target" style="overflow-wrap: anywhere; white-space: normal;"></td></tr>
                     <tr><td class="text-muted">IP Address</td><td><span id="modal-ip"></span>{% if user.is_superuser %} <button class="btn btn-sm btn-outline-danger ms-2" id="modal-block-btn" title="Block this IP"><i class="bi bi-shield-x"></i></button>{% endif %}</td></tr>
-                    <tr><td class="text-muted">Detail</td><td id="modal-detail" style="word-break: break-all; white-space: normal;"></td></tr>
+                    <tr id="modal-detail-row"><td class="text-muted align-top">Detail</td><td id="modal-detail" style="overflow-wrap: anywhere; white-space: normal;"></td></tr>
                 </table>
             </div>
         </div>
@@ -130,14 +131,39 @@ document.addEventListener('DOMContentLoaded', function() {
     initResizableTable('log-table');
 
     var logModal = document.getElementById('logModal');
+
+    function renderMaybeList(cellEl, text) {
+        cellEl.innerHTML = '';
+        var t = (text || '').trim();
+        if (!t) {
+            cellEl.textContent = '';
+            return false;
+        }
+        var parts = t.split('; ').filter(function(p) { return p.trim() !== ''; });
+        if (parts.length >= 2) {
+            var ul = document.createElement('ul');
+            ul.className = 'list-unstyled mb-0';
+            parts.forEach(function(p) {
+                var li = document.createElement('li');
+                li.textContent = p;
+                ul.appendChild(li);
+            });
+            cellEl.appendChild(ul);
+        } else {
+            cellEl.textContent = t;
+        }
+        return true;
+    }
+
     logModal.addEventListener('show.bs.modal', function(event) {
         var row = event.relatedTarget;
         document.getElementById('modal-timestamp').textContent = row.getAttribute('data-timestamp');
         document.getElementById('modal-user').textContent = row.getAttribute('data-user');
         document.getElementById('modal-action').textContent = row.getAttribute('data-action');
-        document.getElementById('modal-target').textContent = row.getAttribute('data-target');
-        document.getElementById('modal-detail').textContent = row.getAttribute('data-detail');
         document.getElementById('modal-ip').textContent = row.getAttribute('data-ip');
+        renderMaybeList(document.getElementById('modal-target'), row.getAttribute('data-target'));
+        var hasDetail = renderMaybeList(document.getElementById('modal-detail'), row.getAttribute('data-detail'));
+        document.getElementById('modal-detail-row').style.display = hasDetail ? '' : 'none';
     });
 
     // Auto-refresh
