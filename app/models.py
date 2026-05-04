@@ -181,8 +181,8 @@ class AppSettings(models.Model):
 
     # Backups (Backblaze B2)
     b2_enabled = models.BooleanField(default=False, verbose_name='Enable B2 Offsite Backup')
-    b2_application_key_id = models.CharField(max_length=64, blank=True, default='', verbose_name='B2 Application Key ID')
-    b2_application_key = EncryptedCharField(max_length=512, blank=True, default='', verbose_name='B2 Application Key')
+    b2_application_key_id = models.CharField(max_length=64, blank=True, default='', verbose_name='B2 keyID')
+    b2_application_key = EncryptedCharField(max_length=512, blank=True, default='', verbose_name='B2 applicationKey')
     b2_bucket_name = models.CharField(max_length=255, blank=True, default='', verbose_name='B2 Bucket Name')
     b2_last_upload_at = models.DateTimeField(null=True, blank=True, verbose_name='B2 Last Upload')
     b2_last_upload_status = models.CharField(max_length=16, blank=True, default='', verbose_name='B2 Last Upload Status')

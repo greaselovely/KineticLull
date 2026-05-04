@@ -14,12 +14,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='appsettings',
             name='b2_application_key',
-            field=app.crypto.EncryptedCharField(blank=True, default='', max_length=512, verbose_name='B2 Application Key'),
+            field=app.crypto.EncryptedCharField(blank=True, default='', max_length=512, verbose_name='B2 applicationKey'),
         ),
         migrations.AddField(
             model_name='appsettings',
             name='b2_application_key_id',
-            field=models.CharField(blank=True, default='', max_length=64, verbose_name='B2 Application Key ID'),
+            field=models.CharField(blank=True, default='', max_length=64, verbose_name='B2 keyID'),
         ),
         migrations.AddField(
             model_name='appsettings',
