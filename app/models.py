@@ -135,9 +135,13 @@ class ActivityLog(models.Model):
 
     @classmethod
     def verify_chain(cls):
-        """Verify the integrity of the log chain. Returns (valid, first_broken_id)."""
+        """Verify the integrity of the log chain. Returns (valid, first_broken_id).
+
+        Streams via iterator() so the integrity page doesn't load every row
+        into memory on customer installs with 100k+ entries.
+        """
         prev_hash = ''
-        for entry in cls.objects.order_by('id'):
+        for entry in cls.objects.order_by('id').iterator(chunk_size=1000):
             expected = entry._compute_hash(prev_hash)
             if entry.chain_hash != expected:
                 return False, entry.id
