@@ -338,6 +338,64 @@ def show_ip_fqdn(request, auto_url):
         raise PermissionDenied
 
 
+_ROBOTS_TXT = """\
+# robots.txt for KineticLull
+# An EDL (External Dynamic List) manager for network security teams who
+# got tired of editing CSVs by hand and ssh'ing to the firewall at 2am
+# to push a /32 block.
+#
+# Built by zeroonesix.co. Yes, that is a real TLD. No, .co is not a typo.
+#
+# ---------------------------------------------------------------------
+# Dear crawler,
+#
+# This is a private appliance. There is nothing here for you to index.
+# You have wandered into a server whose entire purpose in life is
+# blocking other servers. Read the room.
+#
+# ---------------------------------------------------------------------
+# To the human reading this in `view-source:` or `curl -s`:
+#
+# Welcome. The house rules are short:
+#
+#   - It is always DNS.
+#   - rm -rf / is not a backup strategy.
+#   - The S in IoT stands for Security.
+#   - "It works on my machine" is not a deployment plan.
+#   - Firewall rule order matters. yes, that one too.
+#   - /dev/null is the most reliable database in production.
+#   - tabs. it was always tabs.
+#   - There are 10 kinds of people: those who understand binary,
+#     those who don't, and those who weren't expecting base 3.
+#
+# ---------------------------------------------------------------------
+# To the mass scanners, bored botnets, and that one curl loop someone
+# forgot to systemctl stop in 2019:
+#
+#   - The stack you are guessing at is wrong.
+#   - Your favourites list is on file. Try harder, or try elsewhere.
+#   - The teapot is brewing. HTTP 418.
+#
+# ---------------------------------------------------------------------
+# For the truly curious, `base64 -d` this:
+#
+# eW91IGJhc2U2NCAtZCdkIGEgcm9ib3RzLnR4dCBlYXN0ZXIgZWdnLiB0aGF0IGlz
+# IHNvIGRlZXBseSB1bnNlcmlvdXMgdGhhdCBpIGxvdmUgaXQuIHNwb2lsZXI6IGl0
+# IHdhcyBETlMuIGl0IGlzIGFsd2F5cyBETlMuIHNheSBoaTogc2hheW5lQHplcm9v
+# bmVzaXguY28=
+#
+# (no auth required; please don't sell the contents)
+# ---------------------------------------------------------------------
+
+User-agent: *
+Disallow: /
+"""
+
+
+def robots_txt_view(request):
+    return HttpResponse(_ROBOTS_TXT, content_type='text/plain; charset=utf-8')
+
+
 def custom_404(request, exception):
     path = request.get_full_path()
     if not getattr(request, '_kl_logged_404', False):

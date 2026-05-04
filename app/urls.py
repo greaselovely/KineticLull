@@ -71,6 +71,7 @@ urlpatterns = [
     path('s/<str:short_code>/', redirect_short_url, name='redirect_short_url'),
     path('system-health/', views.system_health_view, name='system_health'),
     path('favicon.ico', RedirectView.as_view(url='/static/images/favicon.ico', permanent=True)),
+    path('robots.txt', views.robots_txt_view, name='robots_txt'),
     # keep this at the bottom
     re_path(r'^(?P<auto_url>[\w.-]+)/?$', views.show_ip_fqdn, name='show_ip_fqdn'),
 ]
