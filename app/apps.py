@@ -46,6 +46,41 @@ def _regenerate_blocklist():
         pass  # DB may not be ready yet (e.g., mid-migration); empty file is enough
 
 
+_scheduler_lock_fd = None  # module-level: keep the lock fd alive for the process lifetime
+
+
+def _acquire_scheduler_lock():
+    """Acquire an exclusive flock so only one gunicorn worker runs the scheduled threads.
+
+    Without this, every worker spawns its own backup/cleanup/parser loops and we
+    end up with N copies of every scheduled action (3 identical B2 uploads at the
+    same timestamp under default `--workers 3`, etc.). The lock is released by
+    the kernel when the holding process dies, so a worker restart re-elects.
+    """
+    global _scheduler_lock_fd
+    if _scheduler_lock_fd is not None:
+        return True
+
+    import os
+    import fcntl
+    from django.conf import settings
+
+    lock_path = os.path.join(settings.BASE_DIR, 'backups', '.scheduler.lock')
+    try:
+        os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+        fd = open(lock_path, 'w')
+        fcntl.flock(fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (BlockingIOError, OSError):
+        try:
+            fd.close()
+        except Exception:
+            pass
+        return False
+
+    _scheduler_lock_fd = fd  # keep alive for process lifetime
+    return True
+
+
 def _start_daily_backup_scheduler():
     """Run data backup daily in a background thread. Only starts once."""
     import threading
@@ -59,6 +94,11 @@ def _start_daily_backup_scheduler():
     elif 'gunicorn' in (os.environ.get('_', '') or ''):
         pass  # Also OK
     else:
+        return
+
+    # Under gunicorn we have N workers, each calling ready(). Only the first
+    # worker to grab the lock runs the schedulers; the others bail silently.
+    if not _acquire_scheduler_lock():
         return
 
     def _backup_loop():
