@@ -32,7 +32,7 @@ else:
     load_dotenv(dotenv_path)
 
 LOGIN_URL = 'app:login'
-LOGIN_REDIRECT = '/'
+LOGIN_REDIRECT_URL = '/'
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
