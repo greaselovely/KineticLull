@@ -22,12 +22,13 @@
         <tbody>
             {% for u in users %}
             <tr>
-                <td><a href="{% url 'app:user_edit' u.id %}">{{ u.email }}</a></td>
+                <td>{{ u.email }}</td>
                 <td>{{ u.first_name }} {{ u.last_name }}</td>
                 <td>{% for g in u.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-muted">None</span>{% endfor %}</td>
                 <td>{% if u.is_active %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}</td>
                 <td>{{ u.date_joined|date:app_timestamp_format }}</td>
                 <td>
+                    <a href="{% url 'app:user_edit' u.id %}" title="Edit"><i class="bi bi-pencil action-items"></i></a>
                     {% if u != request.user %}
                     <i class="bi bi-trash action-items text-danger" onclick="deleteUser('{{ u.id }}', '{{ u.email }}', event)" title="Delete"></i>
                     {% endif %}
