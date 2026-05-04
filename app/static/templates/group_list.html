@@ -13,23 +13,17 @@
     <table class="table table-hover mt-3">
         <thead>
             <tr>
-                <th style="width: 25%;">Group Name</th>
-                <th style="width: 45%;">Members</th>
+                <th style="width: 40%;">Group Name</th>
+                <th style="width: 15%;">Members</th>
                 <th style="width: 15%;">Permissions</th>
-                <th style="width: 15%;">Actions</th>
+                <th style="width: 30%;">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for group in groups %}
             <tr>
                 <td><a href="{% url 'app:group_edit' group.id %}">{{ group.name }}</a></td>
-                <td>
-                    {% for member in group.user_set.all %}
-                        <a href="{% url 'app:user_edit' member.id %}">{{ member.email }}</a>{% if not forloop.last %}, {% endif %}
-                    {% empty %}
-                        <span class="text-muted">No members</span>
-                    {% endfor %}
-                </td>
+                <td>{{ group.user_set.count }}</td>
                 <td>{{ group.permissions.count }}</td>
                 <td>
                     <a href="{% url 'app:group_edit' group.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
