@@ -324,7 +324,8 @@ def show_ip_fqdn(request, auto_url):
         edl = ExtDynLists.objects.get(auto_url=auto_url)
     except ExtDynLists.DoesNotExist:
         log_activity(request, 'edl_not_found', auto_url, detail)
-        BlockedIP.check_autoblock(user_ip)
+        if not BlockedIP.check_scanner_pattern_block(user_ip, request.path):
+            BlockedIP.check_autoblock(user_ip)
         request._kl_logged_404 = True
         raise Http404
 
@@ -344,7 +345,8 @@ def custom_404(request, exception):
         log_activity(request, 'not_found', path, f'Agent: {user_agent}')
         ip = get_client_ip(request)
         if ip:
-            BlockedIP.check_autoblock(ip)
+            if not BlockedIP.check_scanner_pattern_block(ip, request.path):
+                BlockedIP.check_autoblock(ip)
     return render(request, '404.html', {'request_path': path}, status=404)
 
 

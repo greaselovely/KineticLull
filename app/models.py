@@ -267,6 +267,81 @@ class BlockedIP(models.Model):
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass  # Nginx not installed or not running (dev environment)
 
+    # Path patterns that indicate scanner / exploit probing — any single hit
+    # blocks the source IP immediately, regardless of rate. These are paths a
+    # legitimate user has zero reason to ever request. Substrings are matched
+    # case-insensitively against the URL path. Add only signals you're confident
+    # carry no false positives — operator complaints about over-blocking belong
+    # higher in the priority queue than missing a scanner.
+    SCANNER_PATH_PATTERNS = (
+        '.env',
+        '.git/',
+        'wp-admin',
+        'wp-login',
+        'wp-content/plugins',
+        'phpmyadmin',
+        '.aws/credentials',
+        '/etc/passwd',
+        '/etc/shadow',
+        'id_rsa',
+        'server-status',
+        'web.config',
+        '/cgi-bin/',
+        'xmlrpc.php',
+        'sftp-config',
+        'vendor/phpunit',
+        'eval-stdin.php',
+        '/owa/',
+        '/ecp/',
+        'autodiscover.xml',
+    )
+
+    @classmethod
+    def _matched_scanner_pattern(cls, path):
+        if not path:
+            return None
+        lower = path.lower()
+        for pat in cls.SCANNER_PATH_PATTERNS:
+            if pat in lower:
+                return pat
+        return None
+
+    @classmethod
+    def check_scanner_pattern_block(cls, ip_address, path):
+        """Immediately block an IP that hits a known scanner/exploit path.
+
+        Gated by the same `autoblock_enabled` master switch as the rate-based
+        check. Returns True if a block was created, False otherwise.
+        """
+        if not ip_address:
+            return False
+        app_settings = AppSettings.load()
+        if not app_settings.autoblock_enabled:
+            return False
+        if WhitelistedIP.is_whitelisted(ip_address):
+            return False
+        if cls.objects.filter(ip_address=ip_address).exists():
+            return False
+
+        pattern = cls._matched_scanner_pattern(path)
+        if not pattern:
+            return False
+
+        from django.utils import timezone
+        from datetime import timedelta
+        expires = None
+        if app_settings.autoblock_duration_minutes > 0:
+            expires = timezone.now() + timedelta(minutes=app_settings.autoblock_duration_minutes)
+
+        cls.objects.create(
+            ip_address=ip_address,
+            reason=f'Auto-blocked: scanner pattern "{pattern}" in {path[:120]}',
+            auto_blocked=True,
+            expires_at=expires,
+        )
+        cls.sync_to_nginx()
+        return True
+
     @classmethod
     def check_autoblock(cls, ip_address):
         """Check if an IP should be auto-blocked based on threshold settings."""
