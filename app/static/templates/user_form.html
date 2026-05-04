@@ -93,7 +93,7 @@
             {% if api_key %}
             <div id="api-key-container" class="mb-3">
                 <p style="font-size: 0.85rem;" class="mb-2">{% if is_self %}Your{% else %}{{ edit_user.email }}'s{% endif %} API key:</p>
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2 api-key-row" style="position: relative; padding-right: 22px;">
                     <code id="api-key" class="blur-text flex-grow-1" style="font-size: 0.85rem; padding: 6px 10px; background: #f5f6fa; border-radius: 4px;">{{ api_key }}</code>
                     <i class="bi bi-eye action-items" id="toggle-api-key-visibility" style="cursor: pointer;" title="Show/Hide"></i>
                     <i class="bi bi-clipboard action-items" id="copy-api-key" style="cursor: pointer;" title="Copy"></i>

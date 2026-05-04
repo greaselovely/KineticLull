@@ -437,6 +437,16 @@ a:has(> .action-items) {
     user-select: all;
 }
 
+/* Sparkle from showCopyFlash() lands in this reserved slot so the eye/clipboard
+   icons don't shift when it appears. */
+.api-key-row > .bi-stars {
+    position: absolute;
+    right: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0 !important;
+}
+
 /* Buttons */
 .btn {
     border-radius: 6px;
