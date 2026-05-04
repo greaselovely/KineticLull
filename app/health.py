@@ -252,6 +252,64 @@ def check_version_up_to_date():
     )
 
 
+def check_b2_backup_freshness():
+    """Flag when B2 offsite backup is enabled but uploads are stale or failing."""
+    try:
+        from .models import AppSettings
+        app_settings = AppSettings.objects.filter(pk=1).first()
+    except Exception:
+        return _check('b2_backup', 'B2 offsite backup', True, 'info', 'Settings not yet initialized.')
+
+    if not app_settings or not app_settings.b2_enabled:
+        return _check('b2_backup', 'B2 offsite backup', True, 'info', 'Not enabled.')
+
+    bucket = app_settings.b2_bucket_name or '(unset)'
+    last_at = app_settings.b2_last_upload_at
+    last_status = app_settings.b2_last_upload_status
+    last_error = app_settings.b2_last_upload_error
+    last_filename = app_settings.b2_last_upload_filename
+
+    if not last_at:
+        return _check(
+            'b2_backup', 'B2 offsite backup', False, 'error',
+            f'Enabled (bucket: {bucket}) but no upload has been attempted yet.',
+            why='B2 was enabled but the daily scheduler has not pushed a tarball. Backups exist locally only.',
+            fix_commands=[
+                '# Open Settings → B2 Backup Status and click "Upload latest backup to B2 now"',
+            ],
+        )
+
+    from django.utils import timezone as djtz
+    age_hours = (djtz.now() - last_at).total_seconds() / 3600
+
+    if last_status == 'failed':
+        return _check(
+            'b2_backup', 'B2 offsite backup', False, 'error',
+            f'Last upload failed {age_hours:.0f}h ago: {last_error[:200]}',
+            why='The most recent B2 upload attempt failed. Check the error and retry from the settings page.',
+            fix_commands=[
+                '# Verify keyID/applicationKey/bucket in Settings',
+                '# Then click "Upload latest backup to B2 now" to retry',
+            ],
+        )
+
+    if age_hours > 36:
+        return _check(
+            'b2_backup', 'B2 offsite backup', False, 'warning',
+            f'Last successful upload was {age_hours:.0f}h ago ({last_filename}).',
+            why='Daily uploads should run every ~24h. Going past 36h means the scheduler is not running or is stuck.',
+            fix_commands=[
+                'sudo systemctl restart kineticlull',
+                '# Or manually push from Settings → B2 Backup Status',
+            ],
+        )
+
+    return _check(
+        'b2_backup', 'B2 offsite backup', True, 'ok',
+        f'Last upload {age_hours:.0f}h ago ({last_filename}).',
+    )
+
+
 CHECKS = [
     check_code_stale,
     check_version_up_to_date,
@@ -260,6 +318,7 @@ CHECKS = [
     check_cryptography,
     check_sudoers,
     check_ssl_cert,
+    check_b2_backup_freshness,
 ]
 
 
