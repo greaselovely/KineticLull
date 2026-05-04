@@ -426,47 +426,69 @@
                     </div>
                 </div>
 
-                {% if app_settings.b2_enabled or app_settings.b2_last_upload_at %}
                 <div class="card mb-3">
                     <div class="card-body">
-                        <h6 class="text-muted text-uppercase mb-3">B2 Backup Status</h6>
-                        {% if app_settings.b2_last_upload_at %}
-                            <p style="font-size: 0.85rem;" class="mb-2">
+                        <h6 class="text-muted text-uppercase mb-3">Local Backups</h6>
+                        <p style="font-size: 0.85rem;" class="mb-2">
+                            {% if data_backups %}
+                                <i class="bi bi-hdd text-muted me-1"></i>Last snapshot: <strong>{{ data_backups.0.timestamp|date:app_timestamp_format }}</strong> &middot; {{ data_backups.0.filename }}
+                            {% else %}
+                                <span class="text-muted">No local snapshots yet.</span>
+                            {% endif %}
+                        </p>
+                        <p class="text-muted mb-3" style="font-size: 0.8rem;">Daily snapshots written to <code>backups/data/</code> on this box, kept for 30 days.</p>
+                        <div class="d-flex gap-2 align-items-end flex-wrap">
+                            <button type="submit" form="take-local-backup-form" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-hdd me-1"></i>Take snapshot now
+                            </button>
+                            {% if data_backups %}
+                            <select name="archive" class="form-select form-select-sm" form="restore-form" style="min-width: 240px; max-width: 320px;">
+                                {% for backup in data_backups %}
+                                <option value="{{ backup.filename }}">{{ backup.timestamp|date:app_timestamp_format|default:backup.filename }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" id="restore-local-btn" class="btn btn-warning btn-sm">Restore from local</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Backblaze B2 Offsite Backup</h6>
+                        {% if app_settings.b2_enabled %}
+                        <p style="font-size: 0.85rem;" class="mb-2">
+                            {% if app_settings.b2_last_upload_at %}
                                 {% if app_settings.b2_last_upload_status == 'success' %}
                                     <i class="bi bi-check-circle text-success me-1"></i>Last upload: <strong>{{ app_settings.b2_last_upload_at|date:app_timestamp_format }}</strong> &middot; {{ app_settings.b2_last_upload_filename }}
                                 {% else %}
                                     <i class="bi bi-exclamation-triangle text-danger me-1"></i>Last upload <strong>failed</strong> at {{ app_settings.b2_last_upload_at|date:app_timestamp_format }}: {{ app_settings.b2_last_upload_error }}
                                 {% endif %}
-                            </p>
-                        {% else %}
-                            <p style="font-size: 0.85rem;" class="text-muted mb-2">No upload attempted yet.</p>
-                        {% endif %}
-                        <button type="submit" form="b2-upload-form" class="btn btn-outline-primary btn-sm" {% if not app_settings.b2_enabled %}disabled title="Enable B2 in settings first"{% endif %}>
-                            <i class="bi bi-cloud-upload me-1"></i>Upload latest backup to B2 now
-                        </button>
-                    </div>
-                </div>
-                {% endif %}
-
-                {% if data_backups %}
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <h6 class="text-muted text-uppercase mb-3">Data Restore</h6>
-                        <p style="font-size: 0.85rem;" class="text-muted">Restore EDLs and URLs from a daily backup. Original URLs are preserved so firewalls do not need to be updated.</p>
-                        <div class="d-flex gap-2 align-items-end">
-                            <div class="flex-grow-1">
-                                <label for="archive" class="form-label">Backup</label>
-                                <select name="archive" id="archive" class="form-select form-select-sm" form="restore-form">
-                                    {% for backup in data_backups %}
-                                    <option value="{{ backup.filename }}">{{ backup.timestamp|date:app_timestamp_format|default:backup.filename }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <button type="button" id="restore-btn" class="btn btn-warning btn-sm">Restore</button>
+                            {% else %}
+                                <span class="text-muted">No upload attempted yet.</span>
+                            {% endif %}
+                        </p>
+                        <p class="text-muted mb-3" style="font-size: 0.8rem;">Mirror of the latest local snapshot. Retention is governed by your B2 bucket lifecycle rules.</p>
+                        <div class="d-flex gap-2 align-items-end flex-wrap">
+                            <button type="submit" form="b2-upload-form" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-cloud-upload me-1"></i>Upload latest to B2 now
+                            </button>
+                            {% if b2_versions %}
+                            <select name="file_id" class="form-select form-select-sm" form="restore-from-b2-form" style="min-width: 280px; max-width: 380px;">
+                                {% for v in b2_versions %}
+                                <option value="{{ v.file_id }}">{{ v.file_name }}{% if v.uploaded_at %} &middot; {{ v.uploaded_at|date:app_timestamp_format }}{% endif %}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" id="restore-b2-btn" class="btn btn-warning btn-sm">Restore from B2</button>
+                            {% elif b2_versions_error %}
+                            <span class="text-danger" style="font-size: 0.8rem;">List failed: {{ b2_versions_error }}</span>
+                            {% endif %}
                         </div>
+                        {% else %}
+                        <p class="text-muted mb-0" style="font-size: 0.85rem;">Enable B2 in the configuration card above to use offsite backup and restore.</p>
+                        {% endif %}
                     </div>
                 </div>
-                {% endif %}
             </div>
 
         </div>
@@ -474,7 +496,9 @@
 
     {# Sibling forms: B2 manual upload + Data Restore. Inputs/buttons inside the Backups tab use form="..." to associate with these. #}
     <form id="b2-upload-form" method="post" action="{% url 'app:backup_to_b2' %}" style="display:none;">{% csrf_token %}</form>
+    <form id="take-local-backup-form" method="post" action="{% url 'app:take_local_backup' %}" style="display:none;">{% csrf_token %}</form>
     <form id="restore-form" method="post" action="{% url 'app:restore_data' %}" style="display:none;">{% csrf_token %}</form>
+    <form id="restore-from-b2-form" method="post" action="{% url 'app:restore_from_b2' %}" style="display:none;">{% csrf_token %}</form>
 
     {# Sticky save bar #}
     <div class="settings-save-bar">
@@ -539,12 +563,22 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Restore button: confirm, then submit the restore-form
-    var restoreBtn = document.getElementById('restore-btn');
-    if (restoreBtn) {
-        restoreBtn.addEventListener('click', function() {
-            showConfirmModal('Restore data from this backup? Existing EDLs and URLs with matching identifiers will be overwritten.', function() {
+    // Restore-from-local: confirm, then submit
+    var restoreLocalBtn = document.getElementById('restore-local-btn');
+    if (restoreLocalBtn) {
+        restoreLocalBtn.addEventListener('click', function() {
+            showConfirmModal('Restore data from this LOCAL backup? Existing EDLs and URLs with matching identifiers will be overwritten.', function() {
                 document.getElementById('restore-form').submit();
+            });
+        });
+    }
+
+    // Restore-from-B2: download to local first, then restore
+    var restoreB2Btn = document.getElementById('restore-b2-btn');
+    if (restoreB2Btn) {
+        restoreB2Btn.addEventListener('click', function() {
+            showConfirmModal('Restore data from this B2 backup? It will be downloaded to local disk first, then existing EDLs and URLs with matching identifiers will be overwritten.', function() {
+                document.getElementById('restore-from-b2-form').submit();
             });
         });
     }

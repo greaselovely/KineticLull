@@ -106,6 +106,12 @@ def _start_daily_backup_scheduler():
 
         Computes the next run target each pass and sleeps up to 1 hour at a
         time so changes to the configured time take effect within the hour.
+
+        On restart we *do not* catch up missed runs. If the service was down
+        at the scheduled time today, skip until tomorrow's target. A backup
+        taken right after a restart captures post-restart state and provides
+        no real recovery value (and would let restart loops bloat disk + B2
+        with redundant tarballs of the same state).
         """
         from datetime import datetime, time as dtime, timedelta
         try:
@@ -114,7 +120,25 @@ def _start_daily_backup_scheduler():
             ZoneInfo = None
 
         time.sleep(60)  # startup grace
+
+        # Initialize last_run_date so the loop only fires at the scheduled time:
+        #   - If today's target has already passed when we boot, mark today done.
+        #     The loop will sleep until tomorrow's target.
+        #   - If we boot before today's target, leave None so the loop fires
+        #     when it naturally crosses the target.
         last_run_date = None
+        try:
+            from app.models import AppSettings
+            app_settings = AppSettings.objects.filter(pk=1).first()
+            target = (app_settings.backup_time if app_settings and app_settings.backup_time else dtime(2, 0))
+            tz_name = app_settings.timezone if app_settings else 'UTC'
+            tz = ZoneInfo(tz_name) if ZoneInfo else None
+            now_local = datetime.now(tz=tz)
+            today_target = now_local.replace(hour=target.hour, minute=target.minute, second=0, microsecond=0)
+            if now_local >= today_target:
+                last_run_date = now_local.date()
+        except Exception:
+            pass
 
         while True:
             sleep_secs = 3600

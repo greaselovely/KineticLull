@@ -101,6 +101,7 @@ def _authorize_and_resolve_bucket(app_settings) -> dict:
 
     return {
         'api_url': api_url,
+        'download_url': storage_api.get('downloadUrl'),
         'account_token': account_token,
         'account_id': account_id,
         'bucket_id': bucket_id,
@@ -271,3 +272,73 @@ def latest_backup_path(base_dir):
         return None
     archives = sorted(backup_dir.glob('backup_*.tar.gz'), reverse=True)
     return archives[0] if archives else None
+
+
+def list_versions(app_settings, max_count=30):
+    """List the most recent N backup tarball versions in the configured B2 bucket.
+
+    Returns a list of dicts: file_id, file_name, upload_timestamp_ms, size.
+    Raises B2Error on failure.
+    """
+    ctx = _authorize_and_resolve_bucket(app_settings)
+    try:
+        resp = requests.post(
+            f'{ctx["api_url"]}/b2api/v3/b2_list_file_versions',
+            headers={'Authorization': ctx['account_token']},
+            json={
+                'bucketId': ctx['bucket_id'],
+                'prefix': 'backup_',
+                'maxFileCount': max_count,
+            },
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        raise B2Error(f'B2 list_file_versions network error: {e}')
+    if resp.status_code != 200:
+        raise B2Error(f'B2 list_file_versions failed: HTTP {resp.status_code} {resp.text[:200]}')
+
+    files = resp.json().get('files', [])
+    return [
+        {
+            'file_id': f['fileId'],
+            'file_name': f['fileName'],
+            'upload_timestamp_ms': f.get('uploadTimestamp', 0),
+            'size': f.get('contentLength', 0),
+        }
+        for f in files
+    ]
+
+
+def download_version_to_local(app_settings, file_id, base_dir):
+    """Download a B2 file version by ID and save it to backups/data/.
+
+    Returns the local Path. Caller is responsible for any subsequent restore.
+    Raises B2Error on failure.
+    """
+    ctx = _authorize_and_resolve_bucket(app_settings)
+    download_url = ctx.get('download_url')
+    if not download_url:
+        raise B2Error('B2 download URL not in auth response.')
+
+    try:
+        resp = requests.get(
+            f'{download_url}/b2api/v3/b2_download_file_by_id',
+            params={'fileId': file_id},
+            headers={'Authorization': ctx['account_token']},
+            timeout=600,
+            stream=True,
+        )
+    except requests.RequestException as e:
+        raise B2Error(f'B2 download network error: {e}')
+    if resp.status_code != 200:
+        raise B2Error(f'B2 download failed: HTTP {resp.status_code} {resp.text[:200]}')
+
+    filename = resp.headers.get('X-Bz-File-Name', f'b2_restore_{file_id}.tar.gz')
+    backup_dir = Path(base_dir) / 'backups' / 'data'
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    local_path = backup_dir / filename
+    with open(local_path, 'wb') as out_f:
+        for chunk in resp.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                out_f.write(chunk)
+    return local_path

@@ -1405,10 +1405,31 @@ def app_settings_view(request):
                 ts = None
             backups.append({'filename': f.name, 'timestamp': ts})
 
+    # B2 versions (offsite restore source) — fetched at render time so the
+    # dropdown reflects current bucket state. Only when fully configured.
+    b2_versions = []
+    b2_versions_error = None
+    if (app_settings.b2_enabled and app_settings.b2_application_key_id
+            and app_settings.b2_application_key and app_settings.b2_bucket_name):
+        try:
+            from . import b2_backup
+            b2_versions = b2_backup.list_versions(app_settings, max_count=30)
+            for v in b2_versions:
+                if v['upload_timestamp_ms']:
+                    v['uploaded_at'] = datetime.fromtimestamp(
+                        v['upload_timestamp_ms'] / 1000, tz=timezone.utc,
+                    )
+                else:
+                    v['uploaded_at'] = None
+        except Exception as e:
+            b2_versions_error = str(e)
+
     return render(request, 'app_settings.html', {
         'app_settings': app_settings,
         'timezones': available_timezones,
         'data_backups': backups,
+        'b2_versions': b2_versions,
+        'b2_versions_error': b2_versions_error,
     })
 
 
@@ -1434,6 +1455,60 @@ def restore_data_view(request):
     except Exception as e:
         messages.error(request, f'Restore failed: {e}')
 
+    return redirect('app:app_settings')
+
+
+@login_required
+@require_http_methods(["POST"])
+def take_local_backup_view(request):
+    """Trigger a one-shot local backup. UI-visible alternative to the daily schedule."""
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    try:
+        from django.core.management import call_command
+        from io import StringIO
+        out = StringIO()
+        call_command('backup_data', stdout=out)
+        log_activity(request, 'manual_local_backup', '', out.getvalue()[:500])
+        messages.success(request, 'Local backup created.')
+    except Exception as e:
+        messages.error(request, f'Backup failed: {e}')
+    return redirect('app:app_settings')
+
+
+@login_required
+@require_http_methods(["POST"])
+def restore_from_b2_view(request):
+    """Download a B2 version into backups/data/ and restore from it."""
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    file_id = request.POST.get('file_id', '').strip()
+    if not file_id:
+        messages.error(request, 'Invalid B2 backup selection.')
+        return redirect('app:app_settings')
+
+    from . import b2_backup
+    app_settings = AppSettings.objects.get(pk=1)
+    if not app_settings.b2_enabled:
+        messages.error(request, 'B2 backup is not enabled.')
+        return redirect('app:app_settings')
+
+    try:
+        local_path = b2_backup.download_version_to_local(app_settings, file_id, settings.BASE_DIR)
+    except b2_backup.B2Error as e:
+        messages.error(request, f'B2 download failed: {e}')
+        return redirect('app:app_settings')
+
+    try:
+        from django.core.management import call_command
+        from io import StringIO
+        out = StringIO()
+        call_command('restore_data', local_path.name, stdout=out)
+        log_activity(request, 'restore_from_b2', local_path.name, out.getvalue()[:500])
+        messages.success(request, f'Data restored from B2 backup {local_path.name}.')
+    except Exception as e:
+        messages.error(request, f'Restore failed: {e}')
     return redirect('app:app_settings')
 
 
