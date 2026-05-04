@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
 from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile
-from .forms import ExtDynListsForm, ProfileChangeForm, ShortenedURLForm
+from .forms import ExtDynListsForm, ShortenedURLForm
 from .email import send_file_shared_email, send_otp_email, send_access_notification
 
 from users.models import CustomUser
@@ -681,64 +681,6 @@ def get_corrected_network_address(value):
     except ValueError:
         # Invalid IP address or network, turn it into a comment with an explanation
         return f"# Invalid entry: {original_value}"
-
-@login_required
-def edit_profile_view(request):
-    """
-    Allows the user to edit their profile, including generating a new API key
-    and updating user information through a form. If the request method is POST
-    and contains 'generate_api_key', the existing API key for the user is deleted,
-    and a new one is generated. If the form is submitted and valid, the user's profile
-    is updated. Otherwise, the edit profile form is displayed.
-
-    Args:
-        request: HttpRequest object.
-
-    Returns:
-        HttpResponse object rendering the edit profile page with the context
-        containing the form, title, and API key if present.
-    """
-    user = request.user
-    if request.method == 'POST':
-        if 'generate_api_key' in request.POST:
-            APIKey.objects.filter(user=user).delete()
-            generate_api_key(user)
-            messages.success(request, "New API key generated.")
-            return redirect('app:edit_profile')
-
-        form = ProfileChangeForm(request.POST, instance=user)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Profile updated successfully.")
-            return redirect('app:profile')
-    else:
-        form = ProfileChangeForm(instance=user)
-        api_key = APIKey.objects.filter(user=user).first()
-
-    context = {
-        'form': form,
-        'title': 'Edit Profile',
-        'api_key': api_key.key if api_key else None
-    }
-    return render(request, 'edit_profile.html', context)
-
-@login_required
-def profile_view(request):
-    """
-    Renders the profile page for the logged-in user.
-
-    This view displays the user's profile information, including their API key if it exists. It's a straightforward
-    view that primarily deals with presenting information to the user without handling any form submissions or
-    data modifications.
-
-    Parameters:
-    - request: HttpRequest object containing metadata about the request.
-
-    Returns:
-    - HttpResponse object with the rendered profile page.
-    """
-    context = {"title": "Profile"}
-    return render(request, 'profile.html', context)
 
 def generate_api_key(user):
     """
@@ -1604,17 +1546,37 @@ def user_delete_view(request, user_id):
 
 @login_required
 def user_edit_view(request, user_id):
-    if not request.user.is_superuser:
-        raise PermissionDenied
+    """Edit a user. Superusers can edit anyone; non-superusers can only edit themselves.
+
+    Self-editing non-superusers can change first/last name, password, and
+    regenerate their API key (if their group has the `users.use_api_key`
+    permission). They cannot change group membership or active status.
+    """
     edit_user = get_object_or_404(CustomUser, id=user_id)
+    is_self = request.user.id == edit_user.id
+    if not (request.user.is_superuser or is_self):
+        raise PermissionDenied
+
     groups = Group.objects.all().order_by('name')
+    can_use_api_key = edit_user.has_perm('users.use_api_key')
 
     if request.method == 'POST':
+        # API-key regeneration is its own POST branch (button name)
+        if 'generate_api_key' in request.POST:
+            if not can_use_api_key:
+                messages.error(request, 'This user does not have permission to use an API key.')
+                return redirect('app:user_edit', user_id=user_id)
+            APIKey.objects.filter(user=edit_user).delete()
+            generate_api_key(edit_user)
+            actor_note = '' if is_self else f' for {edit_user.email}'
+            log_activity(request, 'generate_api_key', edit_user.email, f'Regenerated{actor_note}')
+            messages.success(request, 'New API key generated.')
+            return redirect('app:user_edit', user_id=user_id)
+
         # Snapshot before state
         before = {
             'first_name': edit_user.first_name,
             'last_name': edit_user.last_name,
-            'is_staff': edit_user.is_staff,
             'is_active': edit_user.is_active,
             'is_superuser': edit_user.is_superuser,
             'groups': set(edit_user.groups.values_list('name', flat=True)),
@@ -1622,24 +1584,25 @@ def user_edit_view(request, user_id):
 
         edit_user.first_name = request.POST.get('first_name', '').strip()
         edit_user.last_name = request.POST.get('last_name', '').strip()
-        new_is_active = request.POST.get('is_active') == 'on'
-        selected_groups = request.POST.getlist('groups')
 
-        # Derive superuser from Superuser group membership
-        superuser_group = Group.objects.filter(name='Superuser').first()
-        new_is_superuser = superuser_group and str(superuser_group.id) in selected_groups
+        # Group + active changes — superuser only
+        if request.user.is_superuser:
+            new_is_active = request.POST.get('is_active') == 'on'
+            selected_groups = request.POST.getlist('groups')
+            superuser_group = Group.objects.filter(name='Superuser').first()
+            new_is_superuser = bool(superuser_group and str(superuser_group.id) in selected_groups)
 
-        # Protect last superuser
-        is_last_superuser = edit_user.is_superuser and CustomUser.objects.filter(is_superuser=True).count() == 1
-        if is_last_superuser and (not new_is_superuser or not new_is_active):
-            messages.error(request, 'Cannot remove the last user from the Superuser group or deactivate them.')
-            return redirect('app:user_edit', user_id=user_id)
+            # Protect last superuser
+            is_last_superuser = edit_user.is_superuser and CustomUser.objects.filter(is_superuser=True).count() == 1
+            if is_last_superuser and (not new_is_superuser or not new_is_active):
+                messages.error(request, 'Cannot remove the last user from the Superuser group or deactivate them.')
+                return redirect('app:user_edit', user_id=user_id)
 
-        edit_user.is_active = new_is_active
-        edit_user.is_superuser = new_is_superuser
-        edit_user.is_staff = new_is_superuser
+            edit_user.is_active = new_is_active
+            edit_user.is_superuser = new_is_superuser
+            edit_user.is_staff = new_is_superuser
 
-        # Password change (optional)
+        # Password change (optional, allowed for self or superuser)
         changes = []
         new_password = request.POST.get('password', '').strip()
         if new_password:
@@ -1647,34 +1610,41 @@ def user_edit_view(request, user_id):
             changes.append('Password changed')
 
         edit_user.save()
-        new_groups = set(Group.objects.filter(id__in=selected_groups).values_list('name', flat=True))
-        edit_user.groups.set(Group.objects.filter(id__in=selected_groups))
 
-        # Build change detail
+        if request.user.is_superuser:
+            new_groups = set(Group.objects.filter(id__in=selected_groups).values_list('name', flat=True))
+            edit_user.groups.set(Group.objects.filter(id__in=selected_groups))
+            for flag in ['is_active', 'is_superuser']:
+                new_val = getattr(edit_user, flag)
+                if before[flag] != new_val:
+                    changes.append(f'{flag}: {before[flag]} -> {new_val}')
+            added_groups = new_groups - before['groups']
+            removed_groups = before['groups'] - new_groups
+            if added_groups:
+                changes.append(f'Added groups: {", ".join(sorted(added_groups))}')
+            if removed_groups:
+                changes.append(f'Removed groups: {", ".join(sorted(removed_groups))}')
+
         for field in ['first_name', 'last_name']:
             new_val = getattr(edit_user, field)
             if before[field] != new_val:
                 changes.append(f'{field}: {before[field]!r} -> {new_val!r}')
-        for flag in ['is_active', 'is_superuser']:
-            new_val = getattr(edit_user, flag)
-            if before[flag] != new_val:
-                changes.append(f'{flag}: {before[flag]} -> {new_val}')
-        added_groups = new_groups - before['groups']
-        removed_groups = before['groups'] - new_groups
-        if added_groups:
-            changes.append(f'Added groups: {", ".join(sorted(added_groups))}')
-        if removed_groups:
-            changes.append(f'Removed groups: {", ".join(sorted(removed_groups))}')
 
         detail = '; '.join(changes) if changes else 'No changes'
         log_activity(request, 'edit_user', edit_user.email, detail)
-        messages.success(request, f'User {edit_user.email} updated.')
+        messages.success(request, f'{"Your account" if is_self else f"User {edit_user.email}"} updated.')
+        if is_self:
+            return redirect('app:user_edit', user_id=user_id)
         return redirect('app:user_list')
 
+    api_key_obj = APIKey.objects.filter(user=edit_user).first() if can_use_api_key else None
     return render(request, 'user_form.html', {
         'edit_user': edit_user,
         'groups': groups,
         'mode': 'edit',
+        'is_self': is_self,
+        'can_use_api_key': can_use_api_key,
+        'api_key': api_key_obj.key if api_key_obj else None,
     })
 
 

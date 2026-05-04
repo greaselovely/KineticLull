@@ -53,24 +53,6 @@ class ShortenedURLForm(forms.ModelForm):
         }
 
 
-class ProfileChangeForm(UserChangeForm):
-    password = None  # Exclude the password field
-
-    class Meta:
-        model = CustomUser
-        fields = ['first_name', 'last_name', 'email']
-        widgets = {
-            'first_name': forms.TextInput(attrs={'class': 'form-control mb-3', 'placeholder': 'First Name', 'required': 'required'}),
-            'last_name': forms.TextInput(attrs={'class': 'form-control mb-3', 'placeholder': 'Last Name', 'required': 'required'}),
-            'email': forms.EmailInput(attrs={'class': 'form-control mb-3'}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super(ProfileChangeForm, self).__init__(*args, **kwargs)
-        # Optionally customize form fields here, e.g., set a field as read-only
-        self.fields['email'].disabled = True
-
-
 # class ScriptForm(forms.ModelForm):
 #     class Meta:
 #         model = Script

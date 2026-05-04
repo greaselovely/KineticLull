@@ -36,6 +36,9 @@ class APIKey(models.Model):
     class Meta:
         verbose_name = "API Key"
         verbose_name_plural = "API Keys"
+        permissions = [
+            ('use_api_key', 'Can use an API key'),
+        ]
 
     @property
     def is_expired(self):

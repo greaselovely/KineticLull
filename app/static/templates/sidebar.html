@@ -58,9 +58,9 @@
             </a>
             <ul id="admin-submenu" class="submenu">
                 <li>
-                    <a href="{% url 'app:edit_profile' %}" title="Profile">
+                    <a href="{% url 'app:user_edit' user_id=user.id %}" title="My Account">
                         <i class="bi bi-person"></i>
-                        <span class="nav-text">Profile</span>
+                        <span class="nav-text">My Account</span>
                     </a>
                 </li>
                 {% if user.is_superuser or perms.app.view_activitylog %}

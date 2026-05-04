@@ -22,8 +22,6 @@ urlpatterns = [
     path('delete/<int:item_id>/', views.delete_item, name='delete_item'),
     path('download_ip_fqdn/<int:item_id>/', views.download_ip_fqdn, name='download_ip_fqdn'),
     path('login/', KineticLullLoginView.as_view(template_name='login.html'), name='login'),
-    path('accounts/profile/', views.profile_view, name='profile'),
-    path('edit-profile/', views.edit_profile_view, name='edit_profile'),
     path('logout/', views.logout_view, name='logout'),
     path('item-detail/<int:item_id>/', views.item_detail_view, name='item_detail'),
     path('api/submit_fqdn/', SubmitFQDNView.as_view(), name='submit_fqdn'),
