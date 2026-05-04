@@ -3,7 +3,7 @@
 {% block title %}- Users{% endblock %}
 {% block content %}
 {% timezone app_timezone %}
-<div class="content-card">
+<div class="content-card" style="max-width: 900px;">
     <div class="d-flex justify-content-between align-items-center">
         <h3 class="mb-0">Users</h3>
         <a href="{% url 'app:user_create' %}" class="btn btn-sm btn-primary">New User</a>

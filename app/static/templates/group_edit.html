@@ -1,59 +1,71 @@
 {% extends 'base.html' %}
 {% block title %}- {% if mode == 'create' %}New Group{% else %}Edit Group{% endif %}{% endblock %}
 {% block content %}
-<div class="content-card">
-    <div class="d-flex justify-content-between align-items-center">
+<div style="max-width: 800px;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="mb-0">{% if mode == 'create' %}New Group{% else %}Edit Group: {{ group.name }}{% endif %}</h3>
-        <a href="{% url 'app:group_list' %}" class="btn btn-sm btn-outline-secondary">Back to Groups</a>
+        <a href="{% url 'app:group_list' %}" class="btn btn-sm btn-outline-secondary">Back</a>
     </div>
-    <form method="post" class="mt-3">
+    <form method="post">
         {% csrf_token %}
-        <div class="mb-3">
-            <label for="name" class="form-label">Group Name</label>
-            <input type="text" name="name" id="name" class="form-control" value="{% if group %}{{ group.name }}{% endif %}" required
-                {% if group.name == 'Superuser' %}disabled{% endif %}>
-            {% if group.name == 'Superuser' %}<input type="hidden" name="name" value="Superuser">{% endif %}
-        </div>
 
-        <div class="mb-3">
-            <label class="form-label">Members</label>
-            <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
-                {% for user in all_users %}
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="members" value="{{ user.id }}" id="member_{{ user.id }}"
-                        {% if group and user in group.user_set.all %}checked{% endif %}>
-                    <label class="form-check-label" for="member_{{ user.id }}">{{ user.email }}{% if user.first_name %} ({{ user.first_name }} {{ user.last_name }}){% endif %}</label>
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">Group</h6>
+                <div class="mb-3">
+                    <label for="name" class="form-label">Group Name</label>
+                    <input type="text" name="name" id="name" class="form-control form-control-sm" value="{% if group %}{{ group.name }}{% endif %}" required
+                        {% if group.name == 'Superuser' %}disabled{% endif %}>
+                    {% if group.name == 'Superuser' %}<input type="hidden" name="name" value="Superuser">{% endif %}
                 </div>
-                {% endfor %}
             </div>
         </div>
 
-        <div class="mb-3">
-            <label class="form-label">Permissions</label>
-            {% if group.name == 'Superuser' %}
-            <p class="text-muted">The Superuser group always has all permissions. This cannot be changed.</p>
-            {% else %}
-            <div class="border rounded p-3">
-                {% regroup available_permissions by content_type.model as perm_groups %}
-                <div class="row">
-                    {% for model_perms in perm_groups %}
-                    <div class="col-md-4 col-sm-6 mb-3">
-                        <h6 class="text-muted mb-1" style="font-size: 0.8rem; text-transform: uppercase;">{{ model_perms.grouper }}</h6>
-                        {% for perm in model_perms.list %}
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="permissions" value="{{ perm.id }}" id="perm_{{ perm.id }}"
-                                {% if group and perm in group.permissions.all %}checked{% endif %}>
-                            <label class="form-check-label" for="perm_{{ perm.id }}">{{ perm.name }}</label>
-                        </div>
-                        {% endfor %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">Members</h6>
+                <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto; font-size: 0.85rem;">
+                    {% for user in all_users %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="members" value="{{ user.id }}" id="member_{{ user.id }}"
+                            {% if group and user in group.user_set.all %}checked{% endif %}>
+                        <label class="form-check-label" for="member_{{ user.id }}">{{ user.email }}{% if user.first_name %} ({{ user.first_name }} {{ user.last_name }}){% endif %}</label>
                     </div>
+                    {% empty %}
+                    <span class="text-muted">No users.</span>
                     {% endfor %}
                 </div>
             </div>
-            {% endif %}
         </div>
 
-        <button type="submit" class="btn btn-primary">{% if mode == 'create' %}Create Group{% else %}Save Changes{% endif %}</button>
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">Permissions</h6>
+                {% if group.name == 'Superuser' %}
+                <p class="text-muted mb-0" style="font-size: 0.85rem;">The Superuser group always has all permissions. This cannot be changed.</p>
+                {% else %}
+                <div class="border rounded p-3" style="font-size: 0.85rem;">
+                    {% regroup available_permissions by content_type.model as perm_groups %}
+                    <div class="row">
+                        {% for model_perms in perm_groups %}
+                        <div class="col-md-4 col-sm-6 mb-3">
+                            <h6 class="text-muted mb-1" style="font-size: 0.75rem; text-transform: uppercase;">{{ model_perms.grouper }}</h6>
+                            {% for perm in model_perms.list %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="permissions" value="{{ perm.id }}" id="perm_{{ perm.id }}"
+                                    {% if group and perm in group.permissions.all %}checked{% endif %}>
+                                <label class="form-check-label" for="perm_{{ perm.id }}">{{ perm.name }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm">{% if mode == 'create' %}Create Group{% else %}Save Changes{% endif %}</button>
     </form>
 </div>
 {% endblock %}

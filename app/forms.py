@@ -39,13 +39,13 @@ class ShortenedURLForm(forms.ModelForm):
         fields = ['original_url', 'notes']
         widgets = {
             'original_url': forms.URLInput(attrs={
-                'class': 'form-control mb-3',
+                'class': 'form-control form-control-sm mb-3',
                 'id': 'originalUrlInput',
                 'placeholder': 'https://example.com/very/long/url/to/shorten',
                 'required': 'required',
             }),
             'notes': forms.Textarea(attrs={
-                'class': 'form-control mb-3',
+                'class': 'form-control form-control-sm mb-3',
                 'id': 'notesInput',
                 'placeholder': 'Reference notes (e.g., used in email signature, shared with team)',
                 'rows': '3',
