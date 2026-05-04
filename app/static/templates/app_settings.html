@@ -393,6 +393,19 @@
             <div class="tab-pane fade" id="tab-backups" role="tabpanel">
                 <div class="card mb-3">
                     <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Schedule</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="backup_time" class="form-label">Daily backup time</label>
+                                <input type="time" name="backup_time" id="backup_time" class="form-control form-control-sm" value="{{ app_settings.backup_time|time:'H:i' }}">
+                                <div class="form-text">Interpreted in your display timezone ({{ app_settings.timezone }}). Changes take effect within the hour.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
                         <h6 class="text-muted text-uppercase mb-3">Backblaze B2 Offsite Backup</h6>
                         <p style="font-size: 0.85rem;" class="text-muted mb-3">Push the daily backup tarball to a Backblaze B2 bucket. Create an application key restricted to a single bucket at <a href="https://secure.backblaze.com/app_keys.htm" target="_blank" rel="noopener">backblaze.com/app_keys.htm</a>.</p>
                         <div class="form-check mb-3">

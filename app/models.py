@@ -240,6 +240,9 @@ class AppSettings(models.Model):
     otf_brand_card_text_color = models.CharField(max_length=7, blank=True, default='#a0a4ab', verbose_name='Card Text Color')
     otf_brand_image = models.FileField(upload_to='branding/', blank=True, verbose_name='Brand Logo')
 
+    # Backups
+    backup_time = models.TimeField(default='02:00', verbose_name='Daily backup time (in display timezone)')
+
     # Backups (Backblaze B2)
     b2_enabled = models.BooleanField(default=False, verbose_name='Enable B2 Offsite Backup')
     b2_application_key_id = models.CharField(max_length=64, blank=True, default='', verbose_name='B2 keyID')

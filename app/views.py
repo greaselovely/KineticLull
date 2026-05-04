@@ -1331,6 +1331,19 @@ def app_settings_view(request):
             app_settings.robots_txt = new_robots
             changes.append('robots_txt=updated')
 
+        # Backup schedule
+        new_backup_time_raw = request.POST.get('backup_time', '').strip()
+        if new_backup_time_raw:
+            try:
+                hh, mm = new_backup_time_raw.split(':')[:2]
+                from datetime import time as _dtime
+                new_backup_time = _dtime(int(hh), int(mm))
+                if new_backup_time != app_settings.backup_time:
+                    app_settings.backup_time = new_backup_time
+                    changes.append(f'backup_time={new_backup_time.strftime("%H:%M")}')
+            except (ValueError, TypeError):
+                pass
+
         # Backblaze B2
         new_b2_enabled = request.POST.get('b2_enabled') == 'on'
         if new_b2_enabled != app_settings.b2_enabled:

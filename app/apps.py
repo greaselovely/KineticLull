@@ -102,17 +102,45 @@ def _start_daily_backup_scheduler():
         return
 
     def _backup_loop():
-        # Wait 60 seconds after startup before first backup
-        time.sleep(60)
+        """Run the daily backup at the configured local time-of-day.
+
+        Computes the next run target each pass and sleeps up to 1 hour at a
+        time so changes to the configured time take effect within the hour.
+        """
+        from datetime import datetime, time as dtime, timedelta
+        try:
+            from zoneinfo import ZoneInfo
+        except ImportError:
+            ZoneInfo = None
+
+        time.sleep(60)  # startup grace
+        last_run_date = None
+
         while True:
+            sleep_secs = 3600
             try:
+                from app.models import AppSettings
                 from django.core.management import call_command
-                call_command('backup_data')
-                _maybe_upload_to_b2()
+
+                app_settings = AppSettings.objects.filter(pk=1).first()
+                target = (app_settings.backup_time if app_settings and app_settings.backup_time else dtime(2, 0))
+                tz_name = app_settings.timezone if app_settings else 'UTC'
+                tz = ZoneInfo(tz_name) if ZoneInfo else None
+
+                now_local = datetime.now(tz=tz)
+                today_target = now_local.replace(hour=target.hour, minute=target.minute, second=0, microsecond=0)
+
+                if now_local >= today_target and last_run_date != now_local.date():
+                    call_command('backup_data')
+                    _maybe_upload_to_b2()
+                    last_run_date = now_local.date()
+                else:
+                    next_target = today_target if now_local < today_target else today_target + timedelta(days=1)
+                    delta = (next_target - now_local).total_seconds()
+                    sleep_secs = max(60, min(delta, 3600))
             except Exception:
                 pass
-            # Sleep 24 hours
-            time.sleep(86400)
+            time.sleep(sleep_secs)
 
     def _cleanup_loop():
         """Burn expired one-time files every 5 minutes."""
