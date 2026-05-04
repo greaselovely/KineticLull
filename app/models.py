@@ -146,12 +146,25 @@ class ActivityLog(models.Model):
 
     @classmethod
     def rebase_chain(cls):
-        """Recalculate all chain hashes from scratch. Use after legitimate deletions."""
+        """Recalculate all chain hashes from scratch. Use after legitimate deletions.
+
+        Uses bulk_update inside a single transaction so that a customer with
+        100k+ log entries doesn't time out the gunicorn worker (default 30s).
+        """
+        from django.db import transaction
+        BATCH_SIZE = 1000
         prev_hash = ''
-        for entry in cls.objects.order_by('id'):
-            entry.chain_hash = entry._compute_hash(prev_hash)
-            prev_hash = entry.chain_hash
-            models.Model.save(entry, update_fields=['chain_hash'])
+        batch = []
+        with transaction.atomic():
+            for entry in cls.objects.order_by('id').iterator(chunk_size=BATCH_SIZE):
+                entry.chain_hash = entry._compute_hash(prev_hash)
+                prev_hash = entry.chain_hash
+                batch.append(entry)
+                if len(batch) >= BATCH_SIZE:
+                    cls.objects.bulk_update(batch, ['chain_hash'])
+                    batch = []
+            if batch:
+                cls.objects.bulk_update(batch, ['chain_hash'])
 
     def __str__(self):
         return f"{self.created_at} {self.user} {self.action} {self.target}"
