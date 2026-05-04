@@ -55,7 +55,7 @@ DEFAULT_ROBOTS_TXT = """\
 # no auth required,
 # don't sell the contents, 
 # and wear your pants backwards
-# ¯\_(ツ)_/¯
+# ¯\\_(ツ)_/¯
 # ---------------------------------------------------------------------
 
 User-agent: *
