@@ -158,14 +158,16 @@
             }).catch(function() {});
 
             var attempts = 0;
+            var maxAttempts = 60;             // ~3 minutes of polling
+            var totalSeconds = maxAttempts * 3;
             setTimeout(function() {
                 var poll = setInterval(function() {
                     attempts++;
-                    var remaining = Math.max(0, 60 - (attempts * 3));
-                    statusText.textContent = 'Restarting services... (' + remaining + 's remaining)';
-                    if (attempts > 20) {
+                    var remaining = Math.max(0, totalSeconds - (attempts * 3));
+                    statusText.textContent = 'Restarting services. Waiting for service to come back (' + remaining + 's remaining). 502s during this window are expected.';
+                    if (attempts > maxAttempts) {
                         clearInterval(poll);
-                        statusText.textContent = 'Service did not come back. Restart manually from the command line.';
+                        statusText.textContent = 'Service did not come back within ' + totalSeconds + 's. Restart manually from the command line.';
                         return;
                     }
                     fetch(window.location.href, { method: 'HEAD' })
@@ -178,7 +180,7 @@
                         })
                         .catch(function() {});
                 }, 3000);
-            }, 5000);
+            }, 8000);  // 8s initial delay — wait for restart to actually kick off
         });
     });
 })();
