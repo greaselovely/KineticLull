@@ -34,15 +34,14 @@
         </div>
         {% endif %}
         {% if messages %}
-        <div class="container-fluid pt-3">
+        <div id="kl-flash-data" hidden>
             {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
+            <div data-tag="{{ message.tags|default:'info' }}" data-text="{{ message }}"></div>
             {% endfor %}
         </div>
         {% endif %}
+
+        <div class="toast-container position-fixed top-0 end-0 p-3" id="kl-toast-container" style="z-index: 1080;"></div>
 
         <div class="content-wrapper">
             {% block content %}
@@ -52,6 +51,42 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
     <script src="{% static 'js/index.js' %}"></script>
+    <script>
+    (function () {
+        const data = document.getElementById('kl-flash-data');
+        const container = document.getElementById('kl-toast-container');
+        if (!data || !container) return;
+        const tagToBg = {success: 'success', error: 'danger', warning: 'warning', info: 'info', debug: 'secondary'};
+        const autohideMs = {success: 3000, info: 4000, warning: 5000};
+        data.querySelectorAll('[data-text]').forEach(function (el) {
+            const tag = el.dataset.tag || 'info';
+            const text = el.dataset.text;
+            const bg = tagToBg[tag] || 'info';
+            const delay = autohideMs[tag];
+            const toastEl = document.createElement('div');
+            toastEl.className = 'toast align-items-center text-bg-' + bg + ' border-0';
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+            const body = document.createElement('div');
+            body.className = 'toast-body';
+            body.textContent = text;
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'btn-close btn-close-white me-2 m-auto';
+            close.setAttribute('data-bs-dismiss', 'toast');
+            close.setAttribute('aria-label', 'Close');
+            const flex = document.createElement('div');
+            flex.className = 'd-flex';
+            flex.appendChild(body);
+            flex.appendChild(close);
+            toastEl.appendChild(flex);
+            container.appendChild(toastEl);
+            const opts = delay === undefined ? {autohide: false} : {delay: delay};
+            new bootstrap.Toast(toastEl, opts).show();
+        });
+    })();
+    </script>
     {% block scripts %}
     {% endblock %}
 </body>
