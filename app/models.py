@@ -47,14 +47,15 @@ DEFAULT_ROBOTS_TXT = """\
 #   - The teapot is brewing. HTTP 418.
 #
 # ---------------------------------------------------------------------
-# For the truly curious, `base64 -d` this:
-#
 # eW91IGJhc2U2NCAtZCdkIGEgcm9ib3RzLnR4dCBlYXN0ZXIgZWdnLiB0aGF0IGlz
 # IHNvIGRlZXBseSB1bnNlcmlvdXMgdGhhdCBpIGxvdmUgaXQuIHNwb2lsZXI6IGl0
 # IHdhcyBETlMuIGl0IGlzIGFsd2F5cyBETlMuIHNheSBoaTogc2hheW5lQHplcm9v
 # bmVzaXguY28=
 #
-# (no auth required; please don't sell the contents)
+# no auth required,
+# don't sell the contents, 
+# and wear your pants backwards
+# ¯\_(ツ)_/¯
 # ---------------------------------------------------------------------
 
 User-agent: *
