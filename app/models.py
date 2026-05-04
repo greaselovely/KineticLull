@@ -117,6 +117,9 @@ class ActivityLog(models.Model):
         verbose_name = "Activity Log"
         verbose_name_plural = "Activity Logs"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=['ip_address', 'created_at']),
+        ]
 
     def _compute_hash(self, prev_hash=''):
         data = f"{prev_hash}|{self.user_id}|{self.action}|{self.target}|{self.detail}|{self.ip_address}"
@@ -212,6 +215,9 @@ class AppSettings(models.Model):
     autoblock_threshold = models.PositiveIntegerField(default=50, verbose_name='Auto-Block Threshold (requests)')
     autoblock_window_seconds = models.PositiveIntegerField(default=60, verbose_name='Auto-Block Window (seconds)')
     autoblock_duration_minutes = models.PositiveIntegerField(default=0, verbose_name='Auto-Block Duration (minutes, 0=permanent)')
+    # Cumulative-window check — catches paced scanners that evade the burst window
+    autoblock_long_threshold = models.PositiveIntegerField(default=30, verbose_name='Slow-Probe Threshold (cumulative hits)')
+    autoblock_long_window_hours = models.PositiveIntegerField(default=24, verbose_name='Slow-Probe Window (hours)')
 
     # Failed-login block (separate rule from general auto-block)
     failed_login_block_enabled = models.BooleanField(default=True, verbose_name='Enable Failed-Login Block')
@@ -433,7 +439,13 @@ class BlockedIP(models.Model):
 
     @classmethod
     def check_autoblock(cls, ip_address):
-        """Check if an IP should be auto-blocked based on threshold settings."""
+        """Check if an IP should be auto-blocked based on threshold settings.
+
+        Two independent windows are evaluated:
+          * Burst window (seconds, e.g. 50 hits in 60s) catches noisy scanners.
+          * Cumulative window (hours, e.g. 30 hits in 24h) catches paced
+            scanners that pace probes to stay under the burst threshold.
+        """
         from django.utils import timezone
         from datetime import timedelta
 
@@ -441,34 +453,48 @@ class BlockedIP(models.Model):
         if not app_settings.autoblock_enabled:
             return False
 
-        # Never block whitelisted IPs
         if WhitelistedIP.is_whitelisted(ip_address):
             return False
-
-        # Don't re-block if already blocked
         if cls.objects.filter(ip_address=ip_address).exists():
             return False
 
-        window_start = timezone.now() - timedelta(seconds=app_settings.autoblock_window_seconds)
-        hit_count = ActivityLog.objects.filter(
-            ip_address=ip_address,
-            action__in=['not_found', 'edl_not_found', 'edl_access'],
-            created_at__gte=window_start,
+        actions = ['not_found', 'edl_not_found', 'edl_access']
+        now = timezone.now()
+        expires = None
+        if app_settings.autoblock_duration_minutes > 0:
+            expires = now + timedelta(minutes=app_settings.autoblock_duration_minutes)
+
+        # Burst window
+        burst_start = now - timedelta(seconds=app_settings.autoblock_window_seconds)
+        burst_count = ActivityLog.objects.filter(
+            ip_address=ip_address, action__in=actions, created_at__gte=burst_start,
         ).count()
-
-        if hit_count >= app_settings.autoblock_threshold:
-            expires = None
-            if app_settings.autoblock_duration_minutes > 0:
-                expires = timezone.now() + timedelta(minutes=app_settings.autoblock_duration_minutes)
-
+        if burst_count >= app_settings.autoblock_threshold:
             cls.objects.create(
                 ip_address=ip_address,
-                reason=f'Auto-blocked: {hit_count} hits in {app_settings.autoblock_window_seconds}s',
+                reason=f'Auto-blocked: {burst_count} hits in {app_settings.autoblock_window_seconds}s',
                 auto_blocked=True,
                 expires_at=expires,
             )
             cls.sync_to_nginx()
             return True
+
+        # Cumulative-window (slow-probe) check
+        if app_settings.autoblock_long_threshold > 0 and app_settings.autoblock_long_window_hours > 0:
+            long_start = now - timedelta(hours=app_settings.autoblock_long_window_hours)
+            long_count = ActivityLog.objects.filter(
+                ip_address=ip_address, action__in=actions, created_at__gte=long_start,
+            ).count()
+            if long_count >= app_settings.autoblock_long_threshold:
+                cls.objects.create(
+                    ip_address=ip_address,
+                    reason=f'Auto-blocked: {long_count} hits in {app_settings.autoblock_long_window_hours}h (slow-probe)',
+                    auto_blocked=True,
+                    expires_at=expires,
+                )
+                cls.sync_to_nginx()
+                return True
+
         return False
 
     @classmethod

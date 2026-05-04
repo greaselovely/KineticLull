@@ -122,7 +122,7 @@
                 <div class="card mb-3">
                     <div class="card-body">
                         <h6 class="text-muted text-uppercase mb-3">robots.txt</h6>
-                        <p style="font-size: 0.85rem;" class="text-muted mb-2">Served verbatim at <code>/robots.txt</code>. Edit freely. The default ships with a base64 easter egg pointing back to you.</p>
+                        <p style="font-size: 0.85rem;" class="text-muted mb-2">Served verbatim at <code>/robots.txt</code>. Edit freely. The default ships with a base64 easter egg.</p>
                         <textarea name="robots_txt" id="robots_txt" class="form-control form-control-sm" rows="14" style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8rem;">{{ app_settings.robots_txt }}</textarea>
                     </div>
                 </div>
@@ -264,7 +264,27 @@
                                     <input type="number" name="autoblock_duration_minutes" id="autoblock_duration_minutes" class="form-control" value="{{ app_settings.autoblock_duration_minutes }}" min="0" max="525600">
                                     <span class="input-group-text">min</span>
                                 </div>
-                                <div class="form-text">0 = permanent</div>
+                                <div class="form-text">0 = permanent (applies to both windows)</div>
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+                        <p class="form-text mb-2">Slow-probe (cumulative window). Catches paced scanners that pace probes to stay under the burst threshold.</p>
+                        <div class="row g-3">
+                            <div class="col-4">
+                                <label for="autoblock_long_threshold" class="form-label">Cumulative Threshold</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="autoblock_long_threshold" id="autoblock_long_threshold" class="form-control" value="{{ app_settings.autoblock_long_threshold }}" min="0" max="10000">
+                                    <span class="input-group-text">hits</span>
+                                </div>
+                                <div class="form-text">0 = disabled</div>
+                            </div>
+                            <div class="col-4">
+                                <label for="autoblock_long_window_hours" class="form-label">Cumulative Window</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="autoblock_long_window_hours" id="autoblock_long_window_hours" class="form-control" value="{{ app_settings.autoblock_long_window_hours }}" min="1" max="720">
+                                    <span class="input-group-text">hrs</span>
+                                </div>
                             </div>
                         </div>
                     </div>
