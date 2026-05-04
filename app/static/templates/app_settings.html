@@ -437,19 +437,19 @@
                             {% endif %}
                         </p>
                         <p class="text-muted mb-3" style="font-size: 0.8rem;">Daily snapshots written to <code>backups/data/</code> on this box, kept for 30 days.</p>
-                        <div class="d-flex gap-2 align-items-end flex-wrap">
-                            <button type="submit" form="take-local-backup-form" class="btn btn-outline-primary btn-sm">
-                                <i class="bi bi-hdd me-1"></i>Take snapshot now
-                            </button>
+                        <div class="mb-2">
                             {% if data_backups %}
-                            <select name="archive" class="form-select form-select-sm" form="restore-form" style="min-width: 240px; max-width: 320px;">
-                                {% for backup in data_backups %}
-                                <option value="{{ backup.filename }}">{{ backup.timestamp|date:app_timestamp_format|default:backup.filename }}</option>
-                                {% endfor %}
-                            </select>
-                            <button type="button" id="restore-local-btn" class="btn btn-warning btn-sm">Restore from local</button>
+                            <button type="button" id="restore-local-btn" class="btn btn-warning btn-sm kl-action-btn">Restore</button>
                             {% endif %}
+                            <button type="submit" form="take-local-backup-form" class="btn btn-sm kl-backup-btn kl-action-btn">Backup Now</button>
                         </div>
+                        {% if data_backups %}
+                        <select name="archive" class="form-select form-select-sm w-75" form="restore-form">
+                            {% for backup in data_backups %}
+                            <option value="{{ backup.filename }}">{{ backup.timestamp|date:app_timestamp_format|default:backup.filename }}</option>
+                            {% endfor %}
+                        </select>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -469,21 +469,21 @@
                             {% endif %}
                         </p>
                         <p class="text-muted mb-3" style="font-size: 0.8rem;">Mirror of the latest local snapshot. Retention is governed by your B2 bucket lifecycle rules.</p>
-                        <div class="d-flex gap-2 align-items-end flex-wrap">
-                            <button type="submit" form="b2-upload-form" class="btn btn-outline-primary btn-sm">
-                                <i class="bi bi-cloud-upload me-1"></i>Upload latest to B2 now
-                            </button>
+                        <div class="mb-2">
                             {% if b2_versions %}
-                            <select name="file_id" class="form-select form-select-sm" form="restore-from-b2-form" style="min-width: 280px; max-width: 380px;">
-                                {% for v in b2_versions %}
-                                <option value="{{ v.file_id }}">{{ v.file_name }}{% if v.uploaded_at %} &middot; {{ v.uploaded_at|date:app_timestamp_format }}{% endif %}</option>
-                                {% endfor %}
-                            </select>
-                            <button type="button" id="restore-b2-btn" class="btn btn-warning btn-sm">Restore from B2</button>
-                            {% elif b2_versions_error %}
-                            <span class="text-danger" style="font-size: 0.8rem;">List failed: {{ b2_versions_error }}</span>
+                            <button type="button" id="restore-b2-btn" class="btn btn-warning btn-sm kl-action-btn">Restore</button>
                             {% endif %}
+                            <button type="submit" form="b2-upload-form" class="btn btn-sm kl-backup-btn kl-action-btn">Backup Now</button>
                         </div>
+                        {% if b2_versions %}
+                        <select name="file_id" class="form-select form-select-sm w-75" form="restore-from-b2-form">
+                            {% for v in b2_versions %}
+                            <option value="{{ v.file_id }}">{{ v.file_name }}{% if v.uploaded_at %} &middot; {{ v.uploaded_at|date:app_timestamp_format }}{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        {% elif b2_versions_error %}
+                        <p class="text-danger mb-0" style="font-size: 0.8rem;">List failed: {{ b2_versions_error }}</p>
+                        {% endif %}
                         {% else %}
                         <p class="text-muted mb-0" style="font-size: 0.85rem;">Enable B2 in the configuration card above to use offsite backup and restore.</p>
                         {% endif %}
@@ -534,6 +534,22 @@
 html.sidebar-is-collapsed .settings-save-bar,
 .main-content.expanded .settings-save-bar {
     left: var(--sidebar-collapsed);
+}
+
+/* Backups tab — uniform action buttons */
+.kl-action-btn {
+    width: 140px;
+    margin-right: 6px;
+}
+.kl-backup-btn {
+    background: #28a745;
+    color: #000;
+    border-color: #28a745;
+}
+.kl-backup-btn:hover, .kl-backup-btn:focus {
+    background: #218838;
+    color: #000;
+    border-color: #1e7e34;
 }
 </style>
 {% endtimezone %}
