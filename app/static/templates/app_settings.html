@@ -451,14 +451,33 @@
 </div>
 
 <style>
+/* Tab text colors mirror the left nav palette */
+#settingsTabs .nav-link {
+    color: var(--sidebar-text);
+}
+#settingsTabs .nav-link:hover {
+    color: var(--sidebar-bg);
+}
+#settingsTabs .nav-link.active {
+    color: var(--sidebar-bg);
+    font-weight: 500;
+}
+
+/* Page-wide sticky save footer — pinned to viewport bottom, offset by sidebar */
 .settings-save-bar {
-    position: sticky;
+    position: fixed;
     bottom: 0;
-    margin-top: 1rem;
-    padding: 12px 0;
+    left: var(--sidebar-width);
+    right: 0;
+    padding: 12px 24px;
     background: var(--bs-body-bg, #fff);
     border-top: 1px solid #dee2e6;
-    z-index: 10;
+    z-index: 100;
+    transition: left var(--transition-speed) ease;
+}
+html.sidebar-is-collapsed .settings-save-bar,
+.main-content.expanded .settings-save-bar {
+    left: var(--sidebar-collapsed);
 }
 </style>
 {% endtimezone %}
