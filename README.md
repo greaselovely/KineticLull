@@ -9,21 +9,33 @@ KineticLull (http://kineticlull.com) is a web application for managing and deplo
 
 ## Key Features
 
-- **EDL Management**: Create, edit, clone, and delete EDLs through a clean web interface.
-- **URL Shortener**: Built-in URL shortening with per-user URLs, hit tracking, and notes. Short URLs use branded `.kl` codes and redirect via `/s/<code>/`.
-- **One-Time File Sharing**: Secure file sharing with OTP email verification via Resend. Files are automatically deleted after download or expiration. Configurable expiration (1 hour to 7 days), 250MB default limit, and brandable download pages with custom colors, logo, and name.
-- **Access Control Lists (ACLs)**: Configurable per-EDL ACLs to restrict which IPs/networks can retrieve list contents.
+- **EDL Management**: Create, edit, clone, and delete EDLs through a clean web interface. Per-EDL ACLs restrict which IPs/networks can retrieve list contents.
 - **Group-Scoped Security**: EDLs are scoped to user groups. Users only see EDLs belonging to their groups. Superusers see everything.
 - **Favorites**: Star EDLs for quick access from the home page.
-- **IP Whitelisting**: Whitelist individual IPs or CIDR subnets to prevent them from being auto-blocked. Admin IPs are detected and can be whitelisted with one click.
-- **IP Auto-Blocking**: Automatically block IPs that exceed configurable request thresholds (minimum 3 hits). Integrates with Nginx blocklists.
-- **API Integration**: Submit new FQDNs and update/overwrite existing EDLs programmatically via API with Bearer token auth.
-- **Activity Logging**: All user and device actions logged to the database with a searchable log viewer for staff/admins.
+- **URL Shortener**: Built-in URL shortening with per-user URLs, hit tracking, and notes. Short URLs use branded `.kl` codes and redirect via `/s/<code>/`.
+- **One-Time File Sharing**: Secure file sharing with OTP email verification via Resend. Files are automatically deleted after download or expiration. Configurable expiration (1 hour to 7 days), configurable size limit, and brandable download pages with custom colors, logo, and name.
+- **Auto-Block (multi-layered)**:
+  - **Rate-based burst window** (e.g., 50 hits in 60s) for noisy scanners.
+  - **Cumulative window** (e.g., 30 hits in 24h) for paced scanners that pace probes to evade the burst rule.
+  - **Pattern-based instant block** for known exploit paths (`.env`, `.git/config`, `wp-admin`, `phpmyadmin`, `/etc/passwd`, ~40 patterns total) — one hit on a scanner path blocks the source IP immediately.
+  - **Failed-login block** with separate threshold + window.
+  - All gated by a single master toggle. All honor the whitelist.
+- **Whitelisted IPs**: Dedicated nav entry. Whitelist individual IPs or CIDR subnets to exclude them from any auto-block layer. Your current admin IP is detected and one-click whitelistable.
+- **Backups (Local + Backblaze B2)**:
+  - Daily local snapshots of EDLs, URLs, users, settings, OneTimeFile metadata, and `media/` to `backups/data/` with 30-day retention.
+  - Optional offsite mirror to a Backblaze B2 bucket (single-shot for files ≤200MB, large-file API beyond that). Per-bucket application keys; credentials encrypted at rest.
+  - Configurable daily backup time in your display timezone.
+  - Manual "Backup Now" buttons for both destinations on the Settings page.
+  - Restore from local snapshots OR from any version still in B2.
+- **API Integration**: Submit new FQDNs and update/overwrite existing EDLs programmatically via API with Bearer token auth. API key access is gated by the `users.use_api_key` group permission.
+- **Activity Logging**: All user and device actions logged to the database with a searchable log viewer for staff/admins. Tamper-evident chain hash. Configurable retention.
+- **System Health**: Sidebar badge surfaces issues — stale code after a pull, missing sudoers, expiring SSL cert, B2 backup gone stale, nginx log unreadable. One-click fixes for the common ones.
+- **Tabbed Settings**: General / Customization / Integrations / Security / Limits / Backups. Per-page sticky save.
+- **Configurable robots.txt**: Edit the body served at `/robots.txt` directly from Settings → Customization. Default ships with a base64 easter egg.
 - **In-App Upgrades**: Superusers can upgrade the application directly from the web UI — pulls latest code, installs dependencies, runs migrations, patches Nginx config, and restarts services. Includes a dedicated Restart Services button. Warns if system permissions need updating.
-- **Data Backups**: Automatic daily backup of all EDLs and URLs to gzipped archives with 30-day retention. Database backed up before every upgrade. Restore from Settings with exact URL preservation so firewalls don't need updating.
-- **User Management**: Create, edit, and delete users. Deleting a user reassigns their EDLs and URLs to the next oldest account.
+- **User Management**: Create, edit, and delete users. Self-service "My Account" entry for any logged-in user (change password, manage own API key when permitted). Deleting a user reassigns their EDLs and URLs to the next oldest account.
+- **Toast Notifications**: Success/error/info messages appear as Bootstrap toasts that don't shift page layout.
 - **Timezone Setup**: First-login prompt for superusers to configure display timezone.
-- **API Key Management**: Generate and manage API keys from the user profile.
 - **Backup and Export**: Download EDL contents as text files.
 
 ## Supported Platforms
@@ -95,7 +107,7 @@ sudo systemctl restart kineticlull
 
 ## API Usage
 
-All API endpoints require a Bearer token in the Authorization header. Generate an API key from your profile page.
+All API endpoints require a Bearer token in the Authorization header. Generate an API key from **Admin → My Account** (your group must have the `Can use an API key` permission, which superusers always have).
 
 ### Submit FQDNs for Review
 
