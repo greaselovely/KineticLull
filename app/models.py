@@ -43,7 +43,7 @@ DEFAULT_ROBOTS_TXT = """\
 # forgot to systemctl stop in 2019:
 #
 #   - The stack you are guessing at is wrong.
-#   - Your favourites list is on file. Try harder, or try elsewhere.
+#   - Your favorites list is on file. Try harder, or try elsewhere.
 #   - The teapot is brewing. HTTP 418.
 #
 # ---------------------------------------------------------------------
