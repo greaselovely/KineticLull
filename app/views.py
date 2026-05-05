@@ -1287,6 +1287,13 @@ def app_settings_view(request):
                 setattr(app_settings, field_name, val)
                 changes.append(f'{field_name}={val}')
 
+        new_custom_patterns = request.POST.get('autoblock_custom_patterns', '').strip()
+        if len(new_custom_patterns) > 20000:
+            new_custom_patterns = new_custom_patterns[:20000]
+        if new_custom_patterns != app_settings.autoblock_custom_patterns:
+            app_settings.autoblock_custom_patterns = new_custom_patterns
+            changes.append('autoblock_custom_patterns=updated')
+
         # Failed-login block settings
         new_fl_enabled = request.POST.get('failed_login_block_enabled') == 'on'
         if new_fl_enabled != app_settings.failed_login_block_enabled:
@@ -1445,6 +1452,7 @@ def app_settings_view(request):
         'data_backups': backups,
         'b2_versions': b2_versions,
         'b2_versions_error': b2_versions_error,
+        'builtin_scanner_patterns': BlockedIP.SCANNER_PATH_PATTERNS,
     })
 
 

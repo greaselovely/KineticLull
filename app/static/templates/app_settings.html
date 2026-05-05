@@ -287,6 +287,27 @@
                                 </div>
                             </div>
                         </div>
+
+                        <hr class="my-3">
+                        <p class="form-text mb-2">Custom scanner patterns. Any single hit on one of these path substrings blocks the source IP immediately, in addition to the built-in list.</p>
+                        <div class="mb-2">
+                            <label for="autoblock_custom_patterns" class="form-label">Patterns (one per line)</label>
+                            <textarea name="autoblock_custom_patterns" id="autoblock_custom_patterns" class="form-control font-monospace" rows="5" placeholder="e.g. /myapp/admin/&#10;# comments and blank lines are ignored">{{ app_settings.autoblock_custom_patterns }}</textarea>
+                            <div class="form-text">
+                                Case-insensitive substring match against the URL path. Lines under 3 chars, blank lines, and lines starting with <code>#</code> are skipped. Test patterns carefully, a too-broad match will block legitimate traffic.
+                            </div>
+                        </div>
+                        <div class="mb-1">
+                            <a class="small text-decoration-none" data-bs-toggle="collapse" href="#builtinScannerPatterns" role="button" aria-expanded="false" aria-controls="builtinScannerPatterns">
+                                <i class="bi bi-chevron-right"></i> Show built-in patterns ({{ builtin_scanner_patterns|length }})
+                            </a>
+                            <div class="collapse mt-2" id="builtinScannerPatterns">
+                                <div class="border rounded p-2 bg-body-tertiary small font-monospace" style="max-height: 220px; overflow-y: auto;">
+                                    {% for pat in builtin_scanner_patterns %}{{ pat }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+                                </div>
+                                <div class="form-text">These are always active. Adding the same pattern as a custom entry has no extra effect.</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

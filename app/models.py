@@ -294,6 +294,9 @@ class AppSettings(models.Model):
     # Cumulative-window check — catches paced scanners that evade the burst window
     autoblock_long_threshold = models.PositiveIntegerField(default=30, verbose_name='Slow-Probe Threshold (cumulative hits)')
     autoblock_long_window_hours = models.PositiveIntegerField(default=24, verbose_name='Slow-Probe Window (hours)')
+    # Operator-added scanner path patterns (one per line). Appended to the
+    # built-in BlockedIP.SCANNER_PATH_PATTERNS tuple at match time.
+    autoblock_custom_patterns = models.TextField(blank=True, default='', verbose_name='Custom Scanner Patterns')
 
     # Failed-login block (separate rule from general auto-block)
     failed_login_block_enabled = models.BooleanField(default=True, verbose_name='Enable Failed-Login Block')
@@ -352,6 +355,31 @@ class AppSettings(models.Model):
     def load(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+    def get_custom_scanner_patterns(self):
+        """Operator-added scanner patterns, normalized for matching.
+
+        Lines shorter than 3 chars are dropped (would false-positive on
+        common path fragments). Comments (#-prefixed), blank lines,
+        duplicates, and entries that already exist in the built-in tuple
+        are skipped. Caps at 200 entries.
+        """
+        if not self.autoblock_custom_patterns:
+            return ()
+        builtin = {p.lower() for p in BlockedIP.SCANNER_PATH_PATTERNS}
+        seen = set()
+        out = []
+        for raw in self.autoblock_custom_patterns.splitlines():
+            pat = raw.strip().lower()
+            if not pat or pat.startswith('#') or len(pat) < 3:
+                continue
+            if pat in builtin or pat in seen:
+                continue
+            seen.add(pat)
+            out.append(pat)
+            if len(out) >= 200:
+                break
+        return tuple(out)
 
     def __str__(self):
         return "App Settings"
@@ -476,13 +504,21 @@ class BlockedIP(models.Model):
     )
 
     @classmethod
-    def _matched_scanner_pattern(cls, path):
+    def _matched_scanner_pattern(cls, path, extra_patterns=()):
+        """Return (pattern, is_custom) on match, else None.
+
+        Custom (operator-added) patterns are checked first so a custom
+        override can flag a path before the built-in tuple does.
+        """
         if not path:
             return None
         lower = path.lower()
+        for pat in extra_patterns:
+            if pat in lower:
+                return (pat, True)
         for pat in cls.SCANNER_PATH_PATTERNS:
             if pat in lower:
-                return pat
+                return (pat, False)
         return None
 
     @classmethod
@@ -502,9 +538,10 @@ class BlockedIP(models.Model):
         if cls.objects.filter(ip_address=ip_address).exists():
             return False
 
-        pattern = cls._matched_scanner_pattern(path)
-        if not pattern:
+        match = cls._matched_scanner_pattern(path, app_settings.get_custom_scanner_patterns())
+        if not match:
             return False
+        pattern, is_custom = match
 
         from django.utils import timezone
         from datetime import timedelta
@@ -512,9 +549,10 @@ class BlockedIP(models.Model):
         if app_settings.autoblock_duration_minutes > 0:
             expires = timezone.now() + timedelta(minutes=app_settings.autoblock_duration_minutes)
 
+        source = ' (custom)' if is_custom else ''
         cls.objects.create(
             ip_address=ip_address,
-            reason=f'Auto-blocked: scanner pattern "{pattern}" in {path[:120]}',
+            reason=f'Auto-blocked: scanner pattern "{pattern}"{source} in {path[:120]}',
             auto_blocked=True,
             expires_at=expires,
         )
