@@ -105,7 +105,7 @@ function copyToClipboard(clickedElement) {
 function showCopyFlash(element) {
     var sparkle = document.createElement('i');
     sparkle.className = 'bi bi-stars';
-    sparkle.style.cssText = 'color: #ffc107; font-size: 0.85rem; pointer-events: none; transition: opacity 0.3s; vertical-align: middle; margin-left: 2px;';
+    sparkle.style.cssText = 'color: #ffc107; font-size: 0.85rem; line-height: 1; pointer-events: none; transition: opacity 0.3s; vertical-align: middle; margin-left: 2px;';
     element.insertAdjacentElement('afterend', sparkle);
     setTimeout(function() {
         sparkle.style.opacity = '0';
