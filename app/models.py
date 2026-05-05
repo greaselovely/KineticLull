@@ -78,6 +78,17 @@ class ExtDynLists(models.Model):
         verbose_name = "Ext Dyn List"
         verbose_name_plural = "Ext Dyn Lists"
         ordering = ["-is_system", "created_date", "friendly_name"]
+        constraints = [
+            # Partial unique index: at most one row with is_system=True.
+            # Closes the multi-worker race where every gunicorn worker calls
+            # sync_system_blocklist() in apps.ready() — without this, concurrent
+            # get_or_create() can produce duplicate system EDL rows.
+            models.UniqueConstraint(
+                fields=['is_system'],
+                condition=models.Q(is_system=True),
+                name='unique_system_edl',
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.auto_url:

@@ -11,21 +11,28 @@ class EdlConfig(AppConfig):
         from . import signals  # noqa: F401 — registers auth signal receivers
         from . import health
         health.set_boot_snapshot()
-        _start_daily_backup_scheduler()
-        _patch_nginx_config()
-        _regenerate_blocklist()
+
+        # Empty-file fallback runs in every process. nginx -t fails fast if
+        # deploy/blocklist.conf is missing (it's git-ignored and a fresh clone
+        # won't have it), so we can't gate this behind the leader lock.
+        _ensure_blocklist_file_exists()
+
+        # Everything below runs in exactly one process per host. Gating these
+        # one-shot startup tasks avoids races like the one that produced
+        # duplicate system EDL rows under default --workers 3.
+        if _is_startup_leader():
+            _patch_nginx_config()
+            _sync_blocklist_from_db()
+            _start_scheduler_threads()
 
 
-def _regenerate_blocklist():
-    """Regenerate deploy/blocklist.conf from BlockedIP rows on startup.
+def _ensure_blocklist_file_exists():
+    """Create deploy/blocklist.conf as an empty file if missing.
 
-    The file is NOT tracked in git (it's operator state that varies per install).
-    Re-creating it on every boot guarantees it exists after a pull that would
-    otherwise have removed the working-tree copy — nginx `include`s it and will
-    fail to start if it's missing.
-
-    Guarantees the file exists even if the DB isn't ready (e.g., during
-    migrations) by writing an empty file first, then attempting the sync.
+    nginx `include`s this file and refuses to start when it's absent. The file
+    is git-ignored (operator state, varies per install) so a pull or fresh
+    clone won't have it. Idempotent and safe to run from every worker — pure
+    filesystem, no DB.
     """
     import os
     from django.conf import settings
@@ -34,72 +41,89 @@ def _regenerate_blocklist():
     try:
         os.makedirs(os.path.dirname(blocklist_path), exist_ok=True)
         if not os.path.exists(blocklist_path):
-            with open(blocklist_path, 'w') as f:
-                pass  # empty file — valid nginx include target
+            with open(blocklist_path, 'w'):
+                pass  # empty file is a valid nginx include target
     except Exception:
         pass
 
+
+def _sync_blocklist_from_db():
+    """Rewrite deploy/blocklist.conf from BlockedIP rows and sync the system EDL.
+
+    Leader-only: BlockedIP.sync_to_nginx() also calls
+    ExtDynLists.sync_system_blocklist(), and concurrent get_or_create across
+    workers can produce duplicate system EDL rows. The DB constraint catches
+    that, but gating it here means the constraint never has to fire in
+    healthy operation.
+    """
     try:
         from app.models import BlockedIP
         BlockedIP.sync_to_nginx()
     except Exception:
-        pass  # DB may not be ready yet (e.g., mid-migration); empty file is enough
+        pass  # DB may not be ready (e.g., mid-migration); empty file is enough
 
 
-_scheduler_lock_fd = None  # module-level: keep the lock fd alive for the process lifetime
+_startup_leader_fd = None  # keep the lock fd alive for the process lifetime
 
 
-def _acquire_scheduler_lock():
-    """Acquire an exclusive flock so only one gunicorn worker runs the scheduled threads.
+def _is_startup_leader():
+    """Return True if this process should run one-shot startup tasks.
 
-    Without this, every worker spawns its own backup/cleanup/parser loops and we
-    end up with N copies of every scheduled action (3 identical B2 uploads at the
-    same timestamp under default `--workers 3`, etc.). The lock is released by
-    the kernel when the holding process dies, so a worker restart re-elects.
+    Two gates:
+      1. We're under gunicorn or `runserver` — not a `manage.py migrate` /
+         `collectstatic` / shell, where startup work would either crash on a
+         not-ready DB or run pointlessly.
+      2. We won the fcntl flock on backups/.startup.lock — exactly one
+         process per host can hold it. Other workers see EWOULDBLOCK and
+         return False. The kernel releases the lock when the holder dies, so
+         a worker restart re-elects automatically.
     """
-    global _scheduler_lock_fd
-    if _scheduler_lock_fd is not None:
-        return True
+    global _startup_leader_fd
+    if _startup_leader_fd is not None:
+        return True  # already elected in this process
 
     import os
+
+    # Gate 1: only under a long-lived web process.
+    is_runserver = os.environ.get('RUN_MAIN') == 'true'
+    is_gunicorn = (
+        'gunicorn' in os.environ.get('SERVER_SOFTWARE', '')
+        or 'gunicorn' in (os.environ.get('_', '') or '')
+    )
+    if not (is_runserver or is_gunicorn):
+        return False
+
+    # Gate 2: fcntl flock — only one worker wins.
     import fcntl
     from django.conf import settings
 
-    lock_path = os.path.join(settings.BASE_DIR, 'backups', '.scheduler.lock')
+    lock_path = os.path.join(settings.BASE_DIR, 'backups', '.startup.lock')
+    fd = None
     try:
         os.makedirs(os.path.dirname(lock_path), exist_ok=True)
         fd = open(lock_path, 'w')
         fcntl.flock(fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except (BlockingIOError, OSError):
-        try:
-            fd.close()
-        except Exception:
-            pass
+        if fd is not None:
+            try:
+                fd.close()
+            except Exception:
+                pass
         return False
 
-    _scheduler_lock_fd = fd  # keep alive for process lifetime
+    _startup_leader_fd = fd  # keep alive for process lifetime; kernel cleans up on exit
     return True
 
 
-def _start_daily_backup_scheduler():
-    """Run data backup daily in a background thread. Only starts once."""
+def _start_scheduler_threads():
+    """Spawn the daily-backup, cleanup, and rejection-parser background threads.
+
+    Caller must already have confirmed leader status — this function does not
+    re-check, it just spawns. Each thread has its own startup grace period
+    and internal scheduling.
+    """
     import threading
     import time
-    import os
-
-    # Don't run in manage.py commands (migrate, collectstatic, etc.)
-    # Only run in the main gunicorn/runserver process
-    if os.environ.get('RUN_MAIN') == 'true' or 'gunicorn' in os.environ.get('SERVER_SOFTWARE', ''):
-        pass  # OK to run
-    elif 'gunicorn' in (os.environ.get('_', '') or ''):
-        pass  # Also OK
-    else:
-        return
-
-    # Under gunicorn we have N workers, each calling ready(). Only the first
-    # worker to grab the lock runs the schedulers; the others bail silently.
-    if not _acquire_scheduler_lock():
-        return
 
     def _backup_loop():
         """Run the daily backup at the configured local time-of-day.
@@ -216,14 +240,15 @@ def _maybe_upload_to_b2():
 
 
 def _patch_nginx_config():
-    """Patch Nginx config on startup if needed — adds media/branding and client_max_body_size."""
+    """Patch Nginx config on startup if needed, adds media/branding and client_max_body_size.
+
+    Leader-only: caller must already have confirmed leader status. Multiple
+    workers running `sudo sed -i` against the same file at the same time is a
+    great way to corrupt it.
+    """
     import subprocess
     import os
     from django.conf import settings
-
-    # Only run in gunicorn/runserver, not manage.py commands
-    if not (os.environ.get('RUN_MAIN') == 'true' or 'gunicorn' in (os.environ.get('SERVER_SOFTWARE', '') + os.environ.get('_', ''))):
-        return
 
     nginx_conf = None
     for path_candidate in [

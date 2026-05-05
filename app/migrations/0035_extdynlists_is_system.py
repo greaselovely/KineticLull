@@ -23,4 +23,12 @@ class Migration(migrations.Migration):
                 'verbose_name_plural': 'Ext Dyn Lists',
             },
         ),
+        migrations.AddConstraint(
+            model_name='extdynlists',
+            constraint=models.UniqueConstraint(
+                condition=models.Q(('is_system', True)),
+                fields=('is_system',),
+                name='unique_system_edl',
+            ),
+        ),
     ]
