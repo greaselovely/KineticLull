@@ -38,7 +38,10 @@
         <tbody>
             {% for item in page_obj %}
             <tr>
-                <td>{{ item.friendly_name }}</td>
+                <td>
+                    {{ item.friendly_name }}
+                    {% if item.is_system %}<span class="badge bg-secondary ms-1" title="Auto-managed by KineticLull. Read-only.">SYSTEM</span>{% endif %}
+                </td>
                 <td class="text-truncate"><a href="{{ item.full_url }}/" target="_blank">{{ item.full_url }}/</a></td>
                 <td class="cell-wrap">
                     {% for ip in item.ip_fqdn %}
@@ -56,10 +59,16 @@
                 <td>
                     <span class="actions-row">
                         <i class="bi {% if item.is_favorited %}bi-star-fill text-warning{% else %}bi-star{% endif %} action-items favorite-btn" data-id="{{ item.id }}" title="Favorite"></i>
+                        {% if not item.is_system %}
                         <a href="{% url 'app:edit' id=item.id %}" title="Edit"><i class="bi bi-pencil action-items"></i></a>
                         <a href="{% url 'app:clone' item.id %}" title="Clone"><i class="bi bi-copy action-items"></i></a>
+                        {% endif %}
                         <a href="{% url 'app:download_ip_fqdn' item.id %}" title="Download"><i class="bi bi-download action-items"></i></a>
-                        <i class="bi bi-trash action-items text-danger" onclick="deleteRecord('{{ item.id }}', event)" title="{% if item.is_protected %}Protected — actively polled{% else %}Delete{% endif %}"{% if item.is_protected %} style="opacity: 0.3;"{% endif %}></i>
+                        {% if not item.is_system %}
+                        <i class="bi bi-trash action-items text-danger" onclick="deleteRecord('{{ item.id }}', event)" title="{% if item.is_protected %}Protected, actively polled{% else %}Delete{% endif %}"{% if item.is_protected %} style="opacity: 0.3;"{% endif %}></i>
+                        {% else %}
+                        <i class="bi bi-shield-lock action-items text-muted" title="System EDL, cannot be deleted" style="opacity: 0.5;"></i>
+                        {% endif %}
                         <i class="bi bi-clipboard action-items copy-url-btn" data-url="{{ item.full_url }}" title="Copy URL"></i>
                     </span>
                 </td>

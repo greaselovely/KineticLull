@@ -420,6 +420,8 @@ def edit_ext_dyn_list_view(request, id=None):
     """
     if id:
         edl = get_edl_for_user(request.user, id=id)
+        if edl.is_system:
+            raise PermissionDenied("System EDL is read-only.")
         # Snapshot before values for diff
         before = {
             'friendly_name': edl.friendly_name,
@@ -502,6 +504,8 @@ def clone_ext_dyn_list_view(request, item_id):
     """
 
     original_item = get_edl_for_user(request.user, id=item_id)
+    if original_item.is_system:
+        raise PermissionDenied("System EDL cannot be cloned.")
 
     if request.method == 'POST':
         form = ExtDynListsForm(request.POST)
@@ -575,6 +579,11 @@ def delete_item(request, item_id):
     - HttpResponseRedirect: Redirects to the referring page or to a fallback URL after the item is deleted.
     """
     item = get_edl_for_user(request.user, id=item_id)
+    if item.is_system:
+        return JsonResponse(
+            {'error': 'System EDL cannot be deleted.'},
+            status=403,
+        )
 
     # Check if EDL is actively being polled
     app_settings = AppSettings.load()
@@ -863,6 +872,12 @@ def update_edl_fqdn(request):
             edl = ExtDynLists.objects.get(auto_url=auto_url)
         except ExtDynLists.DoesNotExist:
             return JsonResponse({'error': 'EDL not found'}, status=404)
+
+        if edl.is_system:
+            return JsonResponse(
+                {'error': 'System EDL is read-only and cannot be modified via API.'},
+                status=403,
+            )
 
         if command == 'overwrite':
             # For 'overwrite', treat all provided domains as new

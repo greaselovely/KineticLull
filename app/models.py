@@ -63,6 +63,8 @@ Disallow: /
 """
 
 class ExtDynLists(models.Model):
+    SYSTEM_BLOCKLIST_NAME = "System Blocklist - Auto-Blocked IPs"
+
     friendly_name = models.CharField(max_length=255, verbose_name='EDL Name')
     auto_url = models.CharField(max_length=255, unique=True, blank=True)
     ip_fqdn = models.TextField(verbose_name='IP/FQDN')
@@ -70,19 +72,64 @@ class ExtDynLists(models.Model):
     policy_reference = models.TextField(verbose_name='Notes')
     groups = models.ManyToManyField(Group, blank=True, verbose_name='Groups')
     created_date = models.DateTimeField(auto_now_add=True)
+    is_system = models.BooleanField(default=False, editable=False)
 
     class Meta:
         verbose_name = "Ext Dyn List"
         verbose_name_plural = "Ext Dyn Lists"
-        ordering = ["created_date", "friendly_name"]
+        ordering = ["-is_system", "created_date", "friendly_name"]
 
     def save(self, *args, **kwargs):
         if not self.auto_url:
             self.auto_url = secrets.token_urlsafe(16) + ".kl"
         super().save(*args, **kwargs)
 
+    def delete(self, *args, **kwargs):
+        if self.is_system:
+            raise PermissionError("System EDL cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.id}: {self.friendly_name} ({self.auto_url})" 
+        return f"{self.id}: {self.friendly_name} ({self.auto_url})"
+
+    @classmethod
+    def sync_system_blocklist(cls):
+        """Mirror every BlockedIP row into the pinned system EDL.
+
+        Called from BlockedIP.sync_to_nginx, so every add/remove/expire path
+        already in the codebase keeps the EDL in lockstep with the blocklist.
+        Creates the singleton on first call. ip_fqdn is fully overwritten;
+        operators can't edit it (the views and model.delete enforce this).
+        """
+        edl, created = cls.objects.get_or_create(
+            is_system=True,
+            defaults={
+                'friendly_name': cls.SYSTEM_BLOCKLIST_NAME,
+                'acl': '*',
+                'policy_reference': (
+                    'Auto-managed by KineticLull. Mirrors every IP in the '
+                    'system blocklist (manual + scanner-pattern + failed-login '
+                    'auto-blocks). Read-only, IPs are added and removed by '
+                    'the app as the blocklist changes.'
+                ),
+                'ip_fqdn': '',
+            },
+        )
+        ips = list(BlockedIP.objects.order_by('ip_address').values_list('ip_address', flat=True))
+        new_body = "\r\n".join(ips)
+        if edl.ip_fqdn != new_body:
+            edl.ip_fqdn = new_body
+            edl.save(update_fields=['ip_fqdn'])
+        if created:
+            # Creating a new EDL row bumps the count and max-id that
+            # compute_db_checksum() hashes; re-baseline so the integrity
+            # check doesn't fire on the first boot after this feature lands.
+            try:
+                from app.views import update_db_checksum
+                update_db_checksum()
+            except Exception:
+                pass
+        return edl
 
     # def update(self):
     #     if self.use_script and self.use_script.is_approved:
@@ -350,6 +397,11 @@ class BlockedIP(models.Model):
             )
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass  # Nginx not installed or not running (dev environment)
+
+        try:
+            ExtDynLists.sync_system_blocklist()
+        except Exception:
+            pass  # don't let an EDL sync hiccup break the nginx blocklist write
 
     # Path patterns that indicate scanner / exploit probing — any single hit
     # blocks the source IP immediately, regardless of rate. These are paths a
