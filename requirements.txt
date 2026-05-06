@@ -6,11 +6,17 @@
 #
 asgiref==3.11.1
     # via django
+certifi==2026.4.22
+    # via
+    #   -r requirements.in
+    #   requests
 cffi==2.0.0
     # via cryptography
+charset-normalizer==3.4.7
+    # via requests
 cryptography==46.0.7
     # via -r requirements.in
-django==5.2.12
+django==5.2.14
     # via
     #   -r requirements.in
     #   django-debug-toolbar
@@ -18,17 +24,31 @@ django-debug-toolbar==6.2.0
     # via -r requirements.in
 gunicorn==25.3.0
     # via -r requirements.in
+idna==3.13
+    # via
+    #   -r requirements.in
+    #   requests
 packaging==26.0
     # via gunicorn
 pycparser==3.0
     # via cffi
 python-dotenv==1.2.2
     # via -r requirements.in
+requests==2.33.1
+    # via
+    #   -r requirements.in
+    #   resend
+resend==2.7.0
+    # via -r requirements.in
 sqlparse==0.5.5
     # via
     #   django
     #   django-debug-toolbar
-resend==2.7.0
-    # via -r requirements.in
+typing-extensions==4.15.0
+    # via resend
+urllib3==2.6.3
+    # via
+    #   -r requirements.in
+    #   requests
 whitenoise==6.12.0
     # via -r requirements.in

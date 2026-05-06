@@ -1,7 +1,13 @@
-django>=5.2,<5.3
+django>=5.2.14,<5.3
 django-debug_toolbar
 whitenoise
 python-dotenv
 gunicorn>=22.0
 cryptography
 resend
+# Transitive deps via resend>requests; pinned to floor-versions that
+# close the Snyk findings (urllib3 carries 3 High-severity CVEs at 2.2.1).
+requests>=2.33.0
+urllib3>=2.6.3
+certifi>=2024.7.4
+idna>=3.7
