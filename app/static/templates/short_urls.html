@@ -188,10 +188,10 @@ function deleteShortUrl(urlId, event) {
     var currentUrlId = null;
     var currentWindow = '30d';
 
-    function fmtTs(iso) {
-        if (!iso) return 'never';
-        var d = new Date(iso);
-        return d.toLocaleString();
+    function fmtTs(s) {
+        // The server pre-formats timestamps in the configured app timezone
+        // and timestamp format, so we render the string verbatim.
+        return s || 'never';
     }
     function escapeHtml(s) {
         return (s || '').replace(/[&<>"']/g, function(c) {

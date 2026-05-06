@@ -3182,9 +3182,21 @@ def short_url_stats_view(request, url_id):
     from django.db.models.functions import TruncHour, TruncDate
     from datetime import timedelta
     from collections import Counter
+    from django.template.defaultfilters import date as date_filter
+    import zoneinfo
     from . import bot_detect
 
     short_url = get_object_or_404(ShortenedURL, id=url_id, created_by=request.user)
+
+    # Render all timestamps in the operator-configured timezone and format,
+    # not the browser's locale. Bin boundaries (TruncHour/TruncDate) also
+    # respect this so a "day" lines up with the operator's wall clock.
+    app_settings = AppSettings.load()
+    try:
+        app_tz = zoneinfo.ZoneInfo(app_settings.timezone or 'UTC')
+    except zoneinfo.ZoneInfoNotFoundError:
+        app_tz = zoneinfo.ZoneInfo('UTC')
+    app_ts_fmt = app_settings.timestamp_format or 'Y-m-d H:i:s'
 
     window = request.GET.get('window', '30d')
     windows = {
@@ -3208,18 +3220,23 @@ def short_url_stats_view(request, url_id):
     first = all_logs.order_by('created_at').values_list('created_at', flat=True).first()
     last = all_logs.order_by('-created_at').values_list('created_at', flat=True).first()
 
+    def fmt_local(dt):
+        if not dt:
+            return None
+        return date_filter(dt.astimezone(app_tz), app_ts_fmt)
+
     headline = {
         'total_window': windowed.count(),
         'total_logged_all_time': total_logged_all_time,
         'lifetime_clicks': short_url.hit_count,
         'legacy_clicks': legacy_clicks,
         'unique_ips_window': windowed.values('ip_address').distinct().count(),
-        'first_click': first.isoformat() if first else None,
-        'last_click': last.isoformat() if last else None,
+        'first_click': fmt_local(first),
+        'last_click': fmt_local(last),
     }
 
     bins = list(
-        windowed.annotate(bin=trunc_fn('created_at'))
+        windowed.annotate(bin=trunc_fn('created_at', tzinfo=app_tz))
         .values('bin').annotate(count=Count('id')).order_by('bin')
         .values_list('bin', 'count')
     )
