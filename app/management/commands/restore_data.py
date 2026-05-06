@@ -133,6 +133,7 @@ class Command(BaseCommand):
             ShortenedURL.objects.update_or_create(
                 short_code=s['short_code'],
                 defaults={
+                    'title': s.get('title', ''),
                     'original_url': s['original_url'],
                     'notes': s.get('notes', ''),
                     'created_by': owner,
@@ -288,6 +289,7 @@ class Command(BaseCommand):
                     ShortenedURL.objects.update_or_create(
                         short_code=r['short_code'],
                         defaults={
+                            'title': r.get('title', ''),
                             'original_url': r['original_url'],
                             'notes': r.get('notes', ''),
                             'created_by': owner,

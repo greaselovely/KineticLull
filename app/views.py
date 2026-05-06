@@ -145,12 +145,16 @@ def log_activity(request, action, target='', detail='', user=None):
     """Log a user activity to the database, forward to syslog, purge old logs, and update the integrity checksum."""
     log_user = user or (request.user if request.user.is_authenticated else None)
     ip_address = get_client_ip(request)
+    user_agent = (request.META.get('HTTP_USER_AGENT') or '')[:512]
+    referer = (request.META.get('HTTP_REFERER') or '')[:512]
     ActivityLog.objects.create(
         user=log_user,
         action=action,
         target=target,
         detail=detail,
         ip_address=ip_address,
+        user_agent=user_agent,
+        referer=referer,
     )
     # Forward to syslog
     try:
@@ -1084,7 +1088,9 @@ def activity_log_view(request):
             models.Q(target__icontains=search) |
             models.Q(detail__icontains=search) |
             models.Q(ip_address__icontains=search) |
-            models.Q(user__email__icontains=search)
+            models.Q(user__email__icontains=search) |
+            models.Q(user_agent__icontains=search) |
+            models.Q(referer__icontains=search)
         )
     default_per_page = str(app_settings.default_log_per_page)
     per_page = request.GET.get("per_page", default_per_page)
@@ -1144,7 +1150,9 @@ def activity_log_export(request):
             models.Q(target__icontains=search) |
             models.Q(detail__icontains=search) |
             models.Q(ip_address__icontains=search) |
-            models.Q(user__email__icontains=search)
+            models.Q(user__email__icontains=search) |
+            models.Q(user_agent__icontains=search) |
+            models.Q(referer__icontains=search)
         )
     app_settings = AppSettings.load()
     tz = zoneinfo.ZoneInfo(app_settings.timezone)
@@ -1153,7 +1161,7 @@ def activity_log_export(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="activity_log.csv"'
     writer = csv.writer(response)
-    writer.writerow(['Timestamp', 'User', 'Action', 'Target', 'Detail', 'IP Address'])
+    writer.writerow(['Timestamp', 'User', 'Action', 'Target', 'Detail', 'IP Address', 'Referer', 'User Agent'])
     for log in logs:
         local_time = log.created_at.astimezone(tz)
         writer.writerow([
@@ -1163,6 +1171,8 @@ def activity_log_export(request):
             log.target,
             log.detail,
             log.ip_address or '',
+            log.referer or '',
+            log.user_agent or '',
         ])
     return response
 
@@ -3097,6 +3107,7 @@ def redirect_short_url(request, short_code):
     """Public redirect endpoint — no login required."""
     short_url = get_object_or_404(ShortenedURL, short_code=short_code)
     ShortenedURL.objects.filter(pk=short_url.pk).update(hit_count=models.F('hit_count') + 1)
+    log_activity(request, 'short_url_visit', short_code, f'-> {short_url.original_url}')
     return HttpResponseRedirect(short_url.original_url)
 
 

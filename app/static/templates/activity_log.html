@@ -43,7 +43,9 @@
                 data-action="{{ log.action }}"
                 data-target="{{ log.target }}"
                 data-detail="{{ log.detail }}"
-                data-ip="{{ log.ip_address|default:'' }}">
+                data-ip="{{ log.ip_address|default:'' }}"
+                data-ua="{{ log.user_agent|default:'' }}"
+                data-referer="{{ log.referer|default:'' }}">
                 <td>{{ log.created_at|date:app_timestamp_format }}</td>
                 <td>{{ log.user.email|default:"System" }}</td>
                 <td><span class="badge bg-secondary">{{ log.action }}</span></td>
@@ -116,6 +118,8 @@
                     <tr><td class="text-muted">Action</td><td id="modal-action"></td></tr>
                     <tr><td class="text-muted align-top">Target</td><td id="modal-target" style="overflow-wrap: anywhere; white-space: normal;"></td></tr>
                     <tr><td class="text-muted">IP Address</td><td><span id="modal-ip"></span>{% if user.is_superuser %} <button class="btn btn-sm btn-outline-danger ms-2" id="modal-block-btn" title="Block this IP"><i class="bi bi-shield-x"></i></button>{% endif %}</td></tr>
+                    <tr id="modal-referer-row"><td class="text-muted align-top">Referer</td><td id="modal-referer" style="overflow-wrap: anywhere; white-space: normal;"></td></tr>
+                    <tr id="modal-ua-row"><td class="text-muted align-top">User Agent</td><td id="modal-ua" style="overflow-wrap: anywhere; white-space: normal;"></td></tr>
                     <tr id="modal-detail-row"><td class="text-muted align-top">Detail</td><td id="modal-detail" style="overflow-wrap: anywhere; white-space: normal;"></td></tr>
                 </table>
             </div>
@@ -162,6 +166,12 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('modal-action').textContent = row.getAttribute('data-action');
         document.getElementById('modal-ip').textContent = row.getAttribute('data-ip');
         renderMaybeList(document.getElementById('modal-target'), row.getAttribute('data-target'));
+        var ua = (row.getAttribute('data-ua') || '').trim();
+        var ref = (row.getAttribute('data-referer') || '').trim();
+        document.getElementById('modal-ua').textContent = ua;
+        document.getElementById('modal-referer').textContent = ref;
+        document.getElementById('modal-ua-row').style.display = ua ? '' : 'none';
+        document.getElementById('modal-referer-row').style.display = ref ? '' : 'none';
         var hasDetail = renderMaybeList(document.getElementById('modal-detail'), row.getAttribute('data-detail'));
         document.getElementById('modal-detail-row').style.display = hasDetail ? '' : 'none';
     });

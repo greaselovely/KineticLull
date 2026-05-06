@@ -36,8 +36,14 @@ class ExtDynListsForm(forms.ModelForm):
 class ShortenedURLForm(forms.ModelForm):
     class Meta:
         model = ShortenedURL
-        fields = ['original_url', 'notes']
+        fields = ['title', 'original_url', 'notes']
         widgets = {
+            'title': forms.TextInput(attrs={
+                'class': 'form-control form-control-sm mb-3',
+                'id': 'titleInput',
+                'placeholder': 'Friendly name for this link',
+                'required': 'required',
+            }),
             'original_url': forms.URLInput(attrs={
                 'class': 'form-control form-control-sm mb-3',
                 'id': 'originalUrlInput',

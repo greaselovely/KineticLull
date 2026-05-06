@@ -169,6 +169,8 @@ class ActivityLog(models.Model):
     target = models.CharField(max_length=255, blank=True)
     detail = models.TextField(blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=512, blank=True, default='')
+    referer = models.CharField(max_length=512, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     chain_hash = models.CharField(max_length=64, blank=True)
 
@@ -835,6 +837,7 @@ class NginxRejection(models.Model):
 
 
 class ShortenedURL(models.Model):
+    title = models.CharField(max_length=255, blank=True, default='', verbose_name='Title')
     original_url = models.URLField(max_length=2048, verbose_name='Original URL')
     short_code = models.CharField(max_length=255, unique=True, blank=True)
     notes = models.TextField(blank=True, default='', verbose_name='Notes')

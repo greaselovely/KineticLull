@@ -31,16 +31,20 @@
     <table id="short-url-table" class="table table-hover table-resizable">
         <thead>
             <tr>
-                <th data-col="0">Short URL</th>
-                <th data-col="1">Original URL</th>
-                <th data-col="2">Hits</th>
-                <th data-col="3">Created</th>
-                <th data-col="4">Actions</th>
+                <th data-col="0">Title</th>
+                <th data-col="1">Short URL</th>
+                <th data-col="2">Original URL</th>
+                <th data-col="3">Hits</th>
+                <th data-col="4">Created</th>
+                <th data-col="5">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for url in page_obj %}
             <tr>
+                <td>
+                    {% if url.title %}{{ url.title }}{% else %}<span class="text-muted">(no title)</span>{% endif %}
+                </td>
                 <td>
                     <a href="{{ url.short_url }}" target="_blank">{{ url.short_url }}</a>
                 </td>
@@ -59,7 +63,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="5" class="text-muted">No URLs yet. Click the + to create one.</td>
+                <td colspan="6" class="text-muted">No URLs yet. Click the + to create one.</td>
             </tr>
             {% endfor %}
         </tbody>

@@ -87,6 +87,7 @@ class Command(BaseCommand):
 
         # Shortened URLs
         data['shortened_urls'] = [{
+            'title': s.title,
             'original_url': s.original_url,
             'short_code': s.short_code,
             'notes': s.notes,
