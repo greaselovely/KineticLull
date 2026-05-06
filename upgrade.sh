@@ -371,33 +371,33 @@ print(AppSettings.load().deployment_mode)
     echo "$DB_MODE"
 }
 
-# ─── Ensure Python 3.12 / Rebuild Venv on Mismatch ───────────────────────────
+# ─── Ensure Python 3.13 / Rebuild Venv on Mismatch ───────────────────────────
 # A venv carries its Python version for life — the interpreter cannot be
 # upgraded in place. So if an existing venv is on the wrong version, the
 # only safe path is to install 3.12 and rebuild the venv from
 # requirements.txt. The old venv is moved to venv.old for recovery.
 
-ensure_python312() {
-    if ! command -v python3.12 &>/dev/null; then
-        log "python3.12 not found. Installing via install_python.sh..."
+ensure_python313() {
+    if ! command -v python3.13 &>/dev/null; then
+        log "python3.13 not found. Installing via install_python.sh..."
         if [ -f "${SCRIPT_DIR}/install_python.sh" ]; then
             bash "${SCRIPT_DIR}/install_python.sh" 2>>"${LOGFILE}"
         else
-            warn "install_python.sh missing. Install Python 3.12 manually then re-run upgrade.sh."
+            warn "install_python.sh missing. Install Python 3.13 manually then re-run upgrade.sh."
             exit 1
         fi
-        if ! command -v python3.12 &>/dev/null; then
-            warn "Python 3.12 still not available after install attempt. Aborting."
+        if ! command -v python3.13 &>/dev/null; then
+            warn "Python 3.13 still not available after install attempt. Aborting."
             exit 1
         fi
-        ok "Python 3.12 installed."
+        ok "Python 3.13 installed."
     fi
     # install_python.sh installs python3-venv (system default), not the
-    # version-matched python3.12-venv that 'python3.12 -m venv' requires.
+    # version-matched python3.13-venv that 'python3.13 -m venv' requires.
     if [ -f /etc/debian_version ]; then
-        if ! python3.12 -m venv --help &>/dev/null; then
-            log "Installing python3.12-venv..."
-            sudo apt-get install -y python3.12-venv 2>>"${LOGFILE}"
+        if ! python3.13 -m venv --help &>/dev/null; then
+            log "Installing python3.13-venv..."
+            sudo apt-get install -y python3.13-venv 2>>"${LOGFILE}"
         fi
     fi
 }
@@ -408,20 +408,20 @@ check_venv_python_version() {
     fi
     local CURRENT
     CURRENT=$("${VENV_PATH}/bin/python" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "unknown")
-    if [ "$CURRENT" = "3.12" ]; then
+    if [ "$CURRENT" = "3.13" ]; then
         log "Existing venv is on Python ${CURRENT}."
         return 0
     fi
-    warn "Existing venv is on Python ${CURRENT}; KineticLull targets 3.12."
-    log "Rebuilding venv on Python 3.12..."
-    ensure_python312
+    warn "Existing venv is on Python ${CURRENT}; KineticLull targets 3.13."
+    log "Rebuilding venv on Python 3.13..."
+    ensure_python313
     log "Stopping ${PROJECT_NAME} service before venv rebuild..."
     sudo systemctl stop "${PROJECT_NAME}" 2>/dev/null || true
     log "Preserving prior venv as ${VENV_PATH}.old (delete after upgrade succeeds)..."
     rm -rf "${VENV_PATH}.old"
     mv "${VENV_PATH}" "${VENV_PATH}.old"
-    log "Creating fresh venv with python3.12..."
-    if ! python3.12 -m venv "${VENV_PATH}"; then
+    log "Creating fresh venv with python3.13..."
+    if ! python3.13 -m venv "${VENV_PATH}"; then
         warn "venv creation failed. Restore prior venv with:"
         warn "  rm -rf ${VENV_PATH} && mv ${VENV_PATH}.old ${VENV_PATH}"
         exit 1
@@ -433,7 +433,7 @@ check_venv_python_version() {
         warn "Then start the service: sudo systemctl start ${PROJECT_NAME}"
         exit 1
     fi
-    ok "Venv rebuilt on Python 3.12. Prior venv preserved at ${VENV_PATH}.old"
+    ok "Venv rebuilt on Python 3.13. Prior venv preserved at ${VENV_PATH}.old"
 }
 
 check_venv_python_version
@@ -443,9 +443,9 @@ check_venv_python_version
 if [ -d "venv" ]; then
     PYTHON="venv/bin/python"
     PIP="venv/bin/pip"
-elif command -v python3.12 &>/dev/null; then
-    PYTHON="python3.12"
-    PIP="pip3.12"
+elif command -v python3.13 &>/dev/null; then
+    PYTHON="python3.13"
+    PIP="pip3.13"
 elif command -v python3 &>/dev/null; then
     PYTHON="python3"
     PIP="pip3"

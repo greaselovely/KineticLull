@@ -2035,12 +2035,23 @@ def upgrade_view(request):
     if result.returncode != 0 and 'password is required' in result.stderr.lower():
         sudoers_ok = False
 
+    # Python interpreter check. The WebUI upgrade can only update libraries
+    # into the running venv; it cannot rebuild the venv itself. So if the
+    # operator is on the wrong Python, surface the SSH command they need.
+    python_target = (3, 13)
+    python_ok = sys.version_info[:2] >= python_target
+    python_current = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    python_target_str = f"{python_target[0]}.{python_target[1]}"
+
     context = {
         'current_version': current_version,
         'latest_version': latest_version,
         'upgrade_available': upgrade_available,
         'legacy_deployment': deployment_mode == 'gunicorn_ssl',
         'sudoers_incomplete': not sudoers_ok,
+        'python_ok': python_ok,
+        'python_current': python_current,
+        'python_target': python_target_str,
         'title': 'System Upgrade',
     }
 
@@ -2358,6 +2369,9 @@ def deployment_status_view(request):
     import platform
     from importlib.metadata import distributions
     python_version = platform.python_version()
+    python_target = (3, 13)
+    python_ok = sys.version_info[:2] >= python_target
+    python_target_str = f"{python_target[0]}.{python_target[1]}"
     installed_packages = sorted(
         [{'name': d.metadata['Name'], 'version': d.metadata['Version']} for d in distributions()],
         key=lambda x: x['name'].lower()
@@ -2375,6 +2389,8 @@ def deployment_status_view(request):
         'service_mode': service_mode,
         'can_migrate': effective_mode == 'gunicorn_ssl',
         'python_version': python_version,
+        'python_ok': python_ok,
+        'python_target': python_target_str,
         'installed_packages': installed_packages,
     }
     return render(request, 'deployment_status.html', context)

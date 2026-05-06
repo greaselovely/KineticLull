@@ -57,30 +57,30 @@ detect_os() {
     log "Detected OS family: ${OS_FAMILY}"
 }
 
-# ─── Ensure Python 3.12 ──────────────────────────────────────────────────────
+# ─── Ensure Python 3.13 ──────────────────────────────────────────────────────
 
-ensure_python312() {
-    if ! command -v python3.12 &>/dev/null; then
-        log "python3.12 not found. Installing via install_python.sh..."
+ensure_python313() {
+    if ! command -v python3.13 &>/dev/null; then
+        log "python3.13 not found. Installing via install_python.sh..."
         if [ -f "${PROJECT_DIR}/install_python.sh" ]; then
             bash "${PROJECT_DIR}/install_python.sh" 2>>"${LOGFILE}"
         else
             warn "install_python.sh missing from ${PROJECT_DIR}."
-            warn "Install Python 3.12 manually then re-run setup.sh."
+            warn "Install Python 3.13 manually then re-run setup.sh."
             exit 1
         fi
-        if ! command -v python3.12 &>/dev/null; then
-            warn "Python 3.12 still not available after install attempt. Aborting."
+        if ! command -v python3.13 &>/dev/null; then
+            warn "Python 3.13 still not available after install attempt. Aborting."
             exit 1
         fi
-        ok "Python 3.12 installed."
+        ok "Python 3.13 installed."
     fi
     # install_python.sh installs python3-venv (system default), not the
-    # version-matched python3.12-venv that 'python3.12 -m venv' requires.
+    # version-matched python3.13-venv that 'python3.13 -m venv' requires.
     if [ "$OS_FAMILY" = "debian" ]; then
-        if ! python3.12 -m venv --help &>/dev/null; then
-            log "Installing python3.12-venv..."
-            sudo apt-get install -y python3.12-venv 2>>"${LOGFILE}"
+        if ! python3.13 -m venv --help &>/dev/null; then
+            log "Installing python3.13-venv..."
+            sudo apt-get install -y python3.13-venv 2>>"${LOGFILE}"
         fi
     fi
 }
@@ -92,7 +92,7 @@ install_packages() {
 
     if [ "$OS_FAMILY" = "debian" ]; then
         sudo apt-get update -qq
-        sudo apt-get install -y nginx openssl python3.12-venv
+        sudo apt-get install -y nginx openssl python3.13-venv
     else
         if command -v dnf &>/dev/null; then
             sudo dnf install -y nginx openssl
@@ -287,8 +287,8 @@ TMPEOF
 # ─── Python Virtual Environment ──────────────────────────────────────────────
 
 setup_python() {
-    log "Creating virtual environment on Python 3.12..."
-    python3.12 -m venv "${VENV_PATH}"
+    log "Creating virtual environment on Python 3.13..."
+    python3.13 -m venv "${VENV_PATH}"
     source "${VENV_PATH}/bin/activate"
 
     log "Upgrading pip..."
@@ -529,7 +529,7 @@ ENVEOF
 }
 
 detect_os
-ensure_python312
+ensure_python313
 install_packages
 setup_ssl
 setup_python

@@ -14,6 +14,21 @@
     </div>
     {% endif %}
 
+    {% if not python_ok %}
+    <div class="alert alert-warning mt-3">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>Python upgrade required.</strong>
+        This appliance is running Python <code>{{ python_current }}</code>; KineticLull targets <code>{{ python_target }}</code>.
+        The web UI upgrade can update libraries but cannot rebuild the virtual environment on a new interpreter.
+        From the server command line, run:
+        <pre class="mb-0 mt-2 p-2 bg-dark text-light rounded"><code>bash upgrade.sh</code></pre>
+        <p class="mt-2 mb-0 small">
+            The script installs Python {{ python_target }}, rebuilds the venv, and restarts the service.
+            The prior environment is preserved at <code>venv.old</code> for recovery.
+        </p>
+    </div>
+    {% endif %}
+
     {% if legacy_deployment %}
     <div class="alert alert-warning mt-3">
         <i class="bi bi-exclamation-triangle me-2"></i>

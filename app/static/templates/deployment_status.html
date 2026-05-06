@@ -72,6 +72,19 @@
             <div class="d-flex align-items-center mb-3">
                 <h5 class="mb-0">Python Environment</h5>
             </div>
+            {% if not python_ok %}
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Python upgrade required.</strong>
+                Running <code>{{ python_version }}</code>; KineticLull targets <code>{{ python_target }}</code>.
+                The web UI cannot rebuild the venv on a new interpreter. From the server command line, run:
+                <pre class="mb-0 mt-2 p-2 bg-dark text-light rounded"><code>bash upgrade.sh</code></pre>
+                <p class="mt-2 mb-0 small">
+                    Installs Python {{ python_target }}, rebuilds the venv, and restarts the service.
+                    The prior environment is preserved at <code>venv.old</code> for recovery.
+                </p>
+            </div>
+            {% endif %}
             <table class="table table-sm mb-3">
                 <tbody>
                     <tr>
