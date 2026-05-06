@@ -332,6 +332,37 @@
 
                 <div class="card mb-3">
                     <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Bot Detection List</h6>
+                        <p class="form-text mb-2">
+                            User-Agent patterns used to classify clicks on shortened URLs as bot vs. human.
+                            Sourced from <a href="https://github.com/monperrus/crawler-user-agents" target="_blank" rel="noopener">monperrus/crawler-user-agents</a>.
+                            Refresh pulls the latest list from upstream.
+                        </p>
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <div class="small">
+                                <span class="text-muted">Patterns:</span> <strong>{{ bot_list_info.pattern_count }}</strong>
+                                {% if bot_list_info.last_refreshed %}
+                                <span class="text-muted ms-2">Last refreshed:</span> <strong>{{ bot_list_info.last_refreshed|date:app_timestamp_format }}</strong>
+                                {% else %}
+                                <span class="text-muted ms-2">Last refreshed: never</span>
+                                {% endif %}
+                            </div>
+                            <form method="post" action="{% url 'app:refresh_bot_list' %}" class="ms-auto">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh from upstream
+                                </button>
+                            </form>
+                        </div>
+                        <div class="form-text mt-2">
+                            Refresh requires worker restart to take effect. CLI fallback if the button fails:
+                            <code class="small">curl -o app/data/crawler_user_agents.json https://raw.githubusercontent.com/monperrus/crawler-user-agents/master/crawler-user-agents.json</code>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
                         <h6 class="text-muted text-uppercase mb-3">Failed-Login Block</h6>
                         <div class="mb-3">
                             <div class="form-check">

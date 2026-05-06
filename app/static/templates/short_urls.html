@@ -55,6 +55,7 @@
                 <td>{{ url.created_at|date:app_timestamp_format }}</td>
                 <td>
                     <span class="actions-row">
+                        <i class="bi bi-graph-up action-items stats-btn" data-url-id="{{ url.id }}" data-url-title="{{ url.title|default:url.short_code }}" title="Stats"></i>
                         <a href="{% url 'app:edit_short_url' url.id %}" title="Edit"><i class="bi bi-pencil action-items"></i></a>
                         <i class="bi bi-trash action-items text-danger" onclick="deleteShortUrl('{{ url.id }}', event)" title="Delete"></i>
                         <i class="bi bi-clipboard action-items copy-url-btn" data-url="{{ url.short_url }}" title="Copy Short URL"></i>
@@ -108,17 +109,214 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Stats Modal -->
+<div class="modal fade" id="statsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Stats: <span id="stats-title"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="font-size: 0.9rem;">
+                <div id="stats-loading" class="text-muted py-3">Loading...</div>
+                <div id="stats-content" style="display:none;">
+                    <div class="row g-3 mb-3">
+                        <div class="col"><div class="border rounded p-2"><div class="text-muted small">In window</div><div class="fs-5" id="stat-window-total">0</div></div></div>
+                        <div class="col"><div class="border rounded p-2"><div class="text-muted small">Unique IPs</div><div class="fs-5" id="stat-unique-ips">0</div></div></div>
+                        <div class="col"><div class="border rounded p-2"><div class="text-muted small">First click</div><div class="fs-6" id="stat-first">never</div></div></div>
+                        <div class="col"><div class="border rounded p-2"><div class="text-muted small">Last click</div><div class="fs-6" id="stat-last">never</div></div></div>
+                    </div>
+                    <div class="text-muted small mb-2" id="stats-lifetime-line"></div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong>Clicks over time</strong>
+                        <div class="btn-group btn-group-sm" role="group" id="stats-window-toggle">
+                            <button type="button" class="btn btn-outline-secondary" data-window="24h">24h</button>
+                            <button type="button" class="btn btn-outline-secondary" data-window="7d">7d</button>
+                            <button type="button" class="btn btn-outline-secondary active" data-window="30d">30d</button>
+                        </div>
+                    </div>
+                    <canvas id="statsChart" height="160"></canvas>
+
+                    <div class="row g-3 mt-3">
+                        <div class="col-md-7">
+                            <strong>Top referrers</strong>
+                            <table class="table table-sm mt-2 mb-0">
+                                <thead><tr><th>Referrer</th><th class="text-end" style="width: 80px;">Hits</th></tr></thead>
+                                <tbody id="stats-referers"></tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-5">
+                            <strong>Bot vs human</strong>
+                            <div class="mt-2" id="stats-bots-summary"></div>
+                            <div class="progress mt-2" style="height: 8px;">
+                                <div class="progress-bar bg-success" id="stats-human-bar" role="progressbar"></div>
+                                <div class="progress-bar bg-warning" id="stats-bot-bar" role="progressbar"></div>
+                            </div>
+                            <table class="table table-sm mt-2 mb-0">
+                                <tbody id="stats-top-bots"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endtimezone %}
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
 var deleteUrlBase = "{% url 'app:delete_short_url' url_id=0 %}".replace('/0/', '/');
+var statsUrlBase = "{% url 'app:short_url_stats' url_id=0 %}".replace('/0/', '/');
 function deleteShortUrl(urlId, event) {
     event.preventDefault();
     showConfirmModal('Delete this short URL?', function() {
         window.location.href = deleteUrlBase + urlId + '/';
     });
 }
+
+(function() {
+    var statsChart = null;
+    var currentUrlId = null;
+    var currentWindow = '30d';
+
+    function fmtTs(iso) {
+        if (!iso) return 'never';
+        var d = new Date(iso);
+        return d.toLocaleString();
+    }
+    function escapeHtml(s) {
+        return (s || '').replace(/[&<>"']/g, function(c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+    }
+
+    function loadStats(urlId, win) {
+        document.getElementById('stats-loading').style.display = '';
+        document.getElementById('stats-content').style.display = 'none';
+        fetch(statsUrlBase + urlId + '/stats/?window=' + encodeURIComponent(win))
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function(data) { renderStats(data); })
+            .catch(function(e) {
+                document.getElementById('stats-loading').textContent = 'Failed to load stats: ' + e.message;
+            });
+    }
+
+    function renderStats(data) {
+        document.getElementById('stats-loading').style.display = 'none';
+        document.getElementById('stats-content').style.display = '';
+
+        document.getElementById('stat-window-total').textContent = data.headline.total_window;
+        document.getElementById('stat-unique-ips').textContent = data.headline.unique_ips_window;
+        document.getElementById('stat-first').textContent = fmtTs(data.headline.first_click);
+        document.getElementById('stat-last').textContent = fmtTs(data.headline.last_click);
+
+        var lifetimeLine = 'Lifetime: ' + data.headline.lifetime_clicks + ' click(s).';
+        if (data.headline.legacy_clicks > 0) {
+            lifetimeLine += ' ' + data.headline.legacy_clicks + ' occurred before per-click logging shipped.';
+        }
+        document.getElementById('stats-lifetime-line').textContent = lifetimeLine;
+
+        // Chart
+        var ctx = document.getElementById('statsChart').getContext('2d');
+        if (statsChart) statsChart.destroy();
+        statsChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.series.labels,
+                datasets: [{
+                    label: 'Clicks',
+                    data: data.series.values,
+                    backgroundColor: 'rgba(13, 110, 253, 0.7)',
+                    borderColor: 'rgba(13, 110, 253, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { ticks: { maxTicksLimit: 12 } },
+                    y: { beginAtZero: true, ticks: { precision: 0 } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Referrers
+        var refTbody = document.getElementById('stats-referers');
+        refTbody.innerHTML = '';
+        if (data.referers.length === 0) {
+            refTbody.innerHTML = '<tr><td colspan="2" class="text-muted">No referrers in this window.</td></tr>';
+        } else {
+            data.referers.forEach(function(r) {
+                var tr = document.createElement('tr');
+                var td1 = document.createElement('td');
+                td1.style.overflowWrap = 'anywhere';
+                td1.textContent = r.referer;
+                var td2 = document.createElement('td');
+                td2.className = 'text-end';
+                td2.textContent = r.count;
+                tr.appendChild(td1); tr.appendChild(td2);
+                refTbody.appendChild(tr);
+            });
+        }
+
+        // Bots
+        var bot = data.bots.bot, human = data.bots.human, total = bot + human;
+        var summaryEl = document.getElementById('stats-bots-summary');
+        if (total === 0) {
+            summaryEl.innerHTML = '<span class="text-muted">No clicks in this window.</span>';
+            document.getElementById('stats-human-bar').style.width = '0%';
+            document.getElementById('stats-bot-bar').style.width = '0%';
+        } else {
+            var humanPct = (human / total * 100).toFixed(0);
+            var botPct = (bot / total * 100).toFixed(0);
+            summaryEl.innerHTML = 'Humans: <strong>' + human + '</strong> (' + humanPct + '%) &nbsp; Bots: <strong>' + bot + '</strong> (' + botPct + '%)';
+            document.getElementById('stats-human-bar').style.width = humanPct + '%';
+            document.getElementById('stats-bot-bar').style.width = botPct + '%';
+        }
+        var botsTbody = document.getElementById('stats-top-bots');
+        botsTbody.innerHTML = '';
+        data.bots.top_bots.forEach(function(b) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + escapeHtml(b.name) + '</td><td class="text-end" style="width:60px;">' + b.count + '</td>';
+            botsTbody.appendChild(tr);
+        });
+    }
+
+    document.querySelectorAll('.stats-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            currentUrlId = this.getAttribute('data-url-id');
+            document.getElementById('stats-title').textContent = this.getAttribute('data-url-title');
+            currentWindow = '30d';
+            // Reset toggle highlight
+            document.querySelectorAll('#stats-window-toggle button').forEach(function(b) {
+                b.classList.toggle('active', b.getAttribute('data-window') === currentWindow);
+            });
+            var modal = new bootstrap.Modal(document.getElementById('statsModal'));
+            modal.show();
+            loadStats(currentUrlId, currentWindow);
+        });
+    });
+
+    document.querySelectorAll('#stats-window-toggle button').forEach(function(b) {
+        b.addEventListener('click', function() {
+            currentWindow = this.getAttribute('data-window');
+            document.querySelectorAll('#stats-window-toggle button').forEach(function(x) {
+                x.classList.toggle('active', x === b);
+            });
+            if (currentUrlId) loadStats(currentUrlId, currentWindow);
+        });
+    });
+})();
 </script>
 {% endblock %}

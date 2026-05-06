@@ -1470,6 +1470,16 @@ def app_settings_view(request):
         except Exception as e:
             b2_versions_error = str(e)
 
+    from . import bot_detect
+    bot_list_info = {'pattern_count': bot_detect.pattern_count(), 'last_refreshed': None}
+    try:
+        if bot_detect.DATA_PATH.exists():
+            bot_list_info['last_refreshed'] = datetime.fromtimestamp(
+                bot_detect.DATA_PATH.stat().st_mtime, tz=timezone.utc,
+            )
+    except Exception:
+        pass
+
     return render(request, 'app_settings.html', {
         'app_settings': app_settings,
         'timezones': available_timezones,
@@ -1477,6 +1487,7 @@ def app_settings_view(request):
         'b2_versions': b2_versions,
         'b2_versions_error': b2_versions_error,
         'builtin_scanner_patterns': BlockedIP.SCANNER_PATH_PATTERNS,
+        'bot_list_info': bot_list_info,
     })
 
 
@@ -1520,6 +1531,37 @@ def take_local_backup_view(request):
         messages.success(request, 'Local backup created.')
     except Exception as e:
         messages.error(request, f'Backup failed: {e}')
+    return redirect('app:app_settings')
+
+
+BOT_LIST_URL = 'https://raw.githubusercontent.com/monperrus/crawler-user-agents/master/crawler-user-agents.json'
+
+
+@login_required
+@require_http_methods(["POST"])
+def refresh_bot_list_view(request):
+    """Pull the latest crawler-user-agents JSON from upstream and overwrite
+    the vendored copy. Worker restart required for the new patterns to apply."""
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    import requests
+    import json as _json
+    from . import bot_detect
+    try:
+        resp = requests.get(BOT_LIST_URL, timeout=15)
+        resp.raise_for_status()
+        # Validate it parses as a list of objects with 'pattern' keys before overwriting
+        data = resp.json()
+        if not isinstance(data, list) or not all(isinstance(d, dict) and 'pattern' in d for d in data):
+            raise ValueError('Upstream JSON shape unexpected')
+        bot_detect.DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with bot_detect.DATA_PATH.open('w') as f:
+            _json.dump(data, f)
+        log_activity(request, 'refresh_bot_list', '', f'{len(data)} entries fetched')
+        messages.success(request, f'Bot list updated ({len(data)} patterns). Restart kineticlull for the new patterns to take effect.')
+    except Exception as e:
+        log_activity(request, 'refresh_bot_list', '', f'failed: {e}')
+        messages.error(request, f'Bot list refresh failed: {e}. As a fallback: curl -o {bot_detect.DATA_PATH} {BOT_LIST_URL}')
     return redirect('app:app_settings')
 
 
@@ -3109,6 +3151,104 @@ def redirect_short_url(request, short_code):
     ShortenedURL.objects.filter(pk=short_url.pk).update(hit_count=models.F('hit_count') + 1)
     log_activity(request, 'short_url_visit', short_code, f'-> {short_url.original_url}')
     return HttpResponseRedirect(short_url.original_url)
+
+
+@login_required
+@require_http_methods(["GET"])
+def short_url_stats_view(request, url_id):
+    """Return JSON stats for a single shortened URL.
+
+    Auth + ownership gated: 404 (not 403) on wrong owner so we don't leak
+    whether the ID exists for some other user. Mirrors edit/delete pattern.
+    """
+    from django.utils import timezone as tz
+    from django.db.models import Count
+    from django.db.models.functions import TruncHour, TruncDate
+    from datetime import timedelta
+    from collections import Counter
+    from . import bot_detect
+
+    short_url = get_object_or_404(ShortenedURL, id=url_id, created_by=request.user)
+
+    window = request.GET.get('window', '30d')
+    windows = {
+        '24h': (timedelta(hours=24), TruncHour, '%m/%d %H:00'),
+        '7d':  (timedelta(days=7),   TruncDate, '%m/%d'),
+        '30d': (timedelta(days=30),  TruncDate, '%m/%d'),
+    }
+    if window not in windows:
+        window = '30d'
+    delta, trunc_fn, label_fmt = windows[window]
+    window_start = tz.now() - delta
+
+    all_logs = ActivityLog.objects.filter(
+        action='short_url_visit', target=short_url.short_code,
+    )
+    windowed = all_logs.filter(created_at__gte=window_start)
+
+    total_logged_all_time = all_logs.count()
+    legacy_clicks = max(0, short_url.hit_count - total_logged_all_time)
+
+    first = all_logs.order_by('created_at').values_list('created_at', flat=True).first()
+    last = all_logs.order_by('-created_at').values_list('created_at', flat=True).first()
+
+    headline = {
+        'total_window': windowed.count(),
+        'total_logged_all_time': total_logged_all_time,
+        'lifetime_clicks': short_url.hit_count,
+        'legacy_clicks': legacy_clicks,
+        'unique_ips_window': windowed.values('ip_address').distinct().count(),
+        'first_click': first.isoformat() if first else None,
+        'last_click': last.isoformat() if last else None,
+    }
+
+    bins = list(
+        windowed.annotate(bin=trunc_fn('created_at'))
+        .values('bin').annotate(count=Count('id')).order_by('bin')
+        .values_list('bin', 'count')
+    )
+    series = {
+        'labels': [b.strftime(label_fmt) for b, _ in bins],
+        'values': [c for _, c in bins],
+    }
+
+    referer_rows = list(
+        windowed.values('referer').annotate(count=Count('id'))
+        .order_by('-count')[:10]
+    )
+    referers = [
+        {'referer': r['referer'] or '(direct)', 'count': r['count']}
+        for r in referer_rows
+    ]
+
+    ua_counts = Counter(
+        windowed.values_list('user_agent', flat=True)
+    )
+    bot_total = 0
+    human_total = 0
+    bot_buckets = Counter()
+    for ua, count in ua_counts.items():
+        name = bot_detect.bot_name(ua)
+        if name:
+            bot_total += count
+            bot_buckets[name] += count
+        else:
+            human_total += count
+    top_bots = [
+        {'name': name, 'count': count}
+        for name, count in bot_buckets.most_common(5)
+    ]
+
+    return JsonResponse({
+        'url_id': short_url.id,
+        'short_code': short_url.short_code,
+        'title': short_url.title,
+        'window': window,
+        'headline': headline,
+        'series': series,
+        'referers': referers,
+        'bots': {'bot': bot_total, 'human': human_total, 'top_bots': top_bots},
+    })
 
 
 # ── One-Time File Sharing ──────────────────────────────────────
