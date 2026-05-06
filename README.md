@@ -49,11 +49,7 @@ KineticLull (http://kineticlull.com) is a web application for managing and deplo
 
 ### Prerequisites
 
-Python 3.12 is required. We provide a helper script:
-
-```bash
-bash install_python.sh
-```
+Python 3.13 is required. `setup.sh` will install it for you (deadsnakes PPA on Debian/Ubuntu, system package manager on RHEL/Fedora) along with the matching `python3.13-venv` package, so you can usually skip ahead to Setup.
 
 ### Setup
 
@@ -63,7 +59,7 @@ cd KineticLull
 bash setup.sh
 ```
 
-The setup script handles virtual environment creation, dependency installation, database setup, Nginx + Gunicorn configuration, and systemd service creation. It will prompt for the IP or FQDN the application will be accessible at.
+The setup script handles Python 3.13 install (if missing), virtual environment creation, dependency installation, database setup, Nginx + Gunicorn configuration, and systemd service creation. It will prompt for the IP or FQDN the application will be accessible at.
 
 **Deployment architecture**: Fresh installs use Nginx for SSL termination, static file serving, security headers, and API rate limiting. Gunicorn runs behind Nginx on `127.0.0.1:8000`.
 
@@ -89,7 +85,7 @@ cd /path/to/KineticLull
 bash upgrade.sh
 ```
 
-This will pull the latest code, install/update dependencies, run database migrations, collect static files, and restart the service. If you are running the legacy Gunicorn + direct SSL setup, `upgrade.sh` will offer to migrate to Nginx + Gunicorn (highly recommended).
+This will pull the latest code, install/update dependencies, run database migrations, collect static files, and restart the service. If the venv is on an older Python interpreter than 3.13, `upgrade.sh` will install Python 3.13, rebuild the venv from `requirements.txt`, and preserve the prior environment at `venv.old` for recovery. If you are running the legacy Gunicorn + direct SSL setup, `upgrade.sh` will offer to migrate to Nginx + Gunicorn (highly recommended).
 
 ### Option 2b: Web UI Migration Wizard
 
@@ -164,7 +160,6 @@ Contributions are welcome. Submit PRs at https://github.com/greaselovely/Kinetic
 ```bash
 git clone https://github.com/greaselovely/KineticLull.git
 cd KineticLull
-bash install_python.sh
 bash setup.sh
 ```
 
