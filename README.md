@@ -17,8 +17,10 @@ KineticLull (http://kineticlull.com) is a web application for managing and deplo
 - **Auto-Block (multi-layered)**:
   - **Rate-based burst window** (e.g., 50 hits in 60s) for noisy scanners.
   - **Cumulative window** (e.g., 30 hits in 24h) for paced scanners that pace probes to evade the burst rule.
-  - **Pattern-based instant block** for known exploit paths (`.env`, `.git/config`, `wp-admin`, `phpmyadmin`, `/etc/passwd`, ~40 patterns total) — one hit on a scanner path blocks the source IP immediately.
+  - **Pattern-based instant block** for known exploit paths (`.env`, `.git/config`, `wp-admin`, `phpmyadmin`, `/etc/passwd`, ~40 patterns total). One hit on a scanner path blocks the source IP immediately. Operators can extend the list with custom patterns from Settings without a code change; the built-in list is shown in a collapsible reference panel.
+  - **IPv4 /24 aggregation** (opt-in): when the configured number of auto-blocked /32 addresses pile up in the same /24, they collapse into a single CIDR block. Skipped automatically when any whitelisted IP lives in that /24.
   - **Failed-login block** with separate threshold + window.
+  - **Configurable block duration**: leave bans permanent (default) or set an expiration so old auto-blocks self-purge.
   - All gated by a single master toggle. All honor the whitelist.
 - **Whitelisted IPs**: Dedicated nav entry. Whitelist individual IPs or CIDR subnets to exclude them from any auto-block layer. Your current admin IP is detected and one-click whitelistable.
 - **Backups (Local + Backblaze B2)**:
@@ -29,10 +31,10 @@ KineticLull (http://kineticlull.com) is a web application for managing and deplo
   - Restore from local snapshots OR from any version still in B2.
 - **API Integration**: Submit new FQDNs and update/overwrite existing EDLs programmatically via API with Bearer token auth. API key access is gated by the `users.use_api_key` group permission.
 - **Activity Logging**: All user and device actions logged to the database with a searchable log viewer for staff/admins. Tamper-evident chain hash. Configurable retention.
-- **System Health**: Sidebar badge surfaces issues — stale code after a pull, missing sudoers, expiring SSL cert, B2 backup gone stale, nginx log unreadable. One-click fixes for the common ones.
+- **System Health**: Sidebar badge surfaces issues: stale code after a pull, missing sudoers, expiring SSL cert, B2 backup gone stale, nginx log unreadable. One-click fixes for the common ones.
 - **Tabbed Settings**: General / Customization / Integrations / Security / Limits / Backups. Per-page sticky save.
 - **Configurable robots.txt**: Edit the body served at `/robots.txt` directly from Settings → Customization. Default ships with a base64 easter egg.
-- **In-App Upgrades**: Superusers can upgrade the application directly from the web UI — pulls latest code, installs dependencies, runs migrations, patches Nginx config, and restarts services. Includes a dedicated Restart Services button. Warns if system permissions need updating.
+- **In-App Upgrades**: Superusers can upgrade the application directly from the web UI: pulls latest code, installs dependencies, runs migrations, patches Nginx config, and restarts services. Includes a dedicated Restart Services button. Warns if system permissions need updating.
 - **User Management**: Create, edit, and delete users. Self-service "My Account" entry for any logged-in user (change password, manage own API key when permitted). Deleting a user reassigns their EDLs and URLs to the next oldest account.
 - **Toast Notifications**: Success/error/info messages appear as Bootstrap toasts that don't shift page layout.
 - **Timezone Setup**: First-login prompt for superusers to configure display timezone.
@@ -174,4 +176,4 @@ bash upgrade.sh
 
 ## Companion Tools
 
-Check out [GhostHunter](https://github.com/greaselovely/GhostHunter) for Firefox and Chrome — a browser extension for submitting domains to KineticLull.
+Check out [GhostHunter](https://github.com/greaselovely/GhostHunter) for Firefox and Chrome, a browser extension for submitting domains to KineticLull.
