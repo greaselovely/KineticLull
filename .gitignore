@@ -1,3 +1,4 @@
+snyk.*
 logs/
 backups/
 staticfiles/
