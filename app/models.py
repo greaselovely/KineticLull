@@ -47,10 +47,13 @@ DEFAULT_ROBOTS_TXT = """\
 #   - The teapot is brewing. HTTP 418.
 #
 # ---------------------------------------------------------------------
-# eW91IGJhc2U2NCAtZCdkIGEgcm9ib3RzLnR4dCBlYXN0ZXIgZWdnLiB0aGF0IGlz
-# IHNvIGRlZXBseSB1bnNlcmlvdXMgdGhhdCBpIGxvdmUgaXQuIHNwb2lsZXI6IGl0
-# IHdhcyBETlMuIGl0IGlzIGFsd2F5cyBETlMuIHNheSBoaTogc2hheW5lQHplcm9v
-# bmVzaXguY28=
+# NDg2NTc5MmMyMDQ5MjA3MzY1NjUyMDc5NmY3NTJj
+# MjA2MTZlNjQyMDc5NmY3NTIwNmU2Zjc3MjA3MzY1
+# CjY1MjA2ZDY1MmMyMDczNmYyMDY0NzI2ZjcwMjA2
+# MTIwNmU2Zjc0NjUyMDc3NmY3NTZjNjQyMDc5NjEz
+# ZgoyMDIwMmQzZDIwNzM2ODYxNzk2ZTY1NDA3YTY1
+# NzI2ZjZmNmU2NTczNjk3ODJlNjM2ZjIwM2QyZDIw
+# MjAK
 #
 # no auth required,
 # don't sell the contents, 
