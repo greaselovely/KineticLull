@@ -297,6 +297,10 @@ class AppSettings(models.Model):
     # Operator-added scanner path patterns (one per line). Appended to the
     # built-in BlockedIP.SCANNER_PATH_PATTERNS tuple at match time.
     autoblock_custom_patterns = models.TextField(blank=True, default='', verbose_name='Custom Scanner Patterns')
+    # Subnet aggregation: when N or more /32s from the same /24 are
+    # auto-blocked, collapse them into a single /24 entry. IPv4 only.
+    autoblock_subnet_aggregation_enabled = models.BooleanField(default=False, verbose_name='Enable /24 Aggregation')
+    autoblock_subnet_threshold = models.PositiveIntegerField(default=5, verbose_name='Aggregation Threshold (auto-blocked /32 in same /24)')
 
     # Failed-login block (separate rule from general auto-block)
     failed_login_block_enabled = models.BooleanField(default=True, verbose_name='Enable Failed-Login Block')
@@ -386,7 +390,10 @@ class AppSettings(models.Model):
 
 
 class BlockedIP(models.Model):
-    ip_address = models.GenericIPAddressField(unique=True)
+    # CharField (not GenericIPAddressField) so we can store both single
+    # addresses and CIDR blocks (e.g. "10.0.0.0/24") produced by subnet
+    # aggregation. Validation happens at the call sites that create rows.
+    ip_address = models.CharField(max_length=50, unique=True, verbose_name='IP Address or Subnet')
     reason = models.CharField(max_length=255, blank=True)
     blocked_at = models.DateTimeField(auto_now_add=True)
     blocked_by = models.ForeignKey(
@@ -410,6 +417,97 @@ class BlockedIP(models.Model):
             return False
         from django.utils import timezone
         return timezone.now() >= self.expires_at
+
+    @classmethod
+    def is_blocked(cls, ip_address):
+        """True if `ip_address` is exactly blocked OR falls within a CIDR
+        block. Mirrors WhitelistedIP.is_whitelisted's matching idiom.
+        """
+        import ipaddress as iplib
+        try:
+            addr = iplib.ip_address(ip_address)
+        except ValueError:
+            return False
+        if cls.objects.filter(ip_address=ip_address).exists():
+            return True
+        for entry in cls.objects.filter(ip_address__contains='/').values_list('ip_address', flat=True):
+            try:
+                if addr in iplib.ip_network(entry, strict=False):
+                    return True
+            except ValueError:
+                continue
+        return False
+
+    @classmethod
+    def _aggregate_subnet(cls, ip_address):
+        """If the configured threshold of auto-blocked /32 entries share
+        an IPv4 /24, replace them with a single /24 block. No-op for IPv6
+        (v1) or when a whitelisted IP lives in the same /24.
+        """
+        import ipaddress as iplib
+        try:
+            addr = iplib.ip_address(ip_address)
+        except ValueError:
+            return False
+        if not isinstance(addr, iplib.IPv4Address):
+            return False
+
+        app_settings = AppSettings.load()
+        if not app_settings.autoblock_subnet_aggregation_enabled:
+            return False
+        threshold = app_settings.autoblock_subnet_threshold
+        if threshold < 2:
+            return False
+
+        network = iplib.IPv4Network(f'{ip_address}/24', strict=False)
+        cidr = str(network)
+
+        # If a covering CIDR already exists, nothing to do
+        if cls.objects.filter(ip_address=cidr).exists():
+            return False
+
+        # Skip if any whitelisted IP lives inside this /24 — operators
+        # explicitly want those addresses reachable, even if neighbors
+        # are noisy.
+        for wl in WhitelistedIP.objects.values_list('ip_address', flat=True):
+            try:
+                if '/' in wl:
+                    if iplib.ip_network(wl, strict=False).overlaps(network):
+                        return False
+                else:
+                    if iplib.ip_address(wl) in network:
+                        return False
+            except ValueError:
+                continue
+
+        # Find auto-blocked /32s in this /24. Regex anchors to the exact
+        # three-octet prefix so 192.168.1.x doesn't match 192.168.10.x.
+        prefix = '.'.join(str(network.network_address).split('.')[:3])
+        candidates = cls.objects.filter(
+            ip_address__regex=r'^' + prefix.replace('.', r'\.') + r'\.\d+$',
+            auto_blocked=True,
+        )
+        ips_in_subnet = []
+        for entry_ip in candidates.values_list('ip_address', flat=True):
+            try:
+                if iplib.ip_address(entry_ip) in network:
+                    ips_in_subnet.append(entry_ip)
+            except ValueError:
+                continue
+
+        if len(ips_in_subnet) < threshold:
+            return False
+
+        from django.db import transaction
+        with transaction.atomic():
+            cls.objects.filter(ip_address__in=ips_in_subnet).delete()
+            cls.objects.create(
+                ip_address=cidr,
+                reason=f'Auto-blocked: aggregated {len(ips_in_subnet)} /32 hits in {cidr}',
+                auto_blocked=True,
+                expires_at=None,
+            )
+        return True
 
     @classmethod
     def sync_to_nginx(cls):
@@ -535,7 +633,7 @@ class BlockedIP(models.Model):
             return False
         if WhitelistedIP.is_whitelisted(ip_address):
             return False
-        if cls.objects.filter(ip_address=ip_address).exists():
+        if cls.is_blocked(ip_address):
             return False
 
         match = cls._matched_scanner_pattern(path, app_settings.get_custom_scanner_patterns())
@@ -556,6 +654,7 @@ class BlockedIP(models.Model):
             auto_blocked=True,
             expires_at=expires,
         )
+        cls._aggregate_subnet(ip_address)
         cls.sync_to_nginx()
         return True
 
@@ -577,7 +676,7 @@ class BlockedIP(models.Model):
 
         if WhitelistedIP.is_whitelisted(ip_address):
             return False
-        if cls.objects.filter(ip_address=ip_address).exists():
+        if cls.is_blocked(ip_address):
             return False
 
         actions = ['not_found', 'edl_not_found', 'edl_access']
@@ -598,6 +697,7 @@ class BlockedIP(models.Model):
                 auto_blocked=True,
                 expires_at=expires,
             )
+            cls._aggregate_subnet(ip_address)
             cls.sync_to_nginx()
             return True
 
@@ -614,6 +714,7 @@ class BlockedIP(models.Model):
                     auto_blocked=True,
                     expires_at=expires,
                 )
+                cls._aggregate_subnet(ip_address)
                 cls.sync_to_nginx()
                 return True
 

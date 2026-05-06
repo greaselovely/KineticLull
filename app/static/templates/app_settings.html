@@ -308,6 +308,25 @@
                                 <div class="form-text">These are always active. Adding the same pattern as a custom entry has no extra effect.</div>
                             </div>
                         </div>
+
+                        <hr class="my-3">
+                        <p class="form-text mb-2">Subnet aggregation (IPv4 only). When this many auto-blocked /32 entries pile up in the same /24, collapse them into a single /24 block. Skipped automatically if any whitelisted IP lives in that /24.</p>
+                        <div class="row g-3 align-items-center">
+                            <div class="col-md-5">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="autoblock_subnet_aggregation_enabled" id="autoblock_subnet_aggregation_enabled"
+                                        {% if app_settings.autoblock_subnet_aggregation_enabled %}checked{% endif %}>
+                                    <label class="form-check-label" for="autoblock_subnet_aggregation_enabled">Enable /24 aggregation</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="autoblock_subnet_threshold" class="form-label">Threshold</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="autoblock_subnet_threshold" id="autoblock_subnet_threshold" class="form-control" value="{{ app_settings.autoblock_subnet_threshold }}" min="2" max="254">
+                                    <span class="input-group-text">hosts</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

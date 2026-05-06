@@ -1294,6 +1294,20 @@ def app_settings_view(request):
             app_settings.autoblock_custom_patterns = new_custom_patterns
             changes.append('autoblock_custom_patterns=updated')
 
+        new_subnet_agg = request.POST.get('autoblock_subnet_aggregation_enabled') == 'on'
+        if new_subnet_agg != app_settings.autoblock_subnet_aggregation_enabled:
+            app_settings.autoblock_subnet_aggregation_enabled = new_subnet_agg
+            changes.append(f'autoblock_subnet_aggregation_enabled={new_subnet_agg}')
+
+        try:
+            new_subnet_threshold = int(request.POST.get('autoblock_subnet_threshold', 5))
+            new_subnet_threshold = max(2, min(new_subnet_threshold, 254))
+        except (ValueError, TypeError):
+            new_subnet_threshold = 5
+        if new_subnet_threshold != app_settings.autoblock_subnet_threshold:
+            app_settings.autoblock_subnet_threshold = new_subnet_threshold
+            changes.append(f'autoblock_subnet_threshold={new_subnet_threshold}')
+
         # Failed-login block settings
         new_fl_enabled = request.POST.get('failed_login_block_enabled') == 'on'
         if new_fl_enabled != app_settings.failed_login_block_enabled:
