@@ -340,8 +340,11 @@ class AppSettings(models.Model):
     b2_last_upload_filename = models.CharField(max_length=255, blank=True, default='', verbose_name='B2 Last Uploaded File')
     b2_last_upload_error = models.TextField(blank=True, default='', verbose_name='B2 Last Upload Error')
 
-    # robots.txt content served at /robots.txt — operator-editable
-    robots_txt = models.TextField(default=DEFAULT_ROBOTS_TXT, blank=True, verbose_name='robots.txt body')
+    # robots.txt content served at /robots.txt — operator-editable.
+    # Default lives in DEFAULT_ROBOTS_TXT and is seeded by AppSettings.load()
+    # on first create. Keeping the field default empty means edits to
+    # DEFAULT_ROBOTS_TXT do not generate stale-default migrations.
+    robots_txt = models.TextField(default='', blank=True, verbose_name='robots.txt body')
 
     # Deployment
     deployment_mode = models.CharField(
@@ -362,7 +365,9 @@ class AppSettings(models.Model):
 
     @classmethod
     def load(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+        obj, _ = cls.objects.get_or_create(
+            pk=1, defaults={'robots_txt': DEFAULT_ROBOTS_TXT},
+        )
         return obj
 
     def get_custom_scanner_patterns(self):

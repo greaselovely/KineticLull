@@ -108,11 +108,13 @@ restart_nginx_services() {
     # Ensure blocklist file exists — nginx config `include`s it. Missing file = failed restart.
     [ -f "${PROJECT_DIR}/deploy/blocklist.conf" ] || touch "${PROJECT_DIR}/deploy/blocklist.conf"
     log "Restarting services..."
-    if systemctl is-active --quiet "$PROJECT_NAME" 2>/dev/null; then
+    # Use list-unit-files instead of is-active so a service stopped earlier
+    # in this script (e.g. during a venv rebuild) still gets brought back up.
+    if systemctl list-unit-files 2>/dev/null | grep -q "^${PROJECT_NAME}\.service"; then
         sudo systemctl restart "$PROJECT_NAME"
         ok "Gunicorn restarted."
     fi
-    if systemctl is-active --quiet "nginx" 2>/dev/null; then
+    if systemctl list-unit-files 2>/dev/null | grep -q "^nginx\.service"; then
         sudo systemctl restart nginx
         ok "Nginx restarted."
     fi
@@ -447,6 +449,8 @@ check_venv_python_version() {
         warn "Then start the service: sudo systemctl start ${PROJECT_NAME}"
         exit 1
     fi
+    log "Starting ${PROJECT_NAME} service on the new venv..."
+    sudo systemctl start "${PROJECT_NAME}" 2>/dev/null || true
     ok "Venv rebuilt on Python 3.13. Prior venv preserved at ${VENV_PATH}.old"
 }
 
