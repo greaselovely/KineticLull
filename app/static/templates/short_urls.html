@@ -172,7 +172,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
 var deleteUrlBase = "{% url 'app:delete_short_url' url_id=0 %}".replace('/0/', '/');
-var statsUrlBase = "{% url 'app:short_url_stats' url_id=0 %}".replace('/0/', '/');
+var statsUrlTemplate = "{% url 'app:short_url_stats' url_id=0 %}";
+function statsUrlFor(id) { return statsUrlTemplate.replace('/0/', '/' + id + '/'); }
 function deleteShortUrl(urlId, event) {
     event.preventDefault();
     showConfirmModal('Delete this short URL?', function() {
@@ -199,7 +200,7 @@ function deleteShortUrl(urlId, event) {
     function loadStats(urlId, win) {
         document.getElementById('stats-loading').style.display = '';
         document.getElementById('stats-content').style.display = 'none';
-        fetch(statsUrlBase + urlId + '/stats/?window=' + encodeURIComponent(win))
+        fetch(statsUrlFor(urlId) + '?window=' + encodeURIComponent(win))
             .then(function(r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();
