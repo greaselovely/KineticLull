@@ -1,4 +1,3 @@
-snyk.*
 logs/
 backups/
 staticfiles/
@@ -15,6 +14,9 @@ ssl/
 .nginx_parse_state
 db.sqlite3
 .c*/
+
+snyk.txt
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
