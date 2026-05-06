@@ -3191,6 +3191,7 @@ def short_url_stats_view(request, url_id):
     # Render all timestamps in the operator-configured timezone and format,
     # not the browser's locale. Bin boundaries (TruncHour/TruncDate) also
     # respect this so a "day" lines up with the operator's wall clock.
+    import re
     app_settings = AppSettings.load()
     try:
         app_tz = zoneinfo.ZoneInfo(app_settings.timezone or 'UTC')
@@ -3198,15 +3199,31 @@ def short_url_stats_view(request, url_id):
         app_tz = zoneinfo.ZoneInfo('UTC')
     app_ts_fmt = app_settings.timestamp_format or 'Y-m-d H:i:s'
 
+    # Split the configured timestamp format into date + time portions so we
+    # can render them on two stacked lines in the modal cards (avoids the
+    # accidental mid-string wrap when the full format runs long).
+    _split = re.search(r'\s+([HhGg].*)$', app_ts_fmt)
+    date_fmt = app_ts_fmt[:_split.start()].rstrip() if _split else app_ts_fmt
+    time_fmt = _split.group(1) if _split else ''
+
+    # Compact chart x-axis labels honor the operator's 12h/24h preference.
+    twelve_hour = 'A' in app_ts_fmt or 'a' in app_ts_fmt
+    chart_label_fmts = {
+        '24h': 'm/d g A' if twelve_hour else 'm/d H:i',
+        '7d':  'm/d',
+        '30d': 'm/d',
+    }
+
     window = request.GET.get('window', '30d')
     windows = {
-        '24h': (timedelta(hours=24), TruncHour, '%m/%d %H:00'),
-        '7d':  (timedelta(days=7),   TruncDate, '%m/%d'),
-        '30d': (timedelta(days=30),  TruncDate, '%m/%d'),
+        '24h': (timedelta(hours=24), TruncHour),
+        '7d':  (timedelta(days=7),   TruncDate),
+        '30d': (timedelta(days=30),  TruncDate),
     }
     if window not in windows:
         window = '30d'
-    delta, trunc_fn, label_fmt = windows[window]
+    delta, trunc_fn = windows[window]
+    label_fmt = chart_label_fmts[window]
     window_start = tz.now() - delta
 
     all_logs = ActivityLog.objects.filter(
@@ -3222,8 +3239,12 @@ def short_url_stats_view(request, url_id):
 
     def fmt_local(dt):
         if not dt:
-            return None
-        return date_filter(dt.astimezone(app_tz), app_ts_fmt)
+            return {'date': None, 'time': None}
+        local = dt.astimezone(app_tz)
+        return {
+            'date': date_filter(local, date_fmt),
+            'time': date_filter(local, time_fmt) if time_fmt else '',
+        }
 
     headline = {
         'total_window': windowed.count(),
@@ -3241,7 +3262,7 @@ def short_url_stats_view(request, url_id):
         .values_list('bin', 'count')
     )
     series = {
-        'labels': [b.strftime(label_fmt) for b, _ in bins],
+        'labels': [date_filter(b, label_fmt) for b, _ in bins],
         'values': [c for _, c in bins],
     }
 

@@ -124,8 +124,16 @@
                     <div class="row g-3 mb-3">
                         <div class="col"><div class="border rounded p-2"><div class="text-muted small">In window</div><div class="fs-5" id="stat-window-total">0</div></div></div>
                         <div class="col"><div class="border rounded p-2"><div class="text-muted small">Unique IPs</div><div class="fs-5" id="stat-unique-ips">0</div></div></div>
-                        <div class="col"><div class="border rounded p-2"><div class="text-muted small">First click</div><div class="fs-6" id="stat-first">never</div></div></div>
-                        <div class="col"><div class="border rounded p-2"><div class="text-muted small">Last click</div><div class="fs-6" id="stat-last">never</div></div></div>
+                        <div class="col"><div class="border rounded p-2">
+                            <div class="text-muted small">First click</div>
+                            <div class="fs-6" id="stat-first-date" style="white-space: nowrap;">never</div>
+                            <div class="small text-muted" id="stat-first-time" style="white-space: nowrap;"></div>
+                        </div></div>
+                        <div class="col"><div class="border rounded p-2">
+                            <div class="text-muted small">Last click</div>
+                            <div class="fs-6" id="stat-last-date" style="white-space: nowrap;">never</div>
+                            <div class="small text-muted" id="stat-last-time" style="white-space: nowrap;"></div>
+                        </div></div>
                     </div>
                     <div class="text-muted small mb-2" id="stats-lifetime-line"></div>
 
@@ -188,10 +196,17 @@ function deleteShortUrl(urlId, event) {
     var currentUrlId = null;
     var currentWindow = '30d';
 
-    function fmtTs(s) {
-        // The server pre-formats timestamps in the configured app timezone
-        // and timestamp format, so we render the string verbatim.
-        return s || 'never';
+    function setTs(dateEl, timeEl, val) {
+        // Server sends {date, time} pre-formatted in the configured app
+        // timezone and timestamp format. We render each portion on its
+        // own line to avoid mid-string wrapping in narrow card layouts.
+        if (!val || !val.date) {
+            dateEl.textContent = 'never';
+            timeEl.textContent = '';
+            return;
+        }
+        dateEl.textContent = val.date;
+        timeEl.textContent = val.time || '';
     }
     function escapeHtml(s) {
         return (s || '').replace(/[&<>"']/g, function(c) {
@@ -219,8 +234,16 @@ function deleteShortUrl(urlId, event) {
 
         document.getElementById('stat-window-total').textContent = data.headline.total_window;
         document.getElementById('stat-unique-ips').textContent = data.headline.unique_ips_window;
-        document.getElementById('stat-first').textContent = fmtTs(data.headline.first_click);
-        document.getElementById('stat-last').textContent = fmtTs(data.headline.last_click);
+        setTs(
+            document.getElementById('stat-first-date'),
+            document.getElementById('stat-first-time'),
+            data.headline.first_click,
+        );
+        setTs(
+            document.getElementById('stat-last-date'),
+            document.getElementById('stat-last-time'),
+            data.headline.last_click,
+        );
 
         var lifetimeLine = 'Lifetime: ' + data.headline.lifetime_clicks + ' click(s).';
         if (data.headline.legacy_clicks > 0) {
