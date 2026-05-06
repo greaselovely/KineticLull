@@ -3206,13 +3206,22 @@ def short_url_stats_view(request, url_id):
     date_fmt = app_ts_fmt[:_split.start()].rstrip() if _split else app_ts_fmt
     time_fmt = _split.group(1) if _split else ''
 
-    # Compact chart x-axis labels honor the operator's 12h/24h preference.
-    twelve_hour = 'A' in app_ts_fmt or 'a' in app_ts_fmt
-    chart_label_fmts = {
-        '24h': 'm/d g A' if twelve_hour else 'm/d H:i',
-        '7d':  'm/d',
-        '30d': 'm/d',
+    # Compact chart x-axis labels honor both the date style (m/d vs d/m
+    # vs textual M d) and the 12h/24h preference of the operator's full
+    # timestamp format. Lookup table is explicit because Django format
+    # codes don't compose cleanly when you only want a subset.
+    _CHART_LABEL_FMTS = {
+        'Y-m-d H:i:s':    {'24h': 'm/d H:i', '7d': 'm/d', '30d': 'm/d'},
+        'm/d/Y H:i:s':    {'24h': 'm/d H:i', '7d': 'm/d', '30d': 'm/d'},
+        'd/m/Y H:i:s':    {'24h': 'd/m H:i', '7d': 'd/m', '30d': 'd/m'},
+        'M d, Y H:i:s':   {'24h': 'M d H:i', '7d': 'M d', '30d': 'M d'},
+        'M d, Y g:i:s A': {'24h': 'M d g A', '7d': 'M d', '30d': 'M d'},
+        'Y-m-d g:i:s A':  {'24h': 'm/d g A', '7d': 'm/d', '30d': 'm/d'},
+        'm/d/Y g:i:s A':  {'24h': 'm/d g A', '7d': 'm/d', '30d': 'm/d'},
     }
+    chart_label_fmts = _CHART_LABEL_FMTS.get(
+        app_ts_fmt, {'24h': 'm/d H:i', '7d': 'm/d', '30d': 'm/d'},
+    )
 
     window = request.GET.get('window', '30d')
     windows = {
