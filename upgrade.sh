@@ -378,28 +378,42 @@ print(AppSettings.load().deployment_mode)
 # requirements.txt. The old venv is moved to venv.old for recovery.
 
 ensure_python313() {
-    if ! command -v python3.13 &>/dev/null; then
-        log "python3.13 not found. Installing via install_python.sh..."
-        if [ -f "${SCRIPT_DIR}/install_python.sh" ]; then
-            bash "${SCRIPT_DIR}/install_python.sh" 2>>"${LOGFILE}"
-        else
-            warn "install_python.sh missing. Install Python 3.13 manually then re-run upgrade.sh."
-            exit 1
-        fi
-        if ! command -v python3.13 &>/dev/null; then
-            warn "Python 3.13 still not available after install attempt. Aborting."
-            exit 1
-        fi
-        ok "Python 3.13 installed."
+    # Self-contained install of Python 3.13 + matching venv module. We
+    # deliberately do not delegate to install_python.sh because that script
+    # is version-generic (currently installs 3.12) and only installs the
+    # system-default python3-venv, not the version-matched python3.13-venv
+    # that 'python3.13 -m venv' actually needs.
+    if command -v python3.13 &>/dev/null && python3.13 -m venv --help &>/dev/null; then
+        return 0
     fi
-    # install_python.sh installs python3-venv (system default), not the
-    # version-matched python3.13-venv that 'python3.13 -m venv' requires.
+
     if [ -f /etc/debian_version ]; then
-        if ! python3.13 -m venv --help &>/dev/null; then
-            log "Installing python3.13-venv..."
-            sudo apt-get install -y python3.13-venv 2>>"${LOGFILE}"
+        log "Installing Python 3.13 from deadsnakes PPA..."
+        sudo apt-get update -qq 2>>"${LOGFILE}"
+        sudo apt-get install -y software-properties-common 2>>"${LOGFILE}"
+        sudo add-apt-repository -y ppa:deadsnakes/ppa 2>>"${LOGFILE}"
+        sudo apt-get update -qq 2>>"${LOGFILE}"
+        sudo apt-get install -y python3.13 python3.13-venv python3.13-dev 2>>"${LOGFILE}"
+    else
+        log "Installing Python 3.13 via package manager..."
+        if command -v dnf &>/dev/null; then
+            sudo dnf install -y python3.13 python3.13-devel 2>>"${LOGFILE}" || true
+        else
+            sudo yum install -y python3.13 python3.13-devel 2>>"${LOGFILE}" || true
         fi
     fi
+
+    if ! command -v python3.13 &>/dev/null; then
+        warn "Python 3.13 still not available after install attempt."
+        warn "Install Python 3.13 manually (with venv support) and re-run upgrade.sh."
+        exit 1
+    fi
+    if ! python3.13 -m venv --help &>/dev/null; then
+        warn "python3.13 found, but 'python3.13 -m venv' is unavailable."
+        warn "Install the matching venv package (e.g. apt install python3.13-venv) and re-run upgrade.sh."
+        exit 1
+    fi
+    ok "Python 3.13 installed."
 }
 
 check_venv_python_version() {
