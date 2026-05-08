@@ -115,6 +115,17 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <div class="d-flex justify-content-end mb-2">
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Window">
+                        <button type="button" class="btn btn-outline-secondary timeline-window-btn active" data-window="24h">24h</button>
+                        <button type="button" class="btn btn-outline-secondary timeline-window-btn" data-window="7d">7d</button>
+                        <button type="button" class="btn btn-outline-secondary timeline-window-btn" data-window="30d">30d</button>
+                    </div>
+                </div>
+                <div id="timeline-empty" class="text-muted text-center py-4" style="display:none;">
+                    No rejections in this window.
+                    <div class="small mt-1" id="timeline-last-rejection"></div>
+                </div>
                 <canvas id="timelineChart" height="200"></canvas>
             </div>
         </div>
@@ -184,17 +195,36 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Timeline chart
-    document.querySelectorAll('.timeline-btn').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            var ip = this.getAttribute('data-ip');
-            document.getElementById('timeline-ip').textContent = ip;
+    var currentTimelineIp = null;
 
-            fetch('{% url "app:blocked_ip_timeline" %}?ip=' + encodeURIComponent(ip))
+    function loadTimeline(ip, window) {
+        var url = '{% url "app:blocked_ip_timeline" %}?ip=' + encodeURIComponent(ip) + '&window=' + encodeURIComponent(window);
+        return fetch(url)
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                var ctx = document.getElementById('timelineChart').getContext('2d');
-                if (timelineChart) timelineChart.destroy();
+                var canvas = document.getElementById('timelineChart');
+                var emptyEl = document.getElementById('timeline-empty');
+                var lastEl = document.getElementById('timeline-last-rejection');
+                var hasData = data.values && data.values.some(function(v) { return v > 0; });
+
+                if (timelineChart) { timelineChart.destroy(); timelineChart = null; }
+
+                if (!hasData) {
+                    canvas.style.display = 'none';
+                    emptyEl.style.display = '';
+                    if (data.last_rejection && data.last_rejection.date) {
+                        var t = data.last_rejection.time ? ' ' + data.last_rejection.time : '';
+                        lastEl.textContent = 'Last rejection on record: ' + data.last_rejection.date + t;
+                    } else {
+                        lastEl.textContent = 'No rejection records on file for this IP.';
+                    }
+                    return;
+                }
+
+                canvas.style.display = '';
+                emptyEl.style.display = 'none';
+
+                var ctx = canvas.getContext('2d');
                 timelineChart = new Chart(ctx, {
                     type: 'bar',
                     data: {
@@ -204,21 +234,50 @@ document.addEventListener('DOMContentLoaded', function() {
                             data: data.values,
                             backgroundColor: 'rgba(220, 53, 69, 0.7)',
                             borderColor: 'rgba(220, 53, 69, 1)',
-                            borderWidth: 1
+                            borderWidth: 1,
+                            categoryPercentage: 0.9,
+                            barPercentage: 0.8
                         }]
                     },
                     options: {
                         responsive: true,
                         scales: {
-                            x: { title: { display: true, text: 'Time' }, ticks: { maxTicksLimit: 20 } },
-                            y: { title: { display: true, text: 'Rejections' }, beginAtZero: true }
+                            x: { title: { display: true, text: 'Time' }, ticks: { maxTicksLimit: 12, autoSkip: true } },
+                            y: { title: { display: true, text: 'Rejections' }, beginAtZero: true, ticks: { precision: 0 } }
                         },
                         plugins: { legend: { display: false } }
                     }
                 });
+            });
+    }
+
+    document.querySelectorAll('.timeline-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            var ip = this.getAttribute('data-ip');
+            currentTimelineIp = ip;
+            document.getElementById('timeline-ip').textContent = ip;
+
+            // Reset to default window each time the modal opens.
+            document.querySelectorAll('.timeline-window-btn').forEach(function(b) {
+                b.classList.toggle('active', b.getAttribute('data-window') === '24h');
+            });
+
+            loadTimeline(ip, '24h').then(function() {
                 var modal = new bootstrap.Modal(document.getElementById('timelineModal'));
                 modal.show();
             });
+        });
+    });
+
+    document.querySelectorAll('.timeline-window-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (!currentTimelineIp) return;
+            document.querySelectorAll('.timeline-window-btn').forEach(function(b) {
+                b.classList.remove('active');
+            });
+            this.classList.add('active');
+            loadTimeline(currentTimelineIp, this.getAttribute('data-window'));
         });
     });
 

@@ -2660,36 +2660,116 @@ def remove_whitelist_ip_view(request):
 
 @login_required
 def blocked_ip_timeline_view(request):
-    """Return JSON data for the 7-day rejection timeline for a specific IP."""
+    """JSON data for the rejection timeline for an IP, zero-filled across
+    the selected window so empty bins render as gaps instead of stretching
+    the bars across the full chart width."""
     if not request.user.is_superuser:
         return JsonResponse({'error': 'Forbidden'}, status=403)
 
-    from django.utils import timezone
+    from django.utils import timezone as tz
     from django.db.models import Count
-    from django.db.models.functions import TruncHour
+    from django.db.models.functions import TruncHour, TruncDate
     from datetime import timedelta
+    from django.template.defaultfilters import date as date_filter
+    import zoneinfo
+    import re
 
     ip = request.GET.get('ip', '').strip()
     if not ip:
         return JsonResponse({'error': 'IP required'}, status=400)
 
-    seven_days_ago = timezone.now() - timedelta(days=7)
+    window = request.GET.get('window', '24h')
+    if window not in ('24h', '7d', '30d'):
+        window = '24h'
 
-    data = list(
+    app_settings = AppSettings.load()
+    try:
+        app_tz = zoneinfo.ZoneInfo(app_settings.timezone or 'UTC')
+    except zoneinfo.ZoneInfoNotFoundError:
+        app_tz = zoneinfo.ZoneInfo('UTC')
+    app_ts_fmt = app_settings.timestamp_format or 'Y-m-d H:i:s'
+
+    # Compact x-axis labels honor both date style (m/d vs d/m vs textual)
+    # and the 12h/24h preference of the operator's full timestamp format.
+    # Same lookup table used by short_url_stats_view.
+    _CHART_LABEL_FMTS = {
+        'Y-m-d H:i:s':    {'24h': 'm/d H:i', '7d': 'm/d', '30d': 'm/d'},
+        'm/d/Y H:i:s':    {'24h': 'm/d H:i', '7d': 'm/d', '30d': 'm/d'},
+        'd/m/Y H:i:s':    {'24h': 'd/m H:i', '7d': 'd/m', '30d': 'd/m'},
+        'M d, Y H:i:s':   {'24h': 'M d H:i', '7d': 'M d', '30d': 'M d'},
+        'M d, Y g:i:s A': {'24h': 'M d g A', '7d': 'M d', '30d': 'M d'},
+        'Y-m-d g:i:s A':  {'24h': 'm/d g A', '7d': 'm/d', '30d': 'm/d'},
+        'm/d/Y g:i:s A':  {'24h': 'm/d g A', '7d': 'm/d', '30d': 'm/d'},
+    }
+    label_fmt = _CHART_LABEL_FMTS.get(
+        app_ts_fmt, {'24h': 'm/d H:i', '7d': 'm/d', '30d': 'm/d'},
+    )[window]
+
+    # Split the configured timestamp format for the empty-state "last
+    # rejection" line — same pattern used by the URL stats modal.
+    _split = re.search(r'\s+([HhGg].*)$', app_ts_fmt)
+    date_fmt = app_ts_fmt[:_split.start()].rstrip() if _split else app_ts_fmt
+    time_fmt = _split.group(1) if _split else ''
+
+    deltas = {'24h': timedelta(hours=24), '7d': timedelta(days=7), '30d': timedelta(days=30)}
+    delta = deltas[window]
+    trunc_fn = TruncHour if window == '24h' else TruncDate
+    window_start = tz.now() - delta
+
+    counts_by_bin = dict(
         NginxRejection.objects.filter(
-            ip_address=ip,
-            timestamp__gte=seven_days_ago,
-        ).annotate(
-            hour=TruncHour('timestamp')
-        ).values('hour').annotate(
-            count=Count('id')
-        ).order_by('hour').values_list('hour', 'count')
+            ip_address=ip, timestamp__gte=window_start,
+        ).annotate(bin=trunc_fn('timestamp', tzinfo=app_tz))
+        .values('bin').annotate(count=Count('id'))
+        .values_list('bin', 'count')
     )
+
+    def _key(b):
+        # Normalize datetime/date to a common string key for dict lookup.
+        if hasattr(b, 'hour'):
+            return b.strftime('%Y-%m-%d %H')
+        return b.strftime('%Y-%m-%d')
+
+    counts_by_key = {_key(b): c for b, c in counts_by_bin.items()}
+
+    now_local = tz.now().astimezone(app_tz)
+    labels, values = [], []
+    if window == '24h':
+        cur = now_local.replace(minute=0, second=0, microsecond=0) - timedelta(hours=23)
+        for _ in range(24):
+            labels.append(date_filter(cur, label_fmt))
+            values.append(counts_by_key.get(_key(cur), 0))
+            cur += timedelta(hours=1)
+    else:
+        days = 7 if window == '7d' else 30
+        today_local = now_local.date()
+        for i in range(days - 1, -1, -1):
+            d = today_local - timedelta(days=i)
+            labels.append(date_filter(d, label_fmt))
+            values.append(counts_by_key.get(_key(d), 0))
+
+    # Empty-state context: surface the most recent rejection so older
+    # blocked entries (all activity > window) explain themselves instead
+    # of rendering as a blank chart.
+    last_rejection = None
+    if not any(values):
+        last_dt = (
+            NginxRejection.objects.filter(ip_address=ip)
+            .order_by('-timestamp').values_list('timestamp', flat=True).first()
+        )
+        if last_dt:
+            local = last_dt.astimezone(app_tz)
+            last_rejection = {
+                'date': date_filter(local, date_fmt),
+                'time': date_filter(local, time_fmt) if time_fmt else '',
+            }
 
     return JsonResponse({
         'ip': ip,
-        'labels': [h.strftime('%m/%d %H:%M') for h, _ in data],
-        'values': [c for _, c in data],
+        'window': window,
+        'labels': labels,
+        'values': values,
+        'last_rejection': last_rejection,
     })
 
 
