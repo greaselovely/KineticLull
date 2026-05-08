@@ -2678,9 +2678,9 @@ def blocked_ip_timeline_view(request):
     if not ip:
         return JsonResponse({'error': 'IP required'}, status=400)
 
-    window = request.GET.get('window', '24h')
+    window = request.GET.get('window', '30d')
     if window not in ('24h', '7d', '30d'):
-        window = '24h'
+        window = '30d'
 
     app_settings = AppSettings.load()
     try:

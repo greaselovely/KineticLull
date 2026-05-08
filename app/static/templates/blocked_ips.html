@@ -117,9 +117,9 @@
             <div class="modal-body">
                 <div class="d-flex justify-content-end mb-2">
                     <div class="btn-group btn-group-sm" role="group" aria-label="Window">
-                        <button type="button" class="btn btn-outline-secondary timeline-window-btn active" data-window="24h">24h</button>
+                        <button type="button" class="btn btn-outline-secondary timeline-window-btn" data-window="24h">24h</button>
                         <button type="button" class="btn btn-outline-secondary timeline-window-btn" data-window="7d">7d</button>
-                        <button type="button" class="btn btn-outline-secondary timeline-window-btn" data-window="30d">30d</button>
+                        <button type="button" class="btn btn-outline-secondary timeline-window-btn active" data-window="30d">30d</button>
                     </div>
                 </div>
                 <div id="timeline-empty" class="text-muted text-center py-4" style="display:none;">
@@ -260,10 +260,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Reset to default window each time the modal opens.
             document.querySelectorAll('.timeline-window-btn').forEach(function(b) {
-                b.classList.toggle('active', b.getAttribute('data-window') === '24h');
+                b.classList.toggle('active', b.getAttribute('data-window') === '30d');
             });
 
-            loadTimeline(ip, '24h').then(function() {
+            loadTimeline(ip, '30d').then(function() {
                 var modal = new bootstrap.Modal(document.getElementById('timelineModal'));
                 modal.show();
             });
