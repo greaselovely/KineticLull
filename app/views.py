@@ -2200,14 +2200,22 @@ def upgrade_view(request):
                 'status': 'error',
                 'message': 'Restart helper missing at /usr/local/bin/kl-restart. Run `bash upgrade.sh` on the server once to install it, then try again.',
             })
-        r = subprocess.run(
-            ['sudo', '-n', '/usr/local/bin/kl-restart'],
-            capture_output=True, text=True, timeout=5,
-        )
-        if r.returncode != 0:
+        try:
+            r = subprocess.run(
+                ['sudo', '-n', '/usr/local/bin/kl-restart'],
+                capture_output=True, text=True, timeout=30,
+            )
+        except subprocess.TimeoutExpired as e:
+            logger.error(f"kl-restart timed out from upgrade view: stdout={(e.stdout or b'').decode(errors='ignore')!r} stderr={(e.stderr or b'').decode(errors='ignore')!r}")
             return JsonResponse({
                 'status': 'error',
-                'message': f'Restart helper failed (rc={r.returncode}). Run `bash upgrade.sh` on the server to reinstall the sudoers rule, then try again.\n\n{(r.stderr or "").strip()}',
+                'message': 'Restart helper hung (>30s). Run `sudo /usr/local/bin/kl-restart` manually on the server, then check `journalctl -u kineticlull -n 50`.',
+            })
+        if r.returncode != 0:
+            logger.error(f"kl-restart rc={r.returncode} from upgrade view: stdout={r.stdout!r} stderr={r.stderr!r}")
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Restart helper failed (rc={r.returncode}).\n\nstderr: {(r.stderr or "").strip() or "(empty)"}\n\nRun `bash upgrade.sh` on the server to reinstall the sudoers rule, then try again.',
             })
         return JsonResponse({'status': 'ok', 'message': 'Restarting...'})
 
@@ -2301,14 +2309,22 @@ def restart_services_view(request):
             'status': 'error',
             'message': 'Restart helper missing at /usr/local/bin/kl-restart. Run `bash upgrade.sh` on the server once to install it.',
         })
-    r = subprocess.run(
-        ['sudo', '-n', '/usr/local/bin/kl-restart'],
-        capture_output=True, text=True, timeout=5,
-    )
-    if r.returncode != 0:
+    try:
+        r = subprocess.run(
+            ['sudo', '-n', '/usr/local/bin/kl-restart'],
+            capture_output=True, text=True, timeout=30,
+        )
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"kl-restart timed out from restart_services view: stdout={(e.stdout or b'').decode(errors='ignore')!r} stderr={(e.stderr or b'').decode(errors='ignore')!r}")
         return JsonResponse({
             'status': 'error',
-            'message': f'Restart failed (rc={r.returncode}). {(r.stderr or "").strip()}',
+            'message': 'Restart helper hung (>30s). Run `sudo /usr/local/bin/kl-restart` manually and check `journalctl -u kineticlull -n 50`.',
+        })
+    if r.returncode != 0:
+        logger.error(f"kl-restart rc={r.returncode} from restart_services view: stdout={r.stdout!r} stderr={r.stderr!r}")
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Restart failed (rc={r.returncode}). stderr: {(r.stderr or "").strip() or "(empty)"}',
         })
     return JsonResponse({'status': 'ok'})
 

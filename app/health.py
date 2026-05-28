@@ -382,7 +382,7 @@ def _fix_restart_kineticlull():
     try:
         r = subprocess.run(
             ['sudo', '-n', '/usr/local/bin/kl-restart'],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True, text=True, timeout=30,
         )
         if r.returncode == 0:
             return True, 'Restart triggered. Page will reconnect in a few seconds.'
@@ -396,7 +396,7 @@ def _fix_restart_kineticlull():
     except FileNotFoundError:
         return False, 'sudo not found on PATH.'
     except subprocess.TimeoutExpired:
-        return False, 'Restart helper timed out.'
+        return False, 'Restart helper timed out (>30s).'
 
 
 FIXES = {
