@@ -1994,6 +1994,21 @@ def get_current_version():
         return 'unknown'
 
 
+def boot_version_view(request):
+    """Public probe for the upgrade flow's end-to-end verification poll.
+
+    Returns the BOOT_VERSION the responding worker captured at AppConfig.ready
+    (i.e. what code that worker is actually running) and the VERSION on disk
+    right now. The upgrade JS uses this to wait for workers to actually serve
+    the deployed code before declaring success.
+    """
+    from app import health as _health
+    return JsonResponse({
+        'boot_version': _health.BOOT_VERSION or 'unknown',
+        'disk_version': get_current_version(),
+    })
+
+
 def get_remote_version():
     """Check the remote branch's VERSION file via git. Returns None on failure."""
     base_dir = str(settings.BASE_DIR)
@@ -2217,7 +2232,11 @@ def upgrade_view(request):
                 'status': 'error',
                 'message': f'Restart helper failed (rc={r.returncode}).\n\nstderr: {(r.stderr or "").strip() or "(empty)"}\n\nRun `bash upgrade.sh` on the server to reinstall the sudoers rule, then try again.',
             })
-        return JsonResponse({'status': 'ok', 'message': 'Restarting...'})
+        return JsonResponse({
+            'status': 'ok',
+            'message': 'Restarting...',
+            'target_version': get_current_version(),
+        })
 
     return render(request, 'upgrade.html', context)
 
@@ -2315,7 +2334,7 @@ def restart_services_view(request):
             'status': 'error',
             'message': f'Restart failed (rc={r.returncode}). stderr: {(r.stderr or "").strip() or "(empty)"}',
         })
-    return JsonResponse({'status': 'ok'})
+    return JsonResponse({'status': 'ok', 'target_version': get_current_version()})
 
 
 @login_required

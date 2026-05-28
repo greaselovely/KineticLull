@@ -68,6 +68,7 @@ urlpatterns = [
     path('files/', views.otf_list_view, name='otf_list'),
     path('files/upload/', views.otf_upload_view, name='otf_upload'),
     path('files/brand-preview/', views.otf_brand_preview, name='otf_brand_preview'),
+    path('api/v0/boot_version/', views.boot_version_view, name='boot_version'),
     path('files/<int:file_id>/links/', views.otf_result_view, name='otf_result'),
     path('files/<str:token>/delete/', views.otf_delete_view, name='otf_delete'),
     path('f/<str:token>/', views.otf_download_view, name='otf_download'),

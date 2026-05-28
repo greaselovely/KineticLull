@@ -85,54 +85,64 @@
 
 {% block scripts %}
 <script>
-// Watch for the restart to complete. The kineticlull restart window is brief
-// (~2-3s), so polling slowly will miss the down state and spin forever. We
-// poll every 500ms and accept any of:
-//   1. Saw a down response, then an up response   -> definite restart
-//   2. Saw only up responses but >= 8s elapsed    -> assume too-fast-to-catch
-//   3. >= 30s elapsed with no clean signal        -> failure UI
-function klPollUntilRestarted(statusEl, onSuccess, onFailure) {
+// End-to-end verification: poll /api/v0/boot_version/ until the responding
+// worker reports BOOT_VERSION == the version we just deployed. That's a
+// definitive "the restart took effect and new code is serving" signal, not a
+// guess based on HTTP availability.
+//
+// Failure modes the poll handles correctly:
+//   - Old workers still serving during graceful drain    -> keep polling
+//   - kineticlull/nginx briefly down (restart window)    -> fetch throws, keep polling
+//   - Workers came back but on the old code              -> wait, report failure with details
+//   - Workers never come back                            -> timeout, report failure
+function klPollUntilBootVersion(target, statusEl, onSuccess, onFailure) {
     var POLL_MS = 500;
-    var FALLBACK_MS = 8000;
-    var MAX_WAIT_MS = 30000;
+    var MAX_WAIT_MS = 60000;
     var start = Date.now();
-    var sawDown = false;
+    var lastSeen = null;
 
     var poll = setInterval(function () {
         var elapsed = Date.now() - start;
         var remaining = Math.max(0, Math.round((MAX_WAIT_MS - elapsed) / 1000));
-        statusEl.textContent = sawDown
-            ? 'Service is restarting. Waiting for it to come back (' + remaining + 's).'
-            : 'Restart in progress... (' + remaining + 's).';
+        statusEl.textContent = lastSeen
+            ? 'Waiting for workers to serve ' + target + '. Currently seeing ' + lastSeen + '. (' + remaining + 's).'
+            : 'Waiting for workers to serve ' + target + '. (' + remaining + 's).';
 
         if (elapsed > MAX_WAIT_MS) {
             clearInterval(poll);
-            onFailure();
+            onFailure(lastSeen);
             return;
         }
 
-        fetch(window.location.href, { method: 'HEAD', cache: 'no-store' })
-            .then(function (resp) {
-                if (!resp.ok) {
-                    sawDown = true;
-                    return;
-                }
-                if (sawDown) {
+        fetch('{% url "app:boot_version" %}', { cache: 'no-store' })
+            .then(function (resp) { return resp.json(); })
+            .then(function (data) {
+                if (!data) return;
+                lastSeen = data.boot_version || lastSeen;
+                if (data.boot_version === target) {
                     clearInterval(poll);
-                    statusEl.textContent = 'Service back up. Reloading...';
-                    setTimeout(onSuccess, 500);
-                    return;
-                }
-                if (elapsed >= FALLBACK_MS) {
-                    clearInterval(poll);
-                    statusEl.textContent = 'Restart complete. Reloading...';
+                    statusEl.textContent = 'Workers now serving ' + target + '. Reloading...';
                     setTimeout(onSuccess, 500);
                 }
             })
-            .catch(function () {
-                sawDown = true;
-            });
+            .catch(function () { /* restart window — keep polling */ });
     }, POLL_MS);
+}
+
+function klShowRestartFailure(target, lastSeen) {
+    var failed = document.getElementById('upgrade-failed');
+    var status = document.getElementById('upgrade-status');
+    var restartStatus = document.getElementById('restart-status');
+    if (status) status.style.display = 'none';
+    if (restartStatus) restartStatus.style.display = 'none';
+    failed.querySelector('.alert-heading').innerHTML =
+        '<i class="bi bi-exclamation-octagon me-2"></i>Restart did not take effect';
+    var detail = lastSeen
+        ? 'Workers are still serving ' + lastSeen + ', expected ' + target + '. '
+        : 'Could not contact workers to verify version. ';
+    failed.querySelector('p').textContent =
+        detail + 'Run one of these from the server command line:';
+    failed.style.display = 'block';
 }
 
 (function () {
@@ -151,17 +161,6 @@ function klPollUntilRestarted(statusEl, onSuccess, onFailure) {
         status.style.display = 'block';
         statusText.textContent = 'Upgrading... pulling code, installing packages, migrating, and patching config.';
 
-        function startPolling() {
-            klPollUntilRestarted(
-                statusText,
-                function () { window.location.reload(); },
-                function () {
-                    status.style.display = 'none';
-                    failed.style.display = 'block';
-                }
-            );
-        }
-
         fetch(form.action || window.location.href, {
             method: 'POST',
             body: new FormData(form),
@@ -176,11 +175,28 @@ function klPollUntilRestarted(statusEl, onSuccess, onFailure) {
                 }
                 return;
             }
-            // POST returned cleanly — kl-restart has fired on the server.
-            startPolling();
+            var target = data && data.target_version;
+            if (!target) {
+                status.style.display = 'none';
+                failed.style.display = 'block';
+                failed.querySelector('p').textContent = 'Server did not report a target version. Verify manually.';
+                return;
+            }
+            klPollUntilBootVersion(
+                target,
+                statusText,
+                function () { window.location.reload(); },
+                function (lastSeen) { klShowRestartFailure(target, lastSeen); }
+            );
         }).catch(function () {
-            // Connection dropped mid-POST. Restart probably fired anyway, so poll.
-            startPolling();
+            // Connection dropped mid-POST — restart almost certainly fired,
+            // but we don't have target_version from the server. Bail to the
+            // failure card so the operator knows to verify, rather than
+            // silently waiting forever.
+            status.style.display = 'none';
+            failed.style.display = 'block';
+            failed.querySelector('p').textContent =
+                'Connection dropped during upgrade. Refresh the page to check whether new code is now running.';
         });
     });
 })();
@@ -197,16 +213,6 @@ function klPollUntilRestarted(statusEl, onSuccess, onFailure) {
             var failed = document.getElementById('upgrade-failed');
             status.style.display = 'block';
 
-            function startPolling() {
-                klPollUntilRestarted(
-                    statusText,
-                    function () { window.location.reload(); },
-                    function () {
-                        statusText.textContent = 'Service did not come back. Restart manually from the command line.';
-                    }
-                );
-            }
-
             fetch('{% url "app:restart_services" %}', {
                 method: 'POST',
                 headers: {'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')},
@@ -220,9 +226,26 @@ function klPollUntilRestarted(statusEl, onSuccess, onFailure) {
                     failed.style.display = 'block';
                     return;
                 }
-                startPolling();
+                var target = data && data.target_version;
+                if (!target) {
+                    status.style.display = 'none';
+                    btn.disabled = false;
+                    failed.querySelector('p').textContent = 'Server did not report a target version. Verify manually.';
+                    failed.style.display = 'block';
+                    return;
+                }
+                klPollUntilBootVersion(
+                    target,
+                    statusText,
+                    function () { window.location.reload(); },
+                    function (lastSeen) { klShowRestartFailure(target, lastSeen); }
+                );
             }).catch(function () {
-                startPolling();
+                status.style.display = 'none';
+                btn.disabled = false;
+                failed.querySelector('p').textContent =
+                    'Connection dropped. Refresh the page to check whether the restart took effect.';
+                failed.style.display = 'block';
             });
         });
     });
