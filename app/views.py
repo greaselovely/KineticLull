@@ -2071,9 +2071,42 @@ def upgrade_view(request):
     }
 
     if request.method == 'POST':
+        from app import health as _health
+        boot_version = _health.BOOT_VERSION or 'unknown'
         if not upgrade_available:
-            messages.info(request, 'Already up to date.')
-            return redirect('app:upgrade')
+            # Nothing to pull, but check whether workers are behind disk. If so,
+            # still kick kl-restart so the click closes the drift instead of
+            # leaving the operator hunting for the right button.
+            if boot_version != 'unknown' and boot_version != current_version:
+                if os.path.exists('/usr/local/bin/kl-restart'):
+                    try:
+                        r = subprocess.run(
+                            ['sudo', '-n', '/usr/local/bin/kl-restart'],
+                            capture_output=True, text=True, timeout=30,
+                        )
+                        if r.returncode == 0:
+                            return JsonResponse({
+                                'status': 'ok',
+                                'message': 'No new code on remote, but workers were behind disk. Restarting to catch up.',
+                                'target_version': current_version,
+                            })
+                        logger.error(f"kl-restart rc={r.returncode} from upgrade view (catch-up path): stderr={r.stderr!r}")
+                    except subprocess.TimeoutExpired:
+                        logger.error("kl-restart timed out from upgrade view (catch-up path)")
+                return JsonResponse({
+                    'status': 'error',
+                    'message': (
+                        f'No new code on remote. Workers are running {boot_version}, disk has {current_version}. '
+                        'Could not auto-restart. Click Restart Services or run sudo /usr/local/bin/kl-restart.'
+                    ),
+                })
+            return JsonResponse({
+                'status': 'error',
+                'message': (
+                    f'Already up to date. Workers and disk are both on {current_version}'
+                    + (f', remote is {latest_version}.' if latest_version else '. (Could not reach remote to confirm.)')
+                ),
+            })
 
         base_dir = str(settings.BASE_DIR)
         python = sys.executable
@@ -2127,9 +2160,11 @@ def upgrade_view(request):
             os.replace(blocklist_protect, blocklist_path)
 
         if result.returncode != 0:
-            messages.error(request, 'Upgrade failed. Please try again or upgrade manually.')
             logger.error(f"Upgrade git pull failed for {request.user.email}: {result.stderr.strip()}")
-            return redirect('app:upgrade')
+            return JsonResponse({
+                'status': 'error',
+                'message': f'git pull failed (rc={result.returncode}).\n\nstderr: {result.stderr.strip() or "(empty)"}',
+            })
 
         # Step 2: pip install
         pip = os.path.join(os.path.dirname(python), 'pip')
