@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %} - Share File{% endblock %}
 {% block content %}
-<div class="content-card" style="max-width: 500px;">
+<div class="content-card" style="max-width: 560px;">
     <h3>Share File</h3>
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
@@ -10,23 +10,72 @@
             <label for="file" class="form-label">File</label>
             <input type="file" name="file" id="file" class="form-control form-control-sm" required>
         </div>
+
         <div class="mb-3">
-            <label for="recipient_email" class="form-label">Recipient Email</label>
-            <input type="email" name="recipient_email" id="recipient_email" class="form-control form-control-sm" placeholder="recipient@example.com" required>
-            <div class="form-text">An OTP will be sent to this email when the link is accessed.</div>
+            <label class="form-label">Mode</label>
+            <div class="d-flex gap-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="mode" id="mode_secure" value="secure" checked>
+                    <label class="form-check-label" for="mode_secure">
+                        <strong>Secure</strong>
+                        <div class="form-text">Each recipient gets a unique link. One download per recipient.</div>
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="mode" id="mode_casual" value="casual">
+                    <label class="form-check-label" for="mode_casual">
+                        <strong>Casual</strong>
+                        <div class="form-text">One shared link. Anyone with it enters their email to access.</div>
+                    </label>
+                </div>
+            </div>
         </div>
+
         <div class="mb-3">
-            <label for="expiry_hours" class="form-label">Expires After</label>
-            <select name="expiry_hours" id="expiry_hours" class="form-select form-select-sm" style="max-width: 150px;">
-                {% for value, label in expiry_choices %}
-                <option value="{{ value }}" {% if value == 1 %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
+            <label for="recipients" class="form-label">Recipients</label>
+            <textarea name="recipients" id="recipients" class="form-control form-control-sm" rows="3" placeholder="one@example.com&#10;two@example.com" required></textarea>
+            <div class="form-text">One per line, or comma separated. Always required, even when sending the link yourself.</div>
         </div>
+
+        <div class="mb-3 row">
+            <div class="col-auto">
+                <label for="expiry_hours" class="form-label">Expires After</label>
+                <select name="expiry_hours" id="expiry_hours" class="form-select form-select-sm" style="width: 150px;">
+                    {% for value, label in expiry_choices %}
+                    <option value="{{ value }}" {% if value == 24 %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto" id="max_downloads_wrap" style="display: none;">
+                <label for="max_downloads" class="form-label">Max Downloads Per Recipient</label>
+                <input type="number" name="max_downloads" id="max_downloads" class="form-control form-control-sm" min="1" value="5" style="width: 110px;">
+            </div>
+        </div>
+
+        <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" name="send_email" id="send_email" checked>
+            <label class="form-check-label" for="send_email">Send notification email from KineticLull</label>
+            <div class="form-text">Turn off if you want to copy the link and send it yourself.</div>
+        </div>
+
         <div class="mt-3">
             <button type="submit" class="btn btn-primary btn-sm">Share</button>
             <a href="{% url 'app:otf_list' %}" class="btn btn-outline-secondary btn-sm">Cancel</a>
         </div>
     </form>
 </div>
+<script>
+(function () {
+    const wrap = document.getElementById('max_downloads_wrap');
+    const input = document.getElementById('max_downloads');
+    function update() {
+        const casual = document.getElementById('mode_casual').checked;
+        wrap.style.display = casual ? '' : 'none';
+        input.disabled = !casual;
+    }
+    document.getElementById('mode_secure').addEventListener('change', update);
+    document.getElementById('mode_casual').addEventListener('change', update);
+    update();
+})();
+</script>
 {% endblock %}

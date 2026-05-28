@@ -191,7 +191,13 @@ def _start_scheduler_threads():
             time.sleep(sleep_secs)
 
     def _cleanup_loop():
-        """Burn expired one-time files every 5 minutes."""
+        """Burn one-time files every 5 minutes.
+
+        - Any unburned file past its expiry: burn from disk.
+        - Secure-mode files where every recipient has burned: burn from disk
+          even if not yet expired (the file is no longer reachable).
+        - Casual-mode files only burn on expiry or manual delete.
+        """
         time.sleep(120)
         while True:
             try:
@@ -199,7 +205,15 @@ def _start_scheduler_threads():
                 from django.utils import timezone
                 expired = OneTimeFile.objects.filter(burned=False, expires_at__lte=timezone.now())
                 for otf in expired:
-                    otf.burn()
+                    otf.burn_disk()
+                # Secure files where all recipients consumed their single-use
+                secure_unburned = OneTimeFile.objects.filter(
+                    burned=False, mode=OneTimeFile.MODE_SECURE
+                ).prefetch_related('recipients')
+                for otf in secure_unburned:
+                    recipients = list(otf.recipients.all())
+                    if recipients and all(r.burned for r in recipients):
+                        otf.burn_disk()
             except Exception:
                 pass
             time.sleep(300)

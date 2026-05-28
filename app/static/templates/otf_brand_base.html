@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %} - {% block otf_title %}File Access{% endblock %}{% endblock %}
+{% block content %}
+<style>
+.main-content, .content-wrapper { background: {{ otf_brand_bg_color }} !important; }
+.otf-card .text-muted, .otf-card .form-label, .otf-card p, .otf-card h3, .otf-card h4 { color: {{ otf_brand_card_text_color }} !important; }
+.otf-card .form-control { background: {{ otf_brand_bg_color }}; color: {{ otf_brand_card_text_color }}; border-color: {{ otf_brand_card_text_color }}; }
+.otf-card .form-control::placeholder { color: {{ otf_brand_card_text_color }}; opacity: 0.5; }
+</style>
+<div style="max-width: 450px; margin: 40px auto;">
+    <div style="text-align: center; padding: 24px 24px 16px; color: {{ otf_brand_text_color }};">
+        {% if otf_brand_image %}
+        <img src="{{ otf_brand_image }}" alt="" style="max-height: 48px; margin-bottom: 12px;">
+        {% endif %}
+        <h4 style="margin: 0;">{{ otf_brand_name }}</h4>
+    </div>
+    <div class="content-card otf-card" style="border-radius: 8px; background: {{ otf_brand_card_color }}; color: {{ otf_brand_card_text_color }};">
+        {% if preview_mode %}
+        <div class="alert alert-info" style="font-size: 0.8rem;"><i class="bi bi-eye me-1"></i>This is a preview. No emails will be sent.</div>
+        {% endif %}
+        {% block otf_body %}{% endblock %}
+    </div>
+</div>
+{% endblock %}

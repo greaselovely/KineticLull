@@ -1,0 +1,17 @@
+{% extends 'otf_brand_base.html' %}
+{% block otf_title %}Access File{% endblock %}
+{% block otf_body %}
+<p class="text-muted">Enter your email to receive a one-time access code.</p>
+{% if error %}
+<div class="alert alert-danger" style="font-size: 0.85rem;">{{ error }}</div>
+{% endif %}
+<form {% if not preview_mode %}method="post" action="{% url 'app:otf_casual_landing' casual_token %}"{% else %}onsubmit="return false;"{% endif %}>
+    {% csrf_token %}
+    <div class="mb-3">
+        <label for="email" class="form-label">Email Address</label>
+        <input type="email" name="email" id="email" class="form-control" placeholder="you@example.com" {% if not preview_mode %}required autofocus{% endif %} autocomplete="email">
+    </div>
+    <button type="submit" class="btn btn-primary w-100">Send Code</button>
+</form>
+<p class="text-muted mt-3" style="font-size: 0.8rem;">You will receive a 6-digit code at this address. The code expires in 5 minutes.</p>
+{% endblock %}

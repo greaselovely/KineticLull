@@ -32,29 +32,43 @@
         <thead>
             <tr>
                 <th data-col="0">Filename</th>
-                <th data-col="1">Recipient</th>
-                <th data-col="2">Expires</th>
-                <th data-col="3">Shared</th>
-                <th data-col="4">Actions</th>
+                <th data-col="1">Mode</th>
+                <th data-col="2">Recipients</th>
+                <th data-col="3">Expires</th>
+                <th data-col="4">Shared</th>
+                <th data-col="5">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for f in files %}
             <tr>
                 <td>{{ f.original_filename }}</td>
-                <td>{{ f.recipient_email }}</td>
+                <td>
+                    {% if f.mode == 'casual' %}
+                    <span class="badge bg-secondary">Casual</span>
+                    {% else %}
+                    <span class="badge bg-primary">Secure</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if f.recipient_summary|length == 1 %}
+                    {{ f.recipient_summary.0 }}
+                    {% else %}
+                    {{ f.recipient_summary|length }} recipients
+                    {% endif %}
+                </td>
                 <td>{{ f.expires_at|date:app_timestamp_format }}</td>
                 <td>{{ f.created_at|date:app_timestamp_format }}</td>
                 <td>
                     <span class="actions-row">
+                        <a href="{% url 'app:otf_result' f.id %}" title="View Links"><i class="bi bi-link-45deg action-items"></i></a>
                         <i class="bi bi-trash action-items text-danger" onclick="deleteOtf('{{ f.token }}', event)" title="Delete"></i>
-                        <i class="bi bi-clipboard action-items copy-url-btn" data-url="{{ f.share_url }}" title="Copy Link"></i>
                     </span>
                 </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="5" class="text-muted">No active file shares. Click the + to share a file.</td>
+                <td colspan="6" class="text-muted">No active file shares. Click the + to share a file.</td>
             </tr>
             {% endfor %}
         </tbody>

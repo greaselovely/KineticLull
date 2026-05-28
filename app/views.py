@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
-from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile
+from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile, OTFRecipient, OTFSession, OTFDownload
 from .forms import ExtDynListsForm, ShortenedURLForm
 from .email import send_file_shared_email, send_otp_email, send_access_notification
 
@@ -3396,22 +3396,71 @@ def short_url_stats_view(request, url_id):
 
 # ── One-Time File Sharing ──────────────────────────────────────
 
+def _otf_base_url():
+    return settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
+
+
+def _otf_parse_recipients(raw):
+    """Split a textarea blob into a deduped, ordered list of email strings."""
+    if not raw:
+        return []
+    parts = []
+    for line in raw.replace(',', '\n').splitlines():
+        s = line.strip()
+        if s and s not in parts:
+            parts.append(s)
+    return parts
+
+
+def _otf_log_download(file_obj, email, request, recipient=None, session=None):
+    OTFDownload.objects.create(
+        file=file_obj,
+        recipient=recipient,
+        session=session,
+        email=email,
+        ip_address=get_client_ip(request),
+        user_agent=(request.META.get('HTTP_USER_AGENT') or '')[:512],
+    )
+
+
+def _otf_casual_cookie_name(file_obj):
+    return f'otf_cs_{file_obj.casual_token[:8]}'
+
+
+def _otf_casual_pending_cookie_name(file_obj):
+    return f'otf_csp_{file_obj.casual_token[:8]}'
+
+
+def _otf_casual_cookie_max_age(file_obj):
+    from django.utils import timezone
+    remaining = (file_obj.expires_at - timezone.now()).total_seconds()
+    return max(60, min(int(remaining), 24 * 3600))
+
+
 @login_required
 def otf_list_view(request):
     """List the current user's active (unburned, unexpired) one-time files."""
-    files = OneTimeFile.objects.filter(uploaded_by=request.user, burned=False, downloaded=False)
-    # Filter out expired ones in Python to also trigger cleanup
-    from django.utils import timezone as tz
+    files = OneTimeFile.objects.filter(uploaded_by=request.user, burned=False).prefetch_related('recipients', 'sessions')
     active_files = []
     for f in files:
         if f.is_expired:
-            f.burn()
-        else:
-            active_files.append(f)
+            f.burn_disk()
+            continue
+        if f.mode == OneTimeFile.MODE_SECURE:
+            recipients = list(f.recipients.all())
+            if recipients and all(r.burned for r in recipients):
+                f.burn_disk()
+                continue
+        active_files.append(f)
 
-    base_url = settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
+    base_url = _otf_base_url()
     for f in active_files:
-        f.share_url = f'{base_url}/f/{f.token}/'
+        if f.mode == OneTimeFile.MODE_CASUAL and f.casual_token:
+            f.share_url = f'{base_url}/fc/{f.casual_token}/'
+            f.recipient_summary = f.intended_recipients or []
+        else:
+            f.share_url = f'{base_url}/files/{f.id}/links/'
+            f.recipient_summary = [r.email for r in f.recipients.all()]
 
     context = {'files': active_files}
     summary = get_security_summary(request.user)
@@ -3429,117 +3478,357 @@ def otf_upload_view(request):
         messages.error(request, 'Email is not configured. Set up Resend API key and From email in Settings before sharing files.')
         return redirect('app:otf_list')
 
+    form_context = {
+        'expiry_choices': OneTimeFile.EXPIRY_CHOICES,
+        'mode_choices': OneTimeFile.MODE_CHOICES,
+    }
+
     if request.method == 'POST':
         uploaded_file = request.FILES.get('file')
-        recipient_email = request.POST.get('recipient_email', '').strip()
-        expiry_hours = request.POST.get('expiry_hours', '24')
+        recipients = _otf_parse_recipients(request.POST.get('recipients', ''))
+        mode = request.POST.get('mode', OneTimeFile.MODE_SECURE)
+        if mode not in (OneTimeFile.MODE_SECURE, OneTimeFile.MODE_CASUAL):
+            mode = OneTimeFile.MODE_SECURE
+        send_email_flag = request.POST.get('send_email') == 'on'
+        try:
+            max_downloads = int(request.POST.get('max_downloads', '1'))
+        except ValueError:
+            max_downloads = 1
+        if mode == OneTimeFile.MODE_SECURE:
+            max_downloads = 1
+        else:
+            max_downloads = max(1, max_downloads)
+        try:
+            expiry_hours = int(request.POST.get('expiry_hours', '24'))
+        except ValueError:
+            expiry_hours = 24
 
-        if not uploaded_file or not recipient_email:
-            messages.error(request, 'File and recipient email are required.')
-            return render(request, 'otf_upload.html', {'expiry_choices': OneTimeFile.EXPIRY_CHOICES})
+        if not uploaded_file or not recipients:
+            messages.error(request, 'A file and at least one recipient email are required.')
+            return render(request, 'otf_upload.html', form_context)
 
-        # Check file size
         max_size = app_settings.max_file_size_mb * 1024 * 1024
         if uploaded_file.size > max_size:
             messages.error(request, f'File exceeds the {app_settings.max_file_size_mb}MB limit.')
-            return render(request, 'otf_upload.html', {'expiry_choices': OneTimeFile.EXPIRY_CHOICES})
-
-        try:
-            expiry_hours = int(expiry_hours)
-        except ValueError:
-            expiry_hours = 24
+            return render(request, 'otf_upload.html', form_context)
 
         otf = OneTimeFile(
             file=uploaded_file,
             original_filename=uploaded_file.name,
             uploaded_by=request.user,
-            recipient_email=recipient_email,
+            recipient_email=recipients[0],
+            mode=mode,
+            max_downloads=max_downloads,
+            send_email=send_email_flag,
+            intended_recipients=recipients if mode == OneTimeFile.MODE_CASUAL else [],
             expiry_hours=expiry_hours,
         )
         otf.save()
 
-        base_url = settings.KINETICLULL_URL if hasattr(settings, 'KINETICLULL_URL') else os.environ.get('KINETICLULL_URL', 'http://127.0.0.1:8000')
-        share_url = f'{base_url}/f/{otf.token}/'
-
+        base_url = _otf_base_url()
         sender_name = f'{request.user.first_name} {request.user.last_name}'.strip() or request.user.email
-        sent = send_file_shared_email(recipient_email, otf.original_filename, share_url, sender_name)
 
-        log_activity(request, 'upload_otf', otf.original_filename, f'To: {recipient_email}, Expires: {expiry_hours}h')
-        if sent:
-            messages.success(request, f'File shared and notification sent to {recipient_email}.')
+        if mode == OneTimeFile.MODE_SECURE:
+            for email in recipients:
+                rcpt = OTFRecipient.objects.create(file=otf, email=email)
+                share_url = f'{base_url}/f/{rcpt.token}/'
+                if send_email_flag:
+                    send_file_shared_email(email, otf.original_filename, share_url, sender_name)
         else:
-            messages.warning(request, f'File shared but email failed to send. Share this link manually: {share_url}')
-        return redirect('app:otf_list')
+            share_url = f'{base_url}/fc/{otf.casual_token}/'
+            if send_email_flag:
+                for email in recipients:
+                    send_file_shared_email(email, otf.original_filename, share_url, sender_name)
 
-    return render(request, 'otf_upload.html', {'expiry_choices': OneTimeFile.EXPIRY_CHOICES})
+        log_activity(
+            request, 'upload_otf', otf.original_filename,
+            f'mode={mode}, recipients={len(recipients)}, max_downloads={max_downloads}, expiry={expiry_hours}h',
+        )
+        return redirect('app:otf_result', file_id=otf.id)
+
+    return render(request, 'otf_upload.html', form_context)
+
+
+@login_required
+def otf_result_view(request, file_id):
+    """Owner-only page showing the share URL(s) for a file after upload."""
+    otf = get_object_or_404(OneTimeFile, id=file_id, uploaded_by=request.user)
+    base_url = _otf_base_url()
+    links = []
+    if otf.mode == OneTimeFile.MODE_CASUAL and otf.casual_token:
+        shared_url = f'{base_url}/fc/{otf.casual_token}/'
+        for email in (otf.intended_recipients or []):
+            links.append({'email': email, 'url': shared_url})
+        if not links:
+            links.append({'email': '', 'url': shared_url})
+    else:
+        for r in otf.recipients.all():
+            links.append({'email': r.email, 'url': f'{base_url}/f/{r.token}/'})
+    return render(request, 'otf_result.html', {'file': otf, 'links': links})
 
 
 @login_required
 def otf_brand_preview(request):
-    """Preview the branded download page."""
+    """Preview the branded download pages. ?page= picks which template."""
     if not request.user.is_superuser:
         raise PermissionDenied
-    return render(request, 'otf_verify.html', {'token': 'preview', 'preview_mode': True})
+    page = request.GET.get('page', 'verify')
+    if page == 'landing':
+        template = 'otf_casual_landing.html'
+        ctx = {'casual_token': 'preview', 'preview_mode': True}
+    elif page == 'download':
+        template = 'otf_casual_download.html'
+        ctx = {'casual_token': 'preview', 'preview_mode': True, 'remaining': 3, 'max_downloads': 5, 'filename': 'sample.pdf'}
+    elif page == 'burned':
+        template = 'otf_burned.html'
+        ctx = {'preview_mode': True}
+    elif page == 'error':
+        template = 'otf_error.html'
+        ctx = {'preview_mode': True, 'message': 'Sample error message for preview.'}
+    else:
+        template = 'otf_verify.html'
+        ctx = {'token': 'preview', 'preview_mode': True}
+    return render(request, template, ctx)
 
 
 @login_required
 @require_http_methods(["POST"])
 def otf_delete_view(request, token):
-    """Delete a one-time file and burn the link."""
-    otf = get_object_or_404(OneTimeFile, token=token, uploaded_by=request.user)
+    """Delete a one-time file and burn the link.
+
+    Token can be either the legacy OneTimeFile.token (kept for in-flight URL
+    compat) or the casual_token.
+    """
+    otf = OneTimeFile.objects.filter(token=token, uploaded_by=request.user).first()
+    if otf is None:
+        otf = get_object_or_404(OneTimeFile, casual_token=token, uploaded_by=request.user)
     filename = otf.original_filename
-    otf.burn()
+    otf.burn_disk()
     log_activity(request, 'delete_otf', filename)
     return JsonResponse({'status': 'deleted'})
 
 
-def otf_download_view(request, token):
-    """Public download endpoint — handles OTP verification and file delivery."""
-    otf = get_object_or_404(OneTimeFile, token=token)
+# ── Secure mode ──
 
-    # Check if burned or expired
-    if otf.burned or otf.downloaded:
+def otf_download_view(request, token):
+    """Secure-mode public download endpoint: per-recipient token + OTP gate."""
+    rcpt = get_object_or_404(OTFRecipient, token=token)
+    otf = rcpt.file
+
+    if otf.burned or rcpt.burned or rcpt.downloaded:
         return render(request, 'otf_burned.html')
 
     if otf.is_expired:
-        otf.burn()
+        otf.burn_disk()
         return render(request, 'otf_burned.html')
 
-    # Step 1: First visit — send OTP
     if request.method == 'GET' and not request.GET.get('verify'):
-        otp = otf.generate_otp()
-        sent = send_otp_email(otf.recipient_email, otp)
+        otp = rcpt.generate_otp()
+        sent = send_otp_email(rcpt.email, otp)
         if not sent:
             return render(request, 'otf_error.html', {'message': 'Failed to send verification email. Contact the sender.'})
-        log_activity(request, 'otf_accessed', otf.original_filename, f'OTP sent to {otf.recipient_email}')
+        log_activity(request, 'otf_accessed', otf.original_filename, f'mode=secure, OTP sent to {rcpt.email}')
         return render(request, 'otf_verify.html', {'token': token})
 
-    # Step 2: OTP verification
     if request.method == 'POST':
         code = request.POST.get('otp', '').strip()
-        if otf.verify_otp(code):
-            # Serve the file
+        if rcpt.verify_otp(code):
             from django.utils import timezone as tz
+            rcpt.downloaded = True
+            rcpt.downloaded_at = tz.now()
+            rcpt.burned = True
+            rcpt.save(update_fields=['downloaded', 'downloaded_at', 'burned'])
+
             otf.downloaded = True
             otf.downloaded_at = tz.now()
-            otf.save()
+            otf.save(update_fields=['downloaded', 'downloaded_at'])
 
-            # Notify uploader
+            _otf_log_download(otf, rcpt.email, request, recipient=rcpt)
+
             if otf.uploaded_by:
-                send_access_notification(otf.uploaded_by.email, otf.recipient_email, otf.original_filename)
+                send_access_notification(otf.uploaded_by.email, rcpt.email, otf.original_filename)
 
-            log_activity(request, 'otf_downloaded', otf.original_filename, f'By: {otf.recipient_email}')
+            log_activity(request, 'otf_downloaded', otf.original_filename, f'mode=secure, by={rcpt.email}')
 
-            # Serve file then burn
             response = HttpResponse(otf.file.read(), content_type='application/octet-stream')
             response['Content-Disposition'] = f'attachment; filename="{otf.original_filename}"'
 
-            # Burn after serving
-            otf.burn()
+            if all(r.burned for r in otf.recipients.all()):
+                otf.burn_disk()
 
             return response
         else:
             messages.error(request, 'Invalid or expired code. A new code has been sent.')
-            otp = otf.generate_otp()
-            send_otp_email(otf.recipient_email, otp)
+            otp = rcpt.generate_otp()
+            send_otp_email(rcpt.email, otp)
             return render(request, 'otf_verify.html', {'token': token})
+
+
+# ── Casual mode ──
+
+def _otf_casual_lookup(casual_token):
+    return get_object_or_404(OneTimeFile, casual_token=casual_token, mode=OneTimeFile.MODE_CASUAL)
+
+
+def otf_casual_landing_view(request, casual_token):
+    """Casual-mode entry: visitor self-attests an email and receives an OTP."""
+    otf = _otf_casual_lookup(casual_token)
+    if otf.burned:
+        return render(request, 'otf_burned.html')
+    if otf.is_expired:
+        otf.burn_disk()
+        return render(request, 'otf_burned.html')
+
+    if request.method == 'POST':
+        email = request.POST.get('email', '').strip().lower()
+        if not email or '@' not in email:
+            return render(request, 'otf_casual_landing.html', {
+                'casual_token': casual_token,
+                'error': 'Enter a valid email address.',
+            })
+
+        session, _ = OTFSession.objects.get_or_create(file=otf, email=email)
+        if session.download_count >= otf.max_downloads:
+            return render(request, 'otf_error.html', {
+                'message': 'You have reached the maximum number of downloads for this file.',
+            })
+
+        otp = session.generate_otp()
+        sent = send_otp_email(email, otp)
+        if not sent:
+            return render(request, 'otf_error.html', {'message': 'Failed to send verification email. Try again later.'})
+
+        log_activity(request, 'otf_otp_sent', otf.original_filename, f'mode=casual, to={email}')
+        log_activity(request, 'otf_accessed', otf.original_filename, f'mode=casual, by={email}')
+
+        response = redirect('app:otf_casual_verify', casual_token=casual_token)
+        response.set_signed_cookie(
+            _otf_casual_pending_cookie_name(otf),
+            str(session.id),
+            salt='otf-casual-pending-v1',
+            max_age=10 * 60,
+            httponly=True,
+            samesite='Lax',
+        )
+        return response
+
+    return render(request, 'otf_casual_landing.html', {'casual_token': casual_token})
+
+
+def otf_casual_verify_view(request, casual_token):
+    """Casual-mode OTP verification. Sets the verified-email cookie on success."""
+    otf = _otf_casual_lookup(casual_token)
+    if otf.burned:
+        return render(request, 'otf_burned.html')
+    if otf.is_expired:
+        otf.burn_disk()
+        return render(request, 'otf_burned.html')
+
+    try:
+        pending_id = request.get_signed_cookie(
+            _otf_casual_pending_cookie_name(otf),
+            salt='otf-casual-pending-v1',
+            max_age=10 * 60,
+        )
+    except Exception:
+        return redirect('app:otf_casual_landing', casual_token=casual_token)
+
+    session = OTFSession.objects.filter(id=pending_id, file=otf).first()
+    if session is None:
+        return redirect('app:otf_casual_landing', casual_token=casual_token)
+
+    if request.method == 'POST':
+        code = request.POST.get('otp', '').strip()
+        if session.verify_otp(code):
+            from django.utils import timezone as tz
+            session.verified_at = tz.now()
+            session.save(update_fields=['verified_at'])
+
+            log_activity(request, 'otf_casual_attested', otf.original_filename, f'by={session.email}')
+
+            response = redirect('app:otf_casual_download', casual_token=casual_token)
+            response.set_signed_cookie(
+                _otf_casual_cookie_name(otf),
+                f'{session.id}:{session.email}',
+                salt='otf-casual-v1',
+                max_age=_otf_casual_cookie_max_age(otf),
+                httponly=True,
+                samesite='Lax',
+            )
+            response.delete_cookie(_otf_casual_pending_cookie_name(otf))
+            return response
+        else:
+            messages.error(request, 'Invalid or expired code. A new code has been sent.')
+            otp = session.generate_otp()
+            send_otp_email(session.email, otp)
+            return render(request, 'otf_casual_verify.html', {'casual_token': casual_token, 'email': session.email})
+
+    return render(request, 'otf_casual_verify.html', {'casual_token': casual_token, 'email': session.email})
+
+
+def otf_casual_download_view(request, casual_token):
+    """Casual-mode download: requires verified-email cookie. GET shows page, POST streams file."""
+    otf = _otf_casual_lookup(casual_token)
+    if otf.burned:
+        return render(request, 'otf_burned.html')
+    if otf.is_expired:
+        otf.burn_disk()
+        return render(request, 'otf_burned.html')
+
+    try:
+        payload = request.get_signed_cookie(
+            _otf_casual_cookie_name(otf),
+            salt='otf-casual-v1',
+            max_age=_otf_casual_cookie_max_age(otf),
+        )
+    except Exception:
+        return redirect('app:otf_casual_landing', casual_token=casual_token)
+
+    try:
+        session_id_str, cookie_email = payload.split(':', 1)
+        session_id = int(session_id_str)
+    except (ValueError, AttributeError):
+        return redirect('app:otf_casual_landing', casual_token=casual_token)
+
+    session = OTFSession.objects.filter(id=session_id, file=otf, email=cookie_email, verified_at__isnull=False).first()
+    if session is None:
+        return redirect('app:otf_casual_landing', casual_token=casual_token)
+
+    remaining = max(0, otf.max_downloads - session.download_count)
+
+    if request.method == 'POST':
+        if remaining <= 0:
+            return render(request, 'otf_error.html', {
+                'message': 'You have reached the maximum number of downloads for this file.',
+            })
+
+        from django.utils import timezone as tz
+        OTFSession.objects.filter(id=session.id).update(download_count=session.download_count + 1)
+        session.refresh_from_db()
+
+        otf.downloaded = True
+        if not otf.downloaded_at:
+            otf.downloaded_at = tz.now()
+        otf.save(update_fields=['downloaded', 'downloaded_at'])
+
+        _otf_log_download(otf, session.email, request, session=session)
+
+        if otf.uploaded_by:
+            send_access_notification(otf.uploaded_by.email, session.email, otf.original_filename)
+
+        log_activity(
+            request, 'otf_downloaded', otf.original_filename,
+            f'mode=casual, by={session.email}, count={session.download_count}/{otf.max_downloads}',
+        )
+
+        response = HttpResponse(otf.file.read(), content_type='application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename="{otf.original_filename}"'
+        return response
+
+    return render(request, 'otf_casual_download.html', {
+        'casual_token': casual_token,
+        'filename': otf.original_filename,
+        'remaining': remaining,
+        'max_downloads': otf.max_downloads,
+        'email': session.email,
+    })

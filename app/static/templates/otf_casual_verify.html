@@ -1,14 +1,14 @@
 {% extends 'otf_brand_base.html' %}
-{% block otf_title %}Verify Download{% endblock %}
+{% block otf_title %}Verify Code{% endblock %}
 {% block otf_body %}
-<p class="text-muted">A verification code has been sent to your email. Enter it below to download the file.</p>
-<form {% if not preview_mode %}method="post" action="{% url 'app:otf_download' token %}"{% else %}onsubmit="return false;"{% endif %}>
+<p class="text-muted">A verification code has been sent to <strong>{{ email }}</strong>. Enter it below to access the file.</p>
+<form {% if not preview_mode %}method="post" action="{% url 'app:otf_casual_verify' casual_token %}"{% else %}onsubmit="return false;"{% endif %}>
     {% csrf_token %}
     <div class="mb-3">
         <label for="otp" class="form-label" style="text-align: center; display: block;">Verification Code</label>
         <input type="text" name="otp" id="otp" class="form-control" maxlength="6" pattern="[0-9]{6}" placeholder="000000" {% if not preview_mode %}required autofocus{% endif %} autocomplete="off" style="font-size: 1.5rem; letter-spacing: 8px; text-align: center;">
     </div>
-    <button type="submit" class="btn btn-primary w-100">Verify and Download</button>
+    <button type="submit" class="btn btn-primary w-100">Verify</button>
 </form>
 <p class="text-muted mt-3" style="font-size: 0.8rem;">Code expires in 5 minutes. If you didn't receive it, check your spam folder.</p>
 {% endblock %}

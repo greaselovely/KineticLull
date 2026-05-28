@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %} - Share Links{% endblock %}
+{% block content %}
+<div class="content-card" style="max-width: 720px;">
+    <div class="d-flex justify-content-between align-items-center">
+        <h3>Share Links</h3>
+        <a href="{% url 'app:otf_list' %}" class="btn btn-outline-secondary btn-sm">Back to Files</a>
+    </div>
+    <p class="text-muted" style="font-size: 0.9rem;">
+        <strong>{{ file.original_filename }}</strong>
+        <span class="mx-2">|</span>
+        {% if file.mode == 'casual' %}
+        <span class="badge bg-secondary">Casual</span>
+        Up to {{ file.max_downloads }} download{{ file.max_downloads|pluralize }} per attested email.
+        {% else %}
+        <span class="badge bg-primary">Secure</span>
+        One download per recipient.
+        {% endif %}
+        <span class="mx-2">|</span>
+        Expires {{ file.expires_at }}
+    </p>
+    {% if file.send_email %}
+    <div class="alert alert-info" style="font-size: 0.85rem;">
+        <i class="bi bi-envelope me-1"></i>Notification emails were sent. The same links are listed below if you need to copy them.
+    </div>
+    {% else %}
+    <div class="alert alert-warning" style="font-size: 0.85rem;">
+        <i class="bi bi-info-circle me-1"></i>No emails were sent. Copy each link and share it manually.
+    </div>
+    {% endif %}
+
+    <table class="table table-sm table-hover">
+        <thead>
+            <tr>
+                <th>Recipient</th>
+                <th>Link</th>
+                <th style="width: 60px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for link in links %}
+            <tr>
+                <td>{{ link.email|default:"(any)" }}</td>
+                <td style="word-break: break-all; font-family: monospace; font-size: 0.85rem;">{{ link.url }}</td>
+                <td>
+                    <i class="bi bi-clipboard action-items copy-url-btn" data-url="{{ link.url }}" title="Copy Link"></i>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

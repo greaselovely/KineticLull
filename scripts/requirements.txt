@@ -1,2 +1,7 @@
-google_api_python_client==2.123.0
-Requests==2.31.0
+google_api_python_client>=2.160.0
+Requests==2.33.1
+# Transitive deps pinned to close Snyk findings
+idna>=3.15
+urllib3>=2.7.0
+protobuf>=5.29.6
+pyasn1>=0.6.3

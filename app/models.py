@@ -877,13 +877,23 @@ class OneTimeFile(models.Model):
         (168, '7 days'),
     ]
 
+    MODE_SECURE = 'secure'
+    MODE_CASUAL = 'casual'
+    MODE_CHOICES = [
+        (MODE_SECURE, 'Secure'),
+        (MODE_CASUAL, 'Casual'),
+    ]
+
     file = models.FileField(upload_to='otf/', verbose_name='File')
     original_filename = models.CharField(max_length=500, verbose_name='Original Filename')
     token = models.CharField(max_length=64, unique=True, blank=True)
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='uploaded_files')
     recipient_email = models.EmailField(verbose_name='Recipient Email')
-    otp = models.CharField(max_length=6, blank=True)
-    otp_created_at = models.DateTimeField(null=True, blank=True)
+    mode = models.CharField(max_length=10, choices=MODE_CHOICES, default=MODE_SECURE, db_default=MODE_SECURE)
+    max_downloads = models.PositiveIntegerField(default=1, db_default=1)
+    casual_token = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    send_email = models.BooleanField(default=True, db_default=True)
+    intended_recipients = models.JSONField(default=list, blank=True)
     expiry_hours = models.PositiveIntegerField(default=24, choices=EXPIRY_CHOICES, verbose_name='Expires After')
     expires_at = models.DateTimeField(verbose_name='Expires At')
     downloaded = models.BooleanField(default=False)
@@ -899,11 +909,12 @@ class OneTimeFile(models.Model):
     def save(self, *args, **kwargs):
         if not self.token:
             self.token = secrets.token_urlsafe(32) + ".kl"
+        if self.mode == self.MODE_CASUAL and not self.casual_token:
+            self.casual_token = secrets.token_urlsafe(32) + ".kl"
         if not self.expires_at:
             from django.utils import timezone
             from datetime import timedelta
             self.expires_at = timezone.now() + timedelta(hours=self.expiry_hours)
-        # Ensure upload directory exists
         from django.conf import settings as django_settings
         upload_dir = os.path.join(django_settings.MEDIA_ROOT, 'otf')
         os.makedirs(upload_dir, exist_ok=True)
@@ -919,39 +930,115 @@ class OneTimeFile(models.Model):
 
     @property
     def is_available(self):
-        return not self.downloaded and not self.burned and not self.is_expired
+        return not self.burned and not self.is_expired
 
-    def generate_otp(self):
-        """Generate a 6-digit OTP valid for 5 minutes."""
-        import random
-        from django.utils import timezone
-        self.otp = f'{random.randint(100000, 999999)}'
-        self.otp_created_at = timezone.now()
-        self.save(update_fields=['otp', 'otp_created_at'])
-        return self.otp
-
-    def verify_otp(self, code):
-        """Verify the OTP. Returns True if valid and not expired."""
-        from django.utils import timezone
-        from datetime import timedelta
-        if not self.otp or not self.otp_created_at:
-            return False
-        if timezone.now() > self.otp_created_at + timedelta(minutes=5):
-            return False
-        return self.otp == code.strip()
-
-    def burn(self):
-        """Mark as burned and delete the file from disk."""
+    def burn_disk(self):
+        """Delete the file from disk and mark burned. Audit rows kept."""
         from django.utils import timezone
         self.burned = True
-        if not self.downloaded_at and self.downloaded:
+        if self.downloaded and not self.downloaded_at:
             self.downloaded_at = timezone.now()
-        self.save()
+        self.save(update_fields=['burned', 'downloaded_at'])
         if self.file:
             try:
                 self.file.delete(save=False)
             except Exception:
                 pass
+
+    # Legacy alias; older callers (e.g. otf_delete_view) expect .burn()
+    def burn(self):
+        self.burn_disk()
+
+
+def _otf_generate_otp(obj):
+    import random
+    from django.utils import timezone
+    obj.otp = f'{random.randint(100000, 999999)}'
+    obj.otp_created_at = timezone.now()
+    obj.save(update_fields=['otp', 'otp_created_at'])
+    return obj.otp
+
+
+def _otf_verify_otp(obj, code):
+    from django.utils import timezone
+    from datetime import timedelta
+    if not obj.otp or not obj.otp_created_at:
+        return False
+    if timezone.now() > obj.otp_created_at + timedelta(minutes=5):
+        return False
+    return obj.otp == (code or '').strip()
+
+
+class OTFRecipient(models.Model):
+    """A pre-set recipient on a secure-mode OneTimeFile. Has its own URL token and single-use burn state."""
+    file = models.ForeignKey(OneTimeFile, on_delete=models.CASCADE, related_name='recipients')
+    email = models.EmailField()
+    token = models.CharField(max_length=64, unique=True, blank=True)
+    otp = models.CharField(max_length=6, blank=True)
+    otp_created_at = models.DateTimeField(null=True, blank=True)
+    downloaded = models.BooleanField(default=False)
+    downloaded_at = models.DateTimeField(null=True, blank=True)
+    burned = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('file', 'email')]
+        ordering = ['created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = secrets.token_urlsafe(32) + ".kl"
+        super().save(*args, **kwargs)
+
+    def generate_otp(self):
+        return _otf_generate_otp(self)
+
+    def verify_otp(self, code):
+        return _otf_verify_otp(self, code)
+
+    def __str__(self):
+        return f"{self.email} ({self.token[:8]}...)"
+
+
+class OTFSession(models.Model):
+    """A self-attested email on a casual-mode OneTimeFile. One row per (file, email)."""
+    file = models.ForeignKey(OneTimeFile, on_delete=models.CASCADE, related_name='sessions')
+    email = models.EmailField()
+    otp = models.CharField(max_length=6, blank=True)
+    otp_created_at = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    download_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('file', 'email')]
+        ordering = ['created_at']
+
+    def generate_otp(self):
+        return _otf_generate_otp(self)
+
+    def verify_otp(self, code):
+        return _otf_verify_otp(self, code)
+
+    def __str__(self):
+        return f"{self.email} ({self.download_count} downloads)"
+
+
+class OTFDownload(models.Model):
+    """Per-delivery audit row. Set either recipient (secure) or session (casual)."""
+    file = models.ForeignKey(OneTimeFile, on_delete=models.CASCADE, related_name='downloads')
+    recipient = models.ForeignKey(OTFRecipient, on_delete=models.SET_NULL, null=True, blank=True, related_name='downloads')
+    session = models.ForeignKey(OTFSession, on_delete=models.SET_NULL, null=True, blank=True, related_name='downloads')
+    email = models.EmailField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=512, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.email} @ {self.created_at:%Y-%m-%d %H:%M}"
 
 
 class InboxEntry(models.Model):
