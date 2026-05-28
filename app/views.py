@@ -2229,17 +2229,6 @@ def restart_services_view(request):
     if not request.user.is_superuser:
         raise PermissionDenied
 
-    # Check if sudoers rules are in place before attempting restart
-    result = subprocess.run(
-        ['sudo', '-n', 'systemctl', 'status', 'kineticlull'],
-        capture_output=True, text=True, timeout=5,
-    )
-    if result.returncode != 0 and 'password is required' in result.stderr.lower():
-        return JsonResponse({
-            'status': 'error',
-            'message': 'Sudoers rules not configured. Run "bash upgrade.sh" once from the command line.',
-        })
-
     base_dir = str(settings.BASE_DIR)
     python = sys.executable
     manage_py = os.path.join(base_dir, 'manage.py')
