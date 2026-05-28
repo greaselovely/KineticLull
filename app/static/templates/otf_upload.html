@@ -1,31 +1,30 @@
 {% extends 'base.html' %}
 {% load static %}
-{% block title %} - Share File{% endblock %}
+{% block title %} - One Time File{% endblock %}
 {% block content %}
 <div class="content-card" style="max-width: 560px;">
-    <h3>Share File</h3>
+    <h3>One Time File</h3>
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="mb-3">
-            <label for="file" class="form-label">File</label>
             <input type="file" name="file" id="file" class="form-control form-control-sm" required>
         </div>
 
         <div class="mb-3">
             <label class="form-label">Mode</label>
-            <div class="d-flex gap-3">
+            <div class="d-flex gap-4">
                 <div class="form-check">
                     <input class="form-check-input" type="radio" name="mode" id="mode_secure" value="secure" checked>
                     <label class="form-check-label" for="mode_secure">
-                        <strong>Secure</strong>
-                        <div class="form-text">Each recipient gets a unique link. One download per recipient.</div>
+                        Secure
+                        <i class="bi bi-info-circle text-muted ms-1" data-bs-toggle="tooltip" title="Each recipient gets a unique link. One download per recipient."></i>
                     </label>
                 </div>
                 <div class="form-check">
                     <input class="form-check-input" type="radio" name="mode" id="mode_casual" value="casual">
                     <label class="form-check-label" for="mode_casual">
-                        <strong>Casual</strong>
-                        <div class="form-text">One shared link. Anyone with it enters their email to access.</div>
+                        Casual
+                        <i class="bi bi-info-circle text-muted ms-1" data-bs-toggle="tooltip" title="One shared link. Anyone with it enters their email to access."></i>
                     </label>
                 </div>
             </div>
@@ -34,7 +33,6 @@
         <div class="mb-3">
             <label for="recipients" class="form-label">Recipients</label>
             <textarea name="recipients" id="recipients" class="form-control form-control-sm" rows="3" placeholder="one@example.com&#10;two@example.com" required></textarea>
-            <div class="form-text">One per line, or comma separated. Always required, even when sending the link yourself.</div>
         </div>
 
         <div class="mb-3 row">
@@ -54,8 +52,7 @@
 
         <div class="mb-3 form-check">
             <input type="checkbox" class="form-check-input" name="send_email" id="send_email" checked>
-            <label class="form-check-label" for="send_email">Send notification email from KineticLull</label>
-            <div class="form-text">Turn off if you want to copy the link and send it yourself.</div>
+            <label class="form-check-label" for="send_email">Send Email</label>
         </div>
 
         <div class="mt-3">
@@ -76,6 +73,10 @@
     document.getElementById('mode_secure').addEventListener('change', update);
     document.getElementById('mode_casual').addEventListener('change', update);
     update();
+
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
+        new bootstrap.Tooltip(el);
+    });
 })();
 </script>
 {% endblock %}
