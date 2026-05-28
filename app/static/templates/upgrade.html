@@ -85,26 +85,32 @@
 
 {% block scripts %}
 <script>
-// Poll the current page with HEAD until the service goes DOWN and then comes
-// BACK UP. Only "down then up" counts as a real restart — a single 200 is not
-// enough, because right after the POST returns the old worker may still be
-// serving requests for a few seconds before systemd-run actually kicks it.
+// Watch for the restart to complete. The kineticlull restart window is brief
+// (~2-3s), so polling slowly will miss the down state and spin forever. We
+// poll every 500ms and accept any of:
+//   1. Saw a down response, then an up response   -> definite restart
+//   2. Saw only up responses but >= 8s elapsed    -> assume too-fast-to-catch
+//   3. >= 30s elapsed with no clean signal        -> failure UI
 function klPollUntilRestarted(statusEl, onSuccess, onFailure) {
-    var attempts = 0;
-    var maxAttempts = 60;
-    var totalSeconds = maxAttempts * 3;
+    var POLL_MS = 500;
+    var FALLBACK_MS = 8000;
+    var MAX_WAIT_MS = 30000;
+    var start = Date.now();
     var sawDown = false;
+
     var poll = setInterval(function () {
-        attempts++;
-        var remaining = Math.max(0, totalSeconds - (attempts * 3));
+        var elapsed = Date.now() - start;
+        var remaining = Math.max(0, Math.round((MAX_WAIT_MS - elapsed) / 1000));
         statusEl.textContent = sawDown
-            ? 'Service is restarting. Waiting for it to come back (' + remaining + 's remaining).'
-            : 'Restart firing. Waiting for the old worker to drop (' + remaining + 's remaining).';
-        if (attempts > maxAttempts) {
+            ? 'Service is restarting. Waiting for it to come back (' + remaining + 's).'
+            : 'Restart in progress... (' + remaining + 's).';
+
+        if (elapsed > MAX_WAIT_MS) {
             clearInterval(poll);
             onFailure();
             return;
         }
+
         fetch(window.location.href, { method: 'HEAD', cache: 'no-store' })
             .then(function (resp) {
                 if (!resp.ok) {
@@ -114,13 +120,19 @@ function klPollUntilRestarted(statusEl, onSuccess, onFailure) {
                 if (sawDown) {
                     clearInterval(poll);
                     statusEl.textContent = 'Service back up. Reloading...';
-                    setTimeout(onSuccess, 1000);
+                    setTimeout(onSuccess, 500);
+                    return;
+                }
+                if (elapsed >= FALLBACK_MS) {
+                    clearInterval(poll);
+                    statusEl.textContent = 'Restart complete. Reloading...';
+                    setTimeout(onSuccess, 500);
                 }
             })
             .catch(function () {
                 sawDown = true;
             });
-    }, 3000);
+    }, POLL_MS);
 }
 
 (function () {
