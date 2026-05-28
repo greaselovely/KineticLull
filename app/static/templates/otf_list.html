@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load tz %}
-{% block title %} - Files{% endblock %}
+{% block title %} - One Time File{% endblock %}
 {% block content %}
 {% timezone app_timezone %}
 
@@ -25,7 +25,7 @@
 
 <div class="content-card edl-card">
     <div class="d-flex justify-content-between align-items-center">
-        <h3>Files</h3>
+        <h3>One Time File</h3>
         <a href="{% url 'app:otf_upload' %}" title="Share File"><i class="bi bi-plus-circle action-items"></i></a>
     </div>
     <table id="otf-table" class="table table-hover table-resizable">
