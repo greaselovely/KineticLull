@@ -85,117 +85,133 @@
 
 {% block scripts %}
 <script>
-(function() {
+// Poll the current page with HEAD until the service goes DOWN and then comes
+// BACK UP. Only "down then up" counts as a real restart — a single 200 is not
+// enough, because right after the POST returns the old worker may still be
+// serving requests for a few seconds before systemd-run actually kicks it.
+function klPollUntilRestarted(statusEl, onSuccess, onFailure) {
+    var attempts = 0;
+    var maxAttempts = 60;
+    var totalSeconds = maxAttempts * 3;
+    var sawDown = false;
+    var poll = setInterval(function () {
+        attempts++;
+        var remaining = Math.max(0, totalSeconds - (attempts * 3));
+        statusEl.textContent = sawDown
+            ? 'Service is restarting. Waiting for it to come back (' + remaining + 's remaining).'
+            : 'Restart firing. Waiting for the old worker to drop (' + remaining + 's remaining).';
+        if (attempts > maxAttempts) {
+            clearInterval(poll);
+            onFailure();
+            return;
+        }
+        fetch(window.location.href, { method: 'HEAD', cache: 'no-store' })
+            .then(function (resp) {
+                if (!resp.ok) {
+                    sawDown = true;
+                    return;
+                }
+                if (sawDown) {
+                    clearInterval(poll);
+                    statusEl.textContent = 'Service back up. Reloading...';
+                    setTimeout(onSuccess, 1000);
+                }
+            })
+            .catch(function () {
+                sawDown = true;
+            });
+    }, 3000);
+}
+
+(function () {
     var form = document.getElementById('upgrade-form');
     if (!form) return;
 
-    form.addEventListener('submit', function(e) {
+    form.addEventListener('submit', function (e) {
         e.preventDefault();
         var btn = document.getElementById('upgrade-btn');
         var status = document.getElementById('upgrade-status');
         var statusText = document.getElementById('upgrade-status-text');
+        var failed = document.getElementById('upgrade-failed');
 
         btn.disabled = true;
         btn.style.display = 'none';
         status.style.display = 'block';
+        statusText.textContent = 'Upgrading... pulling code, installing packages, migrating, and patching config.';
 
-        // Fire the upgrade request
+        function startPolling() {
+            klPollUntilRestarted(
+                statusText,
+                function () { window.location.reload(); },
+                function () {
+                    status.style.display = 'none';
+                    failed.style.display = 'block';
+                }
+            );
+        }
+
         fetch(form.action || window.location.href, {
             method: 'POST',
             body: new FormData(form),
-        }).then(function(resp) {
-            return resp.json();
-        }).then(function(data) {
-            if (data.status === 'error') {
+        }).then(function (resp) {
+            return resp.json().catch(function () { return null; });
+        }).then(function (data) {
+            if (data && data.status === 'error') {
                 status.style.display = 'none';
-                document.getElementById('upgrade-failed').style.display = 'block';
+                failed.style.display = 'block';
+                if (data.message) {
+                    failed.querySelector('p').textContent = data.message;
+                }
                 return;
             }
-        }).catch(function() {
-            // Connection dropped — expected during restart
+            // POST returned cleanly — kl-restart has fired on the server.
+            startPolling();
+        }).catch(function () {
+            // Connection dropped mid-POST. Restart probably fired anyway, so poll.
+            startPolling();
         });
-
-        // Wait for the restart to begin before polling
-        var attempts = 0;
-        var maxAttempts = 60;
-        var totalSeconds = maxAttempts * 3;
-        var poll;
-        setTimeout(function() {
-        poll = setInterval(function() {
-            attempts++;
-            var remaining = Math.max(0, totalSeconds - (attempts * 3));
-            statusText.textContent = 'Upgrading... waiting for service to restart (' + remaining + 's remaining)';
-            if (attempts > maxAttempts) {
-                clearInterval(poll);
-                status.style.display = 'none';
-                document.getElementById('upgrade-failed').style.display = 'block';
-                return;
-            }
-            fetch(window.location.href, { method: 'HEAD' })
-                .then(function(resp) {
-                    if (resp.ok) {
-                        clearInterval(poll);
-                        statusText.textContent = 'Upgrade complete. Reloading...';
-                        setTimeout(function() { window.location.reload(); }, 1000);
-                    }
-                })
-                .catch(function() {});
-        }, 3000);
-        }, 5000);  // 5s delay — wait for restart to begin
     });
 })();
 
-// Restart services button
-(function() {
+(function () {
     var btn = document.getElementById('restart-btn');
     if (!btn) return;
 
-    btn.addEventListener('click', function() {
-        showConfirmModal('Restart KineticLull and Nginx?', function() {
+    btn.addEventListener('click', function () {
+        showConfirmModal('Restart KineticLull and Nginx?', function () {
             btn.disabled = true;
             var status = document.getElementById('restart-status');
             var statusText = document.getElementById('restart-status-text');
+            var failed = document.getElementById('upgrade-failed');
             status.style.display = 'block';
+
+            function startPolling() {
+                klPollUntilRestarted(
+                    statusText,
+                    function () { window.location.reload(); },
+                    function () {
+                        statusText.textContent = 'Service did not come back. Restart manually from the command line.';
+                    }
+                );
+            }
 
             fetch('{% url "app:restart_services" %}', {
                 method: 'POST',
                 headers: {'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')},
-            }).then(function(resp) {
-                return resp.json();
-            }).then(function(data) {
-                if (data.status === 'error') {
+            }).then(function (resp) {
+                return resp.json().catch(function () { return null; });
+            }).then(function (data) {
+                if (data && data.status === 'error') {
                     status.style.display = 'none';
                     btn.disabled = false;
-                    var failed = document.getElementById('upgrade-failed');
                     failed.querySelector('.alert-heading').innerHTML = '<i class="bi bi-exclamation-octagon me-2"></i>' + data.message;
                     failed.style.display = 'block';
+                    return;
                 }
-            }).catch(function() {});
-
-            var attempts = 0;
-            var maxAttempts = 60;             // ~3 minutes of polling
-            var totalSeconds = maxAttempts * 3;
-            setTimeout(function() {
-                var poll = setInterval(function() {
-                    attempts++;
-                    var remaining = Math.max(0, totalSeconds - (attempts * 3));
-                    statusText.textContent = 'Restarting services. Waiting for service to come back (' + remaining + 's remaining). 502s during this window are expected.';
-                    if (attempts > maxAttempts) {
-                        clearInterval(poll);
-                        statusText.textContent = 'Service did not come back within ' + totalSeconds + 's. Restart manually from the command line.';
-                        return;
-                    }
-                    fetch(window.location.href, { method: 'HEAD' })
-                        .then(function(resp) {
-                            if (resp.ok) {
-                                clearInterval(poll);
-                                statusText.textContent = 'Restarted. Reloading...';
-                                setTimeout(function() { window.location.reload(); }, 1000);
-                            }
-                        })
-                        .catch(function() {});
-                }, 3000);
-            }, 8000);  // 8s initial delay — wait for restart to actually kick off
+                startPolling();
+            }).catch(function () {
+                startPolling();
+            });
         });
     });
 })();
