@@ -1,0 +1,44 @@
+{% extends 'otf_brand_base.html' %}
+{% block otf_title %}Secret Revealed{% endblock %}
+{% block otf_body %}
+<div class="alert alert-warning py-2 px-3" style="font-size: 0.85rem;">
+    <i class="bi bi-exclamation-triangle me-1"></i>This is the only time this secret will be shown. The link has now been burned. Copy it somewhere safe before closing this page.
+</div>
+
+{% if label %}
+<p class="text-muted mb-1" style="font-size: 0.85rem;">{{ label }}</p>
+{% endif %}
+
+<div class="mb-2">
+    <textarea id="secret-value" class="form-control font-monospace" rows="5" readonly onclick="this.select()" style="resize: vertical;">{{ secret_text }}</textarea>
+</div>
+
+<button type="button" id="copy-secret-btn" class="btn btn-primary w-100">
+    <i class="bi bi-clipboard me-1"></i><span id="copy-secret-label">Copy to clipboard</span>
+</button>
+
+<script>
+(function () {
+    var btn = document.getElementById('copy-secret-btn');
+    var label = document.getElementById('copy-secret-label');
+    var field = document.getElementById('secret-value');
+    btn.addEventListener('click', function () {
+        var done = function () {
+            label.textContent = 'Copied';
+            setTimeout(function () { label.textContent = 'Copy to clipboard'; }, 2000);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(field.value).then(done, function () {
+                field.select();
+                document.execCommand('copy');
+                done();
+            });
+        } else {
+            field.select();
+            document.execCommand('copy');
+            done();
+        }
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load tz %}
+{% block title %} - One Time Secret{% endblock %}
+{% block content %}
+{% timezone app_timezone %}
+
+{% if user.is_superuser and security_summary %}
+<div class="card mb-3">
+    <div class="card-body py-2 px-3 d-flex align-items-center justify-content-between" style="font-size: 0.85rem;">
+        <div>
+            <i class="bi bi-shield-lock me-1 text-muted"></i>
+            <span>{{ security_summary.blocked_ips }} blocked IP{{ security_summary.blocked_ips|pluralize }} total</span>
+            <span class="text-muted mx-1">|</span>
+            <span>{{ security_summary.rejections_24h }} rejection{{ security_summary.rejections_24h|pluralize }} (24h)</span>
+            {% if security_summary.auto_blocked_24h > 0 %}
+            <span class="text-muted mx-1">|</span>
+            <span class="text-warning">{{ security_summary.auto_blocked_24h }} auto-blocked (24h)</span>
+            {% endif %}
+        </div>
+        <a href="{% url 'app:blocked_ips' %}" class="btn btn-sm btn-outline-secondary py-0">View</a>
+    </div>
+</div>
+{% endif %}
+
+<div class="content-card edl-card">
+    <div class="d-flex justify-content-between align-items-center">
+        <h3>One Time Secret</h3>
+        <a href="{% url 'app:ots_create' %}" title="Share Secret"><i class="bi bi-plus-circle action-items"></i></a>
+    </div>
+    <table id="ots-table" class="table table-hover table-resizable">
+        <thead>
+            <tr>
+                <th data-col="0">Label</th>
+                <th data-col="1">Recipients</th>
+                <th data-col="2">Expires</th>
+                <th data-col="3">Shared</th>
+                <th data-col="4">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in secrets %}
+            <tr>
+                <td>{{ s.label }}</td>
+                <td>
+                    {% if s.recipient_summary|length == 1 %}
+                    {{ s.recipient_summary.0 }}
+                    {% else %}
+                    {{ s.recipient_summary|length }} recipients
+                    {% endif %}
+                </td>
+                <td>{{ s.expires_at|date:app_timestamp_format }}</td>
+                <td>{{ s.created_at|date:app_timestamp_format }}</td>
+                <td>
+                    <span class="actions-row">
+                        <a href="{% url 'app:ots_result' s.id %}" title="View Links"><i class="bi bi-link-45deg action-items"></i></a>
+                        <i class="bi bi-trash action-items text-danger" onclick="deleteOts('{{ s.recipients.first.token }}', event)" title="Delete"></i>
+                    </span>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-muted">No active secret shares. Click the + to share a secret.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endtimezone %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteOts(token, event) {
+    event.preventDefault();
+    showConfirmModal('Delete this secret and burn the link?', function() {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        fetch('{% url "app:ots_delete" token="PLACEHOLDER" %}'.replace('PLACEHOLDER', token), {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrfToken},
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'deleted') {
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to delete');
+            }
+        });
+    });
+}
+</script>
+{% endblock %}

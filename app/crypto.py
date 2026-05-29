@@ -65,3 +65,28 @@ class EncryptedCharField(models.CharField):
         if value is None or value == '':
             return value
         return encrypt(value)
+
+
+class EncryptedTextField(models.TextField):
+    """TextField that encrypts at rest. Application code sees plaintext.
+
+    Use for free-text secrets that may be multi-line or longer than a CharField
+    (e.g. the One-Time Secret payload).
+    """
+
+    description = 'TextField with Fernet encryption at rest'
+
+    def from_db_value(self, value, expression, connection):
+        if value is None:
+            return value
+        return decrypt(value)
+
+    def to_python(self, value):
+        if value is None:
+            return value
+        return decrypt(value)
+
+    def get_prep_value(self, value):
+        if value is None or value == '':
+            return value
+        return encrypt(value)

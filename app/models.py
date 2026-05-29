@@ -4,7 +4,7 @@ import secrets
 
 from django.db import models
 from django.conf import settings
-from .crypto import EncryptedCharField
+from .crypto import EncryptedCharField, EncryptedTextField
 from django.contrib.auth.models import Group
 
 
@@ -1029,6 +1029,113 @@ class OTFDownload(models.Model):
     file = models.ForeignKey(OneTimeFile, on_delete=models.CASCADE, related_name='downloads')
     recipient = models.ForeignKey(OTFRecipient, on_delete=models.SET_NULL, null=True, blank=True, related_name='downloads')
     session = models.ForeignKey(OTFSession, on_delete=models.SET_NULL, null=True, blank=True, related_name='downloads')
+    email = models.EmailField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=512, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.email} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class OneTimeSecret(models.Model):
+    """A secure-mode, single-reveal text secret. Sibling of OneTimeFile.
+
+    The payload lives encrypted in the DB (no file on disk). Each recipient gets
+    a unique link gated by an emailed OTP; revealing burns that recipient. Once
+    every recipient has read it (or it expires), the plaintext is scrubbed.
+    """
+    EXPIRY_CHOICES = OneTimeFile.EXPIRY_CHOICES
+
+    label = models.CharField(max_length=255, verbose_name='Label')
+    secret_text = EncryptedTextField(blank=True, default='', verbose_name='Secret')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_secrets')
+    recipient_email = models.EmailField(verbose_name='Recipient Email')
+    send_email = models.BooleanField(default=True, db_default=True)
+    expiry_hours = models.PositiveIntegerField(default=24, choices=EXPIRY_CHOICES, verbose_name='Expires After')
+    expires_at = models.DateTimeField(verbose_name='Expires At')
+    revealed = models.BooleanField(default=False)
+    revealed_at = models.DateTimeField(null=True, blank=True)
+    burned = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "One-Time Secret"
+        verbose_name_plural = "One-Time Secrets"
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            from django.utils import timezone
+            from datetime import timedelta
+            self.expires_at = timezone.now() + timedelta(hours=self.expiry_hours)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.label} ({self.recipient_email})"
+
+    @property
+    def is_expired(self):
+        from django.utils import timezone
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_available(self):
+        return not self.burned and not self.is_expired
+
+    def burn(self):
+        """Scrub the plaintext and mark burned. Audit rows are kept.
+
+        Unlike OneTimeFile (which deletes a file from disk), the secret itself
+        lives in this row, so burning must null out secret_text so no recoverable
+        ciphertext remains.
+        """
+        from django.utils import timezone
+        self.burned = True
+        self.secret_text = ''
+        if self.revealed and not self.revealed_at:
+            self.revealed_at = timezone.now()
+        self.save(update_fields=['burned', 'secret_text', 'revealed_at'])
+
+
+class OTSRecipient(models.Model):
+    """A pre-set recipient on a OneTimeSecret. Has its own URL token and single-use burn state."""
+    secret = models.ForeignKey(OneTimeSecret, on_delete=models.CASCADE, related_name='recipients')
+    email = models.EmailField()
+    token = models.CharField(max_length=64, unique=True, blank=True)
+    otp = models.CharField(max_length=6, blank=True)
+    otp_created_at = models.DateTimeField(null=True, blank=True)
+    revealed = models.BooleanField(default=False)
+    revealed_at = models.DateTimeField(null=True, blank=True)
+    burned = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('secret', 'email')]
+        ordering = ['created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = secrets.token_urlsafe(32) + ".kl"
+        super().save(*args, **kwargs)
+
+    def generate_otp(self):
+        return _otf_generate_otp(self)
+
+    def verify_otp(self, code):
+        return _otf_verify_otp(self, code)
+
+    def __str__(self):
+        return f"{self.email} ({self.token[:8]}...)"
+
+
+class OTSAccess(models.Model):
+    """Per-reveal audit row for a OneTimeSecret."""
+    secret = models.ForeignKey(OneTimeSecret, on_delete=models.CASCADE, related_name='accesses')
+    recipient = models.ForeignKey(OTSRecipient, on_delete=models.SET_NULL, null=True, blank=True, related_name='accesses')
     email = models.EmailField()
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.CharField(max_length=512, blank=True)

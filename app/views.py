@@ -34,9 +34,9 @@ logger = logging.getLogger(__name__)
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
-from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile, OTFRecipient, OTFSession, OTFDownload
+from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile, OTFRecipient, OTFSession, OTFDownload, OneTimeSecret, OTSRecipient, OTSAccess
 from .forms import ExtDynListsForm, ShortenedURLForm
-from .email import send_file_shared_email, send_otp_email, send_access_notification
+from .email import send_file_shared_email, send_otp_email, send_access_notification, send_secret_shared_email
 
 from users.models import CustomUser
 from django.contrib.auth.models import Group, Permission
@@ -3914,3 +3914,201 @@ def otf_casual_download_view(request, casual_token):
         'max_downloads': otf.max_downloads,
         'email': session.email,
     })
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# One-Time Secret (OTS) — secure-mode text/credential sharing, sibling of OTF
+# ══════════════════════════════════════════════════════════════════════════
+
+def _ots_log_access(secret_obj, email, request, recipient=None):
+    OTSAccess.objects.create(
+        secret=secret_obj,
+        recipient=recipient,
+        email=email,
+        ip_address=get_client_ip(request),
+        user_agent=(request.META.get('HTTP_USER_AGENT') or '')[:512],
+    )
+
+
+@login_required
+def ots_list_view(request):
+    """List the current user's active (unburned, unexpired) one-time secrets."""
+    secrets_qs = OneTimeSecret.objects.filter(created_by=request.user, burned=False).prefetch_related('recipients')
+    active = []
+    for s in secrets_qs:
+        if s.is_expired:
+            s.burn()
+            continue
+        recipients = list(s.recipients.all())
+        if recipients and all(r.burned for r in recipients):
+            s.burn()
+            continue
+        active.append(s)
+
+    base_url = _otf_base_url()
+    for s in active:
+        s.share_url = f'{base_url}/secrets/{s.id}/links/'
+        s.recipient_summary = [r.email for r in s.recipients.all()]
+
+    context = {'secrets': active}
+    summary = get_security_summary(request.user)
+    if summary:
+        context['security_summary'] = summary
+    return render(request, 'ots_list.html', context)
+
+
+@login_required
+def ots_create_view(request):
+    """Create a secret for one-time sharing (secure mode: per-recipient link + OTP)."""
+    app_settings = AppSettings.load()
+
+    if not app_settings.resend_api_key or not app_settings.resend_from_email:
+        messages.error(request, 'Email is not configured. Set up Resend API key and From email in Settings before sharing secrets.')
+        return redirect('app:ots_list')
+
+    form_context = {'expiry_choices': OneTimeSecret.EXPIRY_CHOICES}
+
+    if request.method == 'POST':
+        label = (request.POST.get('label') or '').strip()
+        secret_text = request.POST.get('secret_text') or ''
+        recipients = _otf_parse_recipients(request.POST.get('recipients', ''))
+        send_email_flag = request.POST.get('send_email') == 'on'
+        try:
+            expiry_hours = int(request.POST.get('expiry_hours', '24'))
+        except ValueError:
+            expiry_hours = 24
+
+        if not label or not secret_text.strip() or not recipients:
+            messages.error(request, 'A label, the secret text, and at least one recipient email are required.')
+            return render(request, 'ots_create.html', form_context)
+
+        secret = OneTimeSecret(
+            label=label,
+            secret_text=secret_text,
+            created_by=request.user,
+            recipient_email=recipients[0],
+            send_email=send_email_flag,
+            expiry_hours=expiry_hours,
+        )
+        secret.save()
+
+        base_url = _otf_base_url()
+        sender_name = f'{request.user.first_name} {request.user.last_name}'.strip() or request.user.email
+
+        for email in recipients:
+            rcpt = OTSRecipient.objects.create(secret=secret, email=email)
+            share_url = f'{base_url}/sec/{rcpt.token}/'
+            if send_email_flag:
+                send_secret_shared_email(email, secret.label, share_url, sender_name)
+
+        # Never log the secret payload — label only.
+        log_activity(
+            request, 'create_ots', secret.label,
+            f'recipients={len(recipients)}, expiry={expiry_hours}h',
+        )
+        return redirect('app:ots_result', secret_id=secret.id)
+
+    return render(request, 'ots_create.html', form_context)
+
+
+@login_required
+def ots_result_view(request, secret_id):
+    """Owner-only page showing the reveal link(s) for a secret after creation."""
+    secret = get_object_or_404(OneTimeSecret, id=secret_id, created_by=request.user)
+    base_url = _otf_base_url()
+    links = [{'email': r.email, 'url': f'{base_url}/sec/{r.token}/'} for r in secret.recipients.all()]
+    return render(request, 'ots_result.html', {'secret': secret, 'links': links})
+
+
+@login_required
+def ots_brand_preview(request):
+    """Preview the branded reveal pages. ?page= picks which template."""
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    page = request.GET.get('page', 'verify')
+    if page == 'reveal':
+        template = 'ots_reveal.html'
+        ctx = {'preview_mode': True, 'label': 'Sample Secret', 'secret_text': 'super-secret-value-1234'}
+    elif page == 'burned':
+        template = 'ots_burned.html'
+        ctx = {'preview_mode': True}
+    elif page == 'error':
+        template = 'ots_error.html'
+        ctx = {'preview_mode': True, 'message': 'Sample error message for preview.'}
+    else:
+        template = 'ots_verify.html'
+        ctx = {'token': 'preview', 'preview_mode': True}
+    return render(request, template, ctx)
+
+
+@login_required
+@require_http_methods(["POST"])
+def ots_delete_view(request, token):
+    """Delete a one-time secret and burn the link. Token is any of its recipient tokens."""
+    rcpt = get_object_or_404(OTSRecipient, token=token, secret__created_by=request.user)
+    secret = rcpt.secret
+    label = secret.label
+    secret.burn()
+    log_activity(request, 'delete_ots', label)
+    return JsonResponse({'status': 'deleted'})
+
+
+def ots_reveal_view(request, token):
+    """Public reveal endpoint: per-recipient token + OTP gate. Single reveal, then burn."""
+    rcpt = get_object_or_404(OTSRecipient, token=token)
+    secret = rcpt.secret
+
+    if secret.burned or rcpt.burned or rcpt.revealed:
+        return render(request, 'ots_burned.html')
+
+    if secret.is_expired:
+        secret.burn()
+        return render(request, 'ots_burned.html')
+
+    if request.method == 'GET' and not request.GET.get('verify'):
+        otp = rcpt.generate_otp()
+        sent = send_otp_email(rcpt.email, otp, noun='secret')
+        if not sent:
+            return render(request, 'ots_error.html', {'message': 'Failed to send verification email. Contact the sender.'})
+        log_activity(request, 'ots_accessed', secret.label, f'OTP sent to {rcpt.email}')
+        return render(request, 'ots_verify.html', {'token': token})
+
+    if request.method == 'POST':
+        code = request.POST.get('otp', '').strip()
+        if rcpt.verify_otp(code):
+            from django.utils import timezone as tz
+            # Grab the plaintext before any burn scrubs it.
+            secret_text = secret.secret_text
+
+            rcpt.revealed = True
+            rcpt.revealed_at = tz.now()
+            rcpt.burned = True
+            rcpt.save(update_fields=['revealed', 'revealed_at', 'burned'])
+
+            secret.revealed = True
+            if not secret.revealed_at:
+                secret.revealed_at = tz.now()
+            secret.save(update_fields=['revealed', 'revealed_at'])
+
+            _ots_log_access(secret, rcpt.email, request, recipient=rcpt)
+
+            if secret.created_by:
+                send_access_notification(secret.created_by.email, rcpt.email, secret.label, noun='secret', verb='revealed')
+
+            log_activity(request, 'ots_revealed', secret.label, f'by={rcpt.email}')
+
+            # Once every recipient has read it, scrub the plaintext from the row.
+            if all(r.burned for r in secret.recipients.all()):
+                secret.burn()
+
+            response = render(request, 'ots_reveal.html', {
+                'label': secret.label,
+                'secret_text': secret_text,
+            })
+            response['Cache-Control'] = 'no-store'
+            return response
+        else:
+            messages.error(request, 'Invalid or expired code. A new code has been sent.')
+            otp = rcpt.generate_otp()
+            send_otp_email(rcpt.email, otp, noun='secret')
+            return render(request, 'ots_verify.html', {'token': token})

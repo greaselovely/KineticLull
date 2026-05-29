@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %} - One Time Secret{% endblock %}
+{% block content %}
+<div class="content-card" style="max-width: 560px;">
+    <h3>One Time Secret</h3>
+    <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label for="label" class="form-label">Label</label>
+            <input type="text" name="label" id="label" class="form-control form-control-sm" maxlength="255" placeholder="What this secret is for" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="secret_text" class="form-label">Secret</label>
+            <textarea name="secret_text" id="secret_text" class="form-control form-control-sm font-monospace" rows="4" placeholder="Paste the credential, token, or note to share" required></textarea>
+        </div>
+
+        <div class="mb-3">
+            <label for="recipients" class="form-label">Recipients</label>
+            <textarea name="recipients" id="recipients" class="form-control form-control-sm" rows="3" placeholder="one@example.com&#10;two@example.com" required></textarea>
+            <div class="form-text" style="font-size: 0.8rem;">Each recipient gets a unique link. The secret can be revealed once per recipient.</div>
+        </div>
+
+        <div class="mb-3 row">
+            <div class="col-auto">
+                <label for="expiry_hours" class="form-label">Expires After</label>
+                <select name="expiry_hours" id="expiry_hours" class="form-select form-select-sm" style="width: 150px;">
+                    {% for value, label in expiry_choices %}
+                    <option value="{{ value }}" {% if value == 24 %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" name="send_email" id="send_email" checked>
+            <label class="form-check-label" for="send_email">Send Email</label>
+        </div>
+
+        <div class="mt-3">
+            <button type="submit" class="btn btn-primary btn-sm">Share</button>
+            <a href="{% url 'app:ots_list' %}" class="btn btn-outline-secondary btn-sm">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
