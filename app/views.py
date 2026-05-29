@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
-from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile, OTFRecipient, OTFSession, OTFDownload, OneTimeSecret, OTSRecipient, OTSAccess
+from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile, OTFRecipient, OTFSession, OTFDownload, OneTimeSecret, OTSRecipient, OTSAccess, Paste
 from .forms import ExtDynListsForm, ShortenedURLForm
 from .email import send_file_shared_email, send_otp_email, send_access_notification, send_secret_shared_email
 
@@ -4112,3 +4112,166 @@ def ots_reveal_view(request, token):
             otp = rcpt.generate_otp()
             send_otp_email(rcpt.email, otp, noun='secret')
             return render(request, 'ots_verify.html', {'token': token})
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Paste — unlisted, link-shared text/code snippets (encrypted at rest)
+# ══════════════════════════════════════════════════════════════════════════
+
+# highlight.js language slugs offered in the create/edit form. 'auto' lets the
+# library detect; the rest are the common ones for this audience.
+PASTE_LANGUAGES = [
+    ('auto', 'Auto-detect'),
+    ('plaintext', 'Plain text'),
+    ('bash', 'Bash / Shell'),
+    ('python', 'Python'),
+    ('json', 'JSON'),
+    ('yaml', 'YAML'),
+    ('javascript', 'JavaScript'),
+    ('sql', 'SQL'),
+    ('xml', 'XML / HTML'),
+    ('ini', 'INI / Conf'),
+    ('dockerfile', 'Dockerfile'),
+    ('nginx', 'Nginx'),
+    ('diff', 'Diff'),
+]
+
+
+@login_required
+def paste_list_view(request):
+    """List the current user's active (unexpired) pastes."""
+    pastes = Paste.objects.filter(created_by=request.user)
+    active = []
+    for p in pastes:
+        if p.is_expired:
+            p.delete()  # lazy cleanup
+            continue
+        active.append(p)
+
+    base_url = _otf_base_url()
+    for p in active:
+        p.share_url = f'{base_url}/p/{p.code}/'
+
+    context = {'pastes': active}
+    summary = get_security_summary(request.user)
+    if summary:
+        context['security_summary'] = summary
+    return render(request, 'paste_list.html', context)
+
+
+@login_required
+def paste_create_view(request):
+    """Create a new paste."""
+    form_context = {
+        'expiry_choices': Paste.EXPIRY_CHOICES,
+        'languages': PASTE_LANGUAGES,
+    }
+
+    if request.method == 'POST':
+        title = (request.POST.get('title') or '').strip()
+        body = request.POST.get('body') or ''
+        language = (request.POST.get('language') or 'auto').strip() or 'auto'
+        try:
+            expiry_hours = int(request.POST.get('expiry_hours', '0'))
+        except ValueError:
+            expiry_hours = Paste.EXPIRY_NEVER
+
+        if not body.strip():
+            messages.error(request, 'The paste content is required.')
+            return render(request, 'paste_form.html', form_context)
+        if len(body.encode('utf-8')) > Paste.MAX_BODY_BYTES:
+            messages.error(request, f'Paste exceeds the {Paste.MAX_BODY_BYTES // 1024}KB limit.')
+            return render(request, 'paste_form.html', form_context)
+
+        paste = Paste(
+            title=title,
+            body=body,
+            language=language,
+            created_by=request.user,
+            expiry_hours=expiry_hours,
+        )
+        paste.save()
+        log_activity(request, 'create_paste', paste.title or paste.code, f'language={language}, expiry={expiry_hours}h')
+        return redirect('app:paste_view', code=paste.code)
+
+    return render(request, 'paste_form.html', form_context)
+
+
+@login_required
+def paste_edit_view(request, paste_id):
+    """Edit an existing paste (owner only)."""
+    paste = get_object_or_404(Paste, id=paste_id, created_by=request.user)
+
+    form_context = {
+        'expiry_choices': Paste.EXPIRY_CHOICES,
+        'languages': PASTE_LANGUAGES,
+        'paste': paste,
+        'editing': True,
+    }
+
+    if request.method == 'POST':
+        title = (request.POST.get('title') or '').strip()
+        body = request.POST.get('body') or ''
+        language = (request.POST.get('language') or 'auto').strip() or 'auto'
+        try:
+            expiry_hours = int(request.POST.get('expiry_hours', '0'))
+        except ValueError:
+            expiry_hours = Paste.EXPIRY_NEVER
+
+        if not body.strip():
+            messages.error(request, 'The paste content is required.')
+            return render(request, 'paste_form.html', form_context)
+        if len(body.encode('utf-8')) > Paste.MAX_BODY_BYTES:
+            messages.error(request, f'Paste exceeds the {Paste.MAX_BODY_BYTES // 1024}KB limit.')
+            return render(request, 'paste_form.html', form_context)
+
+        paste.title = title
+        paste.body = body
+        paste.language = language
+        paste.expiry_hours = expiry_hours
+        paste.save()
+        log_activity(request, 'edit_paste', paste.title or paste.code)
+        return redirect('app:paste_view', code=paste.code)
+
+    return render(request, 'paste_form.html', form_context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def paste_delete_view(request, code):
+    """Delete a paste (owner only)."""
+    paste = get_object_or_404(Paste, code=code, created_by=request.user)
+    label = paste.title or paste.code
+    paste.delete()
+    log_activity(request, 'delete_paste', label)
+    return JsonResponse({'status': 'deleted'})
+
+
+def paste_view(request, code):
+    """Public read view for a paste. Anyone with the link may view it."""
+    paste = get_object_or_404(Paste, code=code)
+    if paste.is_expired:
+        paste.delete()
+        return render(request, 'paste_expired.html', status=410)
+
+    Paste.objects.filter(id=paste.id).update(view_count=paste.view_count + 1)
+
+    return render(request, 'paste_view.html', {
+        'paste': paste,
+        'raw_url': f'{_otf_base_url()}/p/{paste.code}/raw/',
+    })
+
+
+def paste_raw_view(request, code):
+    """Plain-text view of a paste body. Served as text/plain with nosniff so a
+    paste containing HTML/JS cannot be sniffed and executed by the browser."""
+    paste = get_object_or_404(Paste, code=code)
+    if paste.is_expired:
+        paste.delete()
+        return HttpResponse('This paste has expired.', content_type='text/plain; charset=utf-8', status=410)
+
+    Paste.objects.filter(id=paste.id).update(view_count=paste.view_count + 1)
+
+    response = HttpResponse(paste.body, content_type='text/plain; charset=utf-8')
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response

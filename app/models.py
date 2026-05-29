@@ -1148,6 +1148,60 @@ class OTSAccess(models.Model):
         return f"{self.email} @ {self.created_at:%Y-%m-%d %H:%M}"
 
 
+class Paste(models.Model):
+    """An unlisted, link-shared text/code snippet. Body is encrypted at rest.
+
+    Reachable by anyone holding the /p/<code>/ link; viewable repeatedly until an
+    optional expiry. Unlike OTF/OTS there is no burn and no OTP gate.
+    """
+    # Reuse the OTF expiry tiers, plus a "Never" option (expires_at stays null).
+    EXPIRY_NEVER = 0
+    EXPIRY_CHOICES = [(EXPIRY_NEVER, 'Never')] + list(OneTimeFile.EXPIRY_CHOICES)
+
+    # Hard cap so an encrypted blob can't grow unbounded (bytes of UTF-8 body).
+    MAX_BODY_BYTES = 512 * 1024
+
+    title = models.CharField(max_length=255, blank=True, default='', verbose_name='Title')
+    body = EncryptedTextField(verbose_name='Content')
+    language = models.CharField(max_length=32, default='auto', blank=True, verbose_name='Language')
+    code = models.CharField(max_length=64, unique=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='pastes')
+    expiry_hours = models.PositiveIntegerField(default=EXPIRY_NEVER, choices=EXPIRY_CHOICES, verbose_name='Expires After')
+    expires_at = models.DateTimeField(null=True, blank=True, verbose_name='Expires At')
+    view_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Paste"
+        verbose_name_plural = "Pastes"
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = secrets.token_urlsafe(8) + ".kl"
+        if self.expiry_hours and self.expiry_hours != self.EXPIRY_NEVER:
+            from django.utils import timezone
+            from datetime import timedelta
+            self.expires_at = timezone.now() + timedelta(hours=self.expiry_hours)
+        else:
+            self.expires_at = None
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.title or '(untitled)'} ({self.code[:8]}...)"
+
+    @property
+    def is_expired(self):
+        if self.expires_at is None:
+            return False
+        from django.utils import timezone
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_available(self):
+        return not self.is_expired
+
+
 class InboxEntry(models.Model):
     submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='Submitted By', null=True)
     fqdn_list = models.TextField(verbose_name='IP/FQDN')

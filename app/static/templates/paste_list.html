@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load tz %}
+{% block title %} - Paste{% endblock %}
+{% block content %}
+{% timezone app_timezone %}
+
+{% if user.is_superuser and security_summary %}
+<div class="card mb-3">
+    <div class="card-body py-2 px-3 d-flex align-items-center justify-content-between" style="font-size: 0.85rem;">
+        <div>
+            <i class="bi bi-shield-lock me-1 text-muted"></i>
+            <span>{{ security_summary.blocked_ips }} blocked IP{{ security_summary.blocked_ips|pluralize }} total</span>
+            <span class="text-muted mx-1">|</span>
+            <span>{{ security_summary.rejections_24h }} rejection{{ security_summary.rejections_24h|pluralize }} (24h)</span>
+            {% if security_summary.auto_blocked_24h > 0 %}
+            <span class="text-muted mx-1">|</span>
+            <span class="text-warning">{{ security_summary.auto_blocked_24h }} auto-blocked (24h)</span>
+            {% endif %}
+        </div>
+        <a href="{% url 'app:blocked_ips' %}" class="btn btn-sm btn-outline-secondary py-0">View</a>
+    </div>
+</div>
+{% endif %}
+
+<div class="content-card edl-card">
+    <div class="d-flex justify-content-between align-items-center">
+        <h3>Paste</h3>
+        <a href="{% url 'app:paste_create' %}" title="New Paste"><i class="bi bi-plus-circle action-items"></i></a>
+    </div>
+    <table id="paste-table" class="table table-hover table-resizable">
+        <thead>
+            <tr>
+                <th data-col="0">Title</th>
+                <th data-col="1">Language</th>
+                <th data-col="2">Views</th>
+                <th data-col="3">Expires</th>
+                <th data-col="4">Created</th>
+                <th data-col="5">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in pastes %}
+            <tr>
+                <td><a href="{% url 'app:paste_view' p.code %}">{{ p.title|default:"(untitled)" }}</a></td>
+                <td>{{ p.language }}</td>
+                <td>{{ p.view_count }}</td>
+                <td>{% if p.expires_at %}{{ p.expires_at|date:app_timestamp_format }}{% else %}<span class="text-muted">Never</span>{% endif %}</td>
+                <td>{{ p.created_at|date:app_timestamp_format }}</td>
+                <td>
+                    <span class="actions-row">
+                        <a href="{% url 'app:paste_view' p.code %}" title="View"><i class="bi bi-eye action-items"></i></a>
+                        <a href="{% url 'app:paste_raw' p.code %}" title="Raw" target="_blank"><i class="bi bi-file-text action-items"></i></a>
+                        <a href="{% url 'app:paste_edit' p.id %}" title="Edit"><i class="bi bi-pencil action-items"></i></a>
+                        <i class="bi bi-trash action-items text-danger" onclick="deletePaste('{{ p.code }}', event)" title="Delete"></i>
+                    </span>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-muted">No pastes yet. Click the + to create one.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endtimezone %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deletePaste(code, event) {
+    event.preventDefault();
+    showConfirmModal('Delete this paste?', function() {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        fetch('{% url "app:paste_delete" code="PLACEHOLDER" %}'.replace('PLACEHOLDER', code), {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrfToken},
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'deleted') {
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to delete');
+            }
+        });
+    });
+}
+</script>
+{% endblock %}
