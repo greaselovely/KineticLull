@@ -2177,6 +2177,16 @@ def upgrade_view(request):
             logger.error(f"Upgrade pip install failed for {request.user.email}: {result.stderr.strip()}")
 
         # Step 3: migrate
+        # Close the worker's existing SQLite connection BEFORE running migrate
+        # as a subprocess. Otherwise the parent's connection holds a snapshot of
+        # the old schema/locks while the subprocess mutates the DB out from under
+        # it, and subsequent writes from this worker fail with
+        # "attempt to write a readonly database" until the worker restarts.
+        try:
+            from django.db import connection as _db_conn
+            _db_conn.close()
+        except Exception:
+            pass
         result = subprocess.run(
             [python, manage_py, 'migrate', '--noinput'], cwd=base_dir, capture_output=True, text=True,
         )
@@ -2192,7 +2202,20 @@ def upgrade_view(request):
             success = False
             logger.error(f"Upgrade collectstatic failed for {request.user.email}: {result.stderr.strip()}")
 
-        log_activity(request, 'upgrade', f'v{current_version}', 'Code updated, restarting')
+        # log_activity writes to the DB. After migrate has been run via subprocess,
+        # the worker's existing SQLite connection can land in a state where writes
+        # fail ("attempt to write a readonly database") until the worker restarts.
+        # Don't let an audit-log failure crash the upgrade — the restart is about
+        # to fire and the new workers will log correctly.
+        try:
+            log_activity(request, 'upgrade', f'v{current_version}', 'Code updated, restarting')
+        except Exception as e:
+            logger.error(f"log_activity failed during upgrade (continuing): {e}")
+            try:
+                from django.db import connection
+                connection.close()
+            except Exception:
+                pass
 
         if not success:
             # git pull/migrate/collectstatic had errors — return JSON so JS knows
