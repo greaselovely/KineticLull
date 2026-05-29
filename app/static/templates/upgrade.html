@@ -165,8 +165,13 @@ function klShowRestartFailure(target, lastSeen) {
             method: 'POST',
             body: new FormData(form),
         }).then(function (resp) {
-            return resp.json().catch(function () { return null; });
-        }).then(function (data) {
+            return resp.text().then(function (bodyText) {
+                var data = null;
+                try { data = JSON.parse(bodyText); } catch (_) {}
+                return { httpStatus: resp.status, body: bodyText, data: data };
+            });
+        }).then(function (r) {
+            var data = r.data;
             if (data && data.status === 'error') {
                 status.style.display = 'none';
                 failed.style.display = 'block';
@@ -179,7 +184,11 @@ function klShowRestartFailure(target, lastSeen) {
             if (!target) {
                 status.style.display = 'none';
                 failed.style.display = 'block';
-                failed.querySelector('p').textContent = 'Server did not report a target version. Verify manually.';
+                var preview = (r.body || '').substring(0, 400).replace(/\s+/g, ' ');
+                failed.querySelector('.alert-heading').innerHTML =
+                    '<i class="bi bi-exclamation-octagon me-2"></i>Unexpected server response';
+                failed.querySelector('p').textContent =
+                    'HTTP ' + r.httpStatus + ' with no target_version. Body (first 400 chars): ' + preview;
                 return;
             }
             klPollUntilBootVersion(
@@ -188,15 +197,12 @@ function klShowRestartFailure(target, lastSeen) {
                 function () { window.location.reload(); },
                 function (lastSeen) { klShowRestartFailure(target, lastSeen); }
             );
-        }).catch(function () {
-            // Connection dropped mid-POST — restart almost certainly fired,
-            // but we don't have target_version from the server. Bail to the
-            // failure card so the operator knows to verify, rather than
-            // silently waiting forever.
+        }).catch(function (e) {
             status.style.display = 'none';
             failed.style.display = 'block';
             failed.querySelector('p').textContent =
-                'Connection dropped during upgrade. Refresh the page to check whether new code is now running.';
+                'Fetch threw: ' + (e && e.message ? e.message : String(e)) +
+                '. Refresh the page to check whether new code is now running.';
         });
     });
 })();
