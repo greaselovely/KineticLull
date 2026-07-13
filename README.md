@@ -103,6 +103,47 @@ python manage.py collectstatic --noinput
 sudo systemctl restart kineticlull
 ```
 
+## Security Advisories & Dependency Updates
+
+Dependencies are scanned with [Snyk](https://snyk.io/). When a scan flags a vulnerable
+package, the pin is bumped in `requirements.txt` (and the floor in `requirements.in`
+where applicable) and the change ships in the next release. The web-UI **Upgrade** and
+`upgrade.sh` both run `pip install -r requirements.txt`, so package fixes deploy together
+with code — no separate step is required.
+
+### 1.1.3.000 (2026-07-13)
+
+**Dependency security upgrades** — closes all 12 findings from the Snyk scan of
+`requirements.txt` (0 vulnerable paths remaining after upgrade):
+
+| Package | From | To | Highest severity | Findings closed (Snyk ID) |
+| --- | --- | --- | --- | --- |
+| `cryptography` | 46.0.7 | 48.0.1 | **High** | Out-of-bounds Read (17344551) |
+| `django` | 5.2.14 | 5.2.16 | **Medium** | Improper Neutralization (17881426), Buffer Access with Incorrect Length (17881427), + 6 Low: case-sensitivity handling (17151726), cleartext transmission (17151727), signature verification (17151728), incomplete comparison (17151772), sensitive cache 17151780 / 17881428 |
+| `idna` | 3.13 | 3.15 | Medium | ReDoS (16769942) |
+| `urllib3` | 2.6.3 | 2.7.0 | **High** | Sensitive info in sent data (16642024), Decompression Bomb (16642059) |
+
+Notes:
+- `django` stays within the `>=5.2.x,<5.3` LTS line — a patch bump, no major-version jump.
+- `cryptography` 46→48 is a larger jump but uses stable symmetric (`Fernet`) APIs; no
+  application code change was required. Verify with `python manage.py check` and a
+  One-Time Secret/File create+burn after upgrading.
+- `idna` and `urllib3` are transitive (via `resend` → `requests`); their fixed floors are
+  pinned in `requirements.in` so a future `pip-compile` cannot regress them.
+
+**Application security hardening** (same release):
+- **Trusted client-IP resolution**: `get_client_ip()` now trusts only the reverse proxy's
+  `X-Real-IP` / the rightmost `X-Forwarded-For` token, ignoring spoofable client headers
+  (`X-Client-IP`, `True-Client-IP`, `X-Originating-IP`, `X-Azure-*`, `X-Host`, and the
+  leftmost XFF token). This closes an IP-spoofing vector used to evade auto-block and poison
+  the blocklist (e.g. forging `127.0.0.1`).
+- **Blocklist safety guard**: auto-block paths refuse any non-globally-routable address
+  (loopback / RFC1918 / link-local / reserved), so loopback or private IPs can never enter
+  the firewall drop-EDL.
+- **`clean_spoofed_ips` management command**: one-time cleanup that removes previously
+  recorded spoofed/non-routable entries from the blocklist, recovers the real attacker IP
+  from the audit trail, and re-blocks it. The immutable activity-log chain is never modified.
+
 ## API Usage
 
 All API endpoints require a Bearer token in the Authorization header. Generate an API key from **Admin → My Account** (your group must have the `Can use an API key` permission, which superusers always have).

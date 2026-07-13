@@ -133,12 +133,51 @@ def send_syslog(app_settings, user_email, action, target, detail, ip_address):
         pass  # Syslog failure should never break the app
 
 
+def _is_valid_ip(value):
+    """True if `value` parses as a valid IPv4/IPv6 address."""
+    try:
+        ipaddress.ip_address(value)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
 def get_client_ip(request):
-    """Extract the real client IP, preferring X-Forwarded-For when behind a reverse proxy."""
+    """Return the real client IP as seen by our trusted Nginx front-end.
+
+    SECURITY: every client-supplied header is spoofable. An attacker can send
+    X-Forwarded-For, X-Client-IP, True-Client-IP, X-Originating-IP,
+    X-Azure-ClientIP/SocketIP, X-Host, etc. with any value (commonly
+    127.0.0.1) to poison the audit log and evade IP-based auto-blocking. We
+    therefore trust ONLY what our own reverse proxy sets, in this order:
+
+      1. X-Real-IP        — Nginx sets this from $remote_addr and OVERWRITES
+                            any client-supplied value
+                            (proxy_set_header X-Real-IP $remote_addr).
+      2. Rightmost X-Forwarded-For token — Nginx APPENDS the real peer on the
+                            right; every token to the left is client-supplied
+                            and must not be trusted. (The old code took the
+                            LEFTMOST token, which is exactly the value the
+                            attacker controls — that is the bug.)
+      3. REMOTE_ADDR      — direct-connection fallback when there is no proxy.
+
+    We never read X-Client-IP / True-Client-IP / X-Originating-IP / X-Azure-*
+    / X-Host, and never trust anything but the rightmost XFF token. Candidates
+    are validated so forged garbage can never reach a GenericIPAddressField.
+    """
+    real_ip = (request.META.get('HTTP_X_REAL_IP') or '').strip()
+    if _is_valid_ip(real_ip):
+        return real_ip
+
     xff = request.META.get('HTTP_X_FORWARDED_FOR')
     if xff:
-        return xff.split(',')[0].strip()
-    return request.META.get('HTTP_X_REAL_IP') or request.META.get('REMOTE_ADDR')
+        # Walk right-to-left: the rightmost entry is the address our trusted
+        # proxy actually observed. Skip any spoofed/invalid tokens.
+        for token in reversed([t.strip() for t in xff.split(',')]):
+            if _is_valid_ip(token):
+                return token
+
+    return request.META.get('REMOTE_ADDR')
 
 
 def log_activity(request, action, target='', detail='', user=None):

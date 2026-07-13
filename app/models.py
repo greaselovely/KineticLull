@@ -399,6 +399,32 @@ class AppSettings(models.Model):
         return "App Settings"
 
 
+def is_globally_blockable(ip_address):
+    """True only for globally-routable addresses that are safe to auto-block.
+
+    SECURITY / SAFETY: loopback (127.0.0.0/8, ::1), private (RFC1918),
+    link-local, multicast, reserved and unspecified addresses are rejected.
+    Auto-blocking them is never useful and is actively dangerous:
+
+      * Attackers forge these (commonly 127.0.0.1) in spoofable client-IP
+        headers to make us block a bogus address instead of their real one.
+        Even with correct IP detection, we refuse them as defence-in-depth so
+        a single detection slip can never poison the blocklist.
+      * The blocklist is mirrored into a firewall drop-EDL. A loopback or
+        RFC1918 entry there can match legitimate internal / health-check
+        traffic and cause an outage.
+
+    Manual operator blocks bypass this helper; only the automated paths call
+    it. IPv4 and IPv6 both handled via ipaddress.is_global.
+    """
+    import ipaddress as iplib
+    try:
+        addr = iplib.ip_address(ip_address)
+    except ValueError:
+        return False
+    return addr.is_global
+
+
 class BlockedIP(models.Model):
     # CharField (not GenericIPAddressField) so we can store both single
     # addresses and CIDR blocks (e.g. "10.0.0.0/24") produced by subnet
@@ -638,6 +664,8 @@ class BlockedIP(models.Model):
         """
         if not ip_address:
             return False
+        if not is_globally_blockable(ip_address):
+            return False
         app_settings = AppSettings.load()
         if not app_settings.autoblock_enabled:
             return False
@@ -680,6 +708,8 @@ class BlockedIP(models.Model):
         from django.utils import timezone
         from datetime import timedelta
 
+        if not is_globally_blockable(ip_address):
+            return False
         app_settings = AppSettings.load()
         if not app_settings.autoblock_enabled:
             return False
@@ -757,6 +787,8 @@ class BlockedIP(models.Model):
     @classmethod
     def check_failed_login_block(cls, ip_address):
         """Apply the failed-login block rule. Returns 'blocked', 'warning', or None."""
+        if not is_globally_blockable(ip_address):
+            return None
         app_settings = AppSettings.load()
         if not app_settings.failed_login_block_enabled:
             return None

@@ -108,7 +108,12 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Log Entry</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="modal-copy-btn" title="Copy entire log entry to clipboard">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
             </div>
             <div class="modal-body" style="font-size: 0.85rem;">
                 <table class="table table-sm table-borderless mb-0" style="table-layout: fixed; width: 100%;">
@@ -159,8 +164,41 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     }
 
+    // Full plain-text of the currently-open entry, rebuilt each time the
+    // modal opens. Used by the clipboard button so a copied log carries every
+    // field header plus the expanded request-header dump.
+    var currentEntryText = '';
+
+    function buildEntryText(row) {
+        // '; '-joined header dumps (the Detail field on edl_* rows) are split
+        // onto their own lines so a pasted log reads exactly like the modal.
+        function expand(val) {
+            var t = (val || '').trim();
+            if (!t) return '';
+            var parts = t.split('; ').filter(function(p) { return p.trim() !== ''; });
+            return parts.length >= 2 ? parts.join('\n') : t;
+        }
+        var lines = [];
+        lines.push('Timestamp:  ' + (row.getAttribute('data-timestamp') || ''));
+        lines.push('User:       ' + (row.getAttribute('data-user') || ''));
+        lines.push('Action:     ' + (row.getAttribute('data-action') || ''));
+        lines.push('Target:     ' + expand(row.getAttribute('data-target')));
+        lines.push('IP Address: ' + (row.getAttribute('data-ip') || ''));
+        var ref = (row.getAttribute('data-referer') || '').trim();
+        if (ref) lines.push('Referer:    ' + ref);
+        var ua = (row.getAttribute('data-ua') || '').trim();
+        if (ua) lines.push('User Agent: ' + ua);
+        var detail = expand(row.getAttribute('data-detail'));
+        if (detail) {
+            lines.push('Detail:');
+            lines.push(detail);
+        }
+        return lines.join('\n');
+    }
+
     logModal.addEventListener('show.bs.modal', function(event) {
         var row = event.relatedTarget;
+        currentEntryText = buildEntryText(row);
         document.getElementById('modal-timestamp').textContent = row.getAttribute('data-timestamp');
         document.getElementById('modal-user').textContent = row.getAttribute('data-user');
         document.getElementById('modal-action').textContent = row.getAttribute('data-action');
@@ -175,6 +213,43 @@ document.addEventListener('DOMContentLoaded', function() {
         var hasDetail = renderMaybeList(document.getElementById('modal-detail'), row.getAttribute('data-detail'));
         document.getElementById('modal-detail-row').style.display = hasDetail ? '' : 'none';
     });
+
+    // Copy the entire entry to the clipboard, with a brief icon confirmation.
+    var copyBtn = document.getElementById('modal-copy-btn');
+    if (copyBtn) {
+        var copyIcon = copyBtn.querySelector('i');
+        copyBtn.addEventListener('click', function() {
+            function flashCopied() {
+                copyIcon.className = 'bi bi-clipboard-check';
+                copyBtn.classList.add('btn-success');
+                copyBtn.classList.remove('btn-outline-secondary');
+                setTimeout(function() {
+                    copyIcon.className = 'bi bi-clipboard';
+                    copyBtn.classList.remove('btn-success');
+                    copyBtn.classList.add('btn-outline-secondary');
+                }, 1500);
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(currentEntryText).then(flashCopied, function() {
+                    fallbackCopy(currentEntryText, flashCopied);
+                });
+            } else {
+                fallbackCopy(currentEntryText, flashCopied);
+            }
+        });
+    }
+
+    function fallbackCopy(text, onDone) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try { document.execCommand('copy'); onDone(); } catch (e) { /* clipboard unavailable */ }
+        document.body.removeChild(ta);
+    }
 
     // Auto-refresh
     var refreshSelect = document.getElementById('refresh-interval');
