@@ -876,9 +876,53 @@ class NginxRejection(models.Model):
         cls.objects.filter(timestamp__lt=timezone.now() - timedelta(days=days)).delete()
 
 
+# Schemes a shortened link is allowed to point at. This is an allowlist on
+# purpose: a public redirector must never forward to javascript:, data:,
+# file:, etc. — those are phishing/XSS vectors. Web links + the "contact"
+# schemes (mailto/tel) cover the real use cases. Kept here as the single
+# source of truth, reused by both the field validator and the redirect
+# response class in views.py.
+ALLOWED_LINK_SCHEMES = ('http', 'https', 'ftp', 'ftps', 'mailto', 'tel')
+
+
+def validate_short_link(value):
+    """Validate the target of a shortened URL.
+
+    Django's URLField/URLValidator hardcodes ``scheme://`` in its regex and
+    rejects opaque-scheme URIs like ``mailto:`` and ``tel:`` outright, so we
+    can't just widen its scheme list. Instead we dispatch by scheme:
+    mailto/tel are validated loosely as opaque URIs, everything else goes
+    through the standard URLValidator restricted to our web schemes.
+    """
+    from urllib.parse import urlparse
+    from django.core.validators import URLValidator, EmailValidator
+    from django.core.exceptions import ValidationError
+
+    scheme = urlparse(value).scheme.lower()
+    if scheme not in ALLOWED_LINK_SCHEMES:
+        raise ValidationError(
+            'Unsupported link type. Allowed: %(schemes)s.',
+            params={'schemes': ', '.join(ALLOWED_LINK_SCHEMES)},
+            code='invalid_scheme',
+        )
+
+    if scheme == 'mailto':
+        # mailto:addr[,addr...][?query] — validate the address portion(s).
+        addresses = value[len('mailto:'):].split('?', 1)[0]
+        email_validator = EmailValidator(message='Enter a valid email address after mailto:.')
+        for addr in filter(None, (a.strip() for a in addresses.split(','))):
+            email_validator(addr)
+        return
+
+    if scheme == 'tel':
+        return  # opaque; phone-number shapes vary too much to validate strictly
+
+    URLValidator(schemes=['http', 'https', 'ftp', 'ftps'])(value)
+
+
 class ShortenedURL(models.Model):
     title = models.CharField(max_length=255, blank=True, default='', db_default='', verbose_name='Title')
-    original_url = models.URLField(max_length=2048, verbose_name='Original URL')
+    original_url = models.CharField(max_length=2048, validators=[validate_short_link], verbose_name='Original URL')
     short_code = models.CharField(max_length=255, unique=True, blank=True)
     notes = models.TextField(blank=True, default='', verbose_name='Notes')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shortened_urls')

@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
-from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile, OTFRecipient, OTFSession, OTFDownload, OneTimeSecret, OTSRecipient, OTSAccess, Paste
+from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile, OTFRecipient, OTFSession, OTFDownload, OneTimeSecret, OTSRecipient, OTSAccess, Paste, ALLOWED_LINK_SCHEMES
 from .forms import ExtDynListsForm, ShortenedURLForm
 from .email import send_file_shared_email, send_otp_email, send_access_notification, send_secret_shared_email
 
@@ -3362,12 +3362,23 @@ def delete_short_url(request, url_id):
     return redirect('app:short_urls')
 
 
+class ShortLinkRedirect(HttpResponseRedirect):
+    """Redirect that permits our full shortened-link scheme allowlist.
+
+    Django's HttpResponseRedirect only allows http/https/ftp and raises
+    DisallowedRedirect otherwise, which would break mailto:/tel: links.
+    Widening the allowlist here is safe because the target was already
+    scheme-checked by validate_short_link on the way in.
+    """
+    allowed_schemes = list(ALLOWED_LINK_SCHEMES)
+
+
 def redirect_short_url(request, short_code):
     """Public redirect endpoint — no login required."""
     short_url = get_object_or_404(ShortenedURL, short_code=short_code)
     ShortenedURL.objects.filter(pk=short_url.pk).update(hit_count=models.F('hit_count') + 1)
     log_activity(request, 'short_url_visit', short_code, f'-> {short_url.original_url}')
-    return HttpResponseRedirect(short_url.original_url)
+    return ShortLinkRedirect(short_url.original_url)
 
 
 @login_required

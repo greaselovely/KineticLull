@@ -111,6 +111,23 @@ where applicable) and the change ships in the next release. The web-UI **Upgrade
 `upgrade.sh` both run `pip install -r requirements.txt`, so package fixes deploy together
 with code — no separate step is required.
 
+### 1.1.3.001 (2026-07-13)
+
+**URL shortener — `mailto:` and `tel:` support** — shortened links can now point at
+`mailto:` (and `tel:`) targets, not just web URLs. Django's `URLField`/`URLValidator`
+hardcodes `scheme://` and rejects opaque-scheme URIs, so `ShortenedURL.original_url`
+moved to a `CharField` with a custom `validate_short_link` validator (migration
+`0046`).
+
+- **Scheme allowlist** (`ALLOWED_LINK_SCHEMES`): `http, https, ftp, ftps, mailto, tel`
+  — a strict allowlist, since a public redirector must never forward to `javascript:`,
+  `data:`, or `file:`. Single source of truth, reused by the validator and the redirect.
+- `mailto:` addresses are validated with Django's `EmailValidator` (supports comma-lists
+  and `?subject=` params); `tel:` is accepted opaquely.
+- `redirect_short_url` now uses a `ShortLinkRedirect` response subclass that widens
+  `allowed_schemes` to match — plain `HttpResponseRedirect` raises `DisallowedRedirect`
+  on `mailto:`/`tel:`.
+
 ### 1.1.3.000 (2026-07-13)
 
 **Dependency security upgrades** — closes all 12 findings from the Snyk scan of
