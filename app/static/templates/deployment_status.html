@@ -2,7 +2,10 @@
 {% block title %}- Deployment{% endblock %}
 {% block content %}
 <div class="content-card" style="max-width: 700px;">
-    <h3>Deployment Status</h3>
+    <div class="d-flex justify-content-between align-items-center">
+        <h3 class="mb-0">Deployment Status</h3>
+        <a href="{% url 'app:index' %}" title="Back to Dashboard"><i class="bi bi-arrow-left action-items"></i></a>
+    </div>
 
     {% if mismatch %}
     <div class="alert alert-warning mt-3">
@@ -132,6 +135,5 @@
     </div>
     {% endif %}
 
-    <a href="{% url 'app:index' %}" class="btn btn-outline-secondary btn-sm mt-3">Back</a>
 </div>
 {% endblock %}

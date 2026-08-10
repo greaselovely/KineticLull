@@ -2,7 +2,10 @@
 {% block title %}- System Health{% endblock %}
 {% block content %}
 <div class="content-card" style="max-width: 900px;">
-    <h3>System Health</h3>
+    <div class="d-flex justify-content-between align-items-center">
+        <h3 class="mb-0">System Health</h3>
+        <a href="{% url 'app:index' %}" title="Back to Dashboard"><i class="bi bi-arrow-left action-items"></i></a>
+    </div>
     <p class="text-muted small mt-2 mb-3">Conditions the app cannot auto-remediate. Each warning lists the exact command to run — and, where safe, a one-click fix.</p>
 
     {% for check in checks %}
@@ -58,7 +61,6 @@
     </div>
     {% endfor %}
 
-    <a href="{% url 'app:index' %}" class="btn btn-outline-secondary btn-sm mt-2">Back</a>
 </div>
 {% endblock %}
 

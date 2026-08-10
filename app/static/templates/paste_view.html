@@ -70,16 +70,7 @@ function clearPaste(code, event) {
     if (btn && block) {
         btn.addEventListener('click', function () {
             var text = block.textContent;
-            var done = function () {
-                btn.classList.remove('bi-clipboard');
-                btn.classList.add('bi-clipboard-check', 'text-success');
-                btn.setAttribute('title', 'Copied');
-                setTimeout(function () {
-                    btn.classList.remove('bi-clipboard-check', 'text-success');
-                    btn.classList.add('bi-clipboard');
-                    btn.setAttribute('title', 'Copy');
-                }, 2000);
-            };
+            var done = function () { flashCopied(btn); };
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text).then(done, done);
             } else {

@@ -217,24 +217,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Copy the entire entry to the clipboard, with a brief icon confirmation.
     var copyBtn = document.getElementById('modal-copy-btn');
     if (copyBtn) {
-        var copyIcon = copyBtn.querySelector('i');
         copyBtn.addEventListener('click', function() {
-            function flashCopied() {
-                copyIcon.className = 'bi bi-clipboard-check';
-                copyBtn.classList.add('btn-success');
-                copyBtn.classList.remove('btn-outline-secondary');
-                setTimeout(function() {
-                    copyIcon.className = 'bi bi-clipboard';
-                    copyBtn.classList.remove('btn-success');
-                    copyBtn.classList.add('btn-outline-secondary');
-                }, 1500);
-            }
+            var done = function() { flashCopied(copyBtn); };
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(currentEntryText).then(flashCopied, function() {
-                    fallbackCopy(currentEntryText, flashCopied);
+                navigator.clipboard.writeText(currentEntryText).then(done, function() {
+                    fallbackCopy(currentEntryText, done);
                 });
             } else {
-                fallbackCopy(currentEntryText, flashCopied);
+                fallbackCopy(currentEntryText, done);
             }
         });
     }

@@ -4,7 +4,10 @@
 <div class="content-card" style="max-width: 700px;">
 
     {% if generated %}
-    <h3>Migration Script Ready</h3>
+    <div class="d-flex justify-content-between align-items-center">
+        <h3 class="mb-0">Migration Script Ready</h3>
+        <a href="{% url 'app:deployment_status' %}" title="Back to Deployment"><i class="bi bi-arrow-left action-items"></i></a>
+    </div>
 
     <div class="alert alert-success mt-3">
         <i class="bi bi-check-circle me-2"></i>
@@ -39,7 +42,10 @@
     </p>
 
     {% else %}
-    <h3>Migrate to Nginx + Gunicorn</h3>
+    <div class="d-flex justify-content-between align-items-center">
+        <h3 class="mb-0">Migrate to Nginx + Gunicorn</h3>
+        <a href="{% url 'app:deployment_status' %}" title="Back to Deployment"><i class="bi bi-arrow-left action-items"></i></a>
+    </div>
 
     <p class="text-muted mt-3">
         This wizard generates a migration script that you run with <code>sudo</code>.
@@ -120,7 +126,5 @@
         <a href="{% url 'app:deployment_status' %}" class="btn btn-outline-secondary btn-sm ms-2">Cancel</a>
     </form>
     {% endif %}
-
-    <a href="{% url 'app:deployment_status' %}" class="btn btn-outline-secondary btn-sm mt-3">Back to Deployment</a>
 </div>
 {% endblock %}

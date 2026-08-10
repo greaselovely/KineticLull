@@ -95,22 +95,37 @@ function copyToClipboard(clickedElement) {
 
     if (navigator.clipboard) {
         navigator.clipboard.writeText(fullURL).then(function() {
-            showCopyFlash(clickedElement);
+            flashCopied(clickedElement);
         }).catch(function(error) {
             console.error('Copy failed:', error);
         });
     }
 }
 
-function showCopyFlash(element) {
-    var sparkle = document.createElement('i');
-    sparkle.className = 'bi bi-stars';
-    sparkle.style.cssText = 'color: #ffc107; font-size: 0.85rem; line-height: 1; pointer-events: none; transition: opacity 0.3s; vertical-align: middle; margin-left: 2px;';
-    element.insertAdjacentElement('afterend', sparkle);
+// Shared copy feedback for the whole app: the clipboard icon itself briefly
+// turns into a green check, then reverts. `element` may be the <i> icon or a
+// button wrapping one.
+function flashCopied(element) {
+    if (!element) return;
+    var icon = element.classList.contains('bi') ? element : element.querySelector('i.bi');
+    if (!icon || icon.dataset.copyFlashing === '1') return;
+
+    var previousClass = icon.className;
+    var previousTitle = element.getAttribute('title') || '';
+    icon.dataset.copyFlashing = '1';
+
+    icon.className = previousClass.replace('bi-clipboard', 'bi-clipboard-check') + ' text-success';
+    element.setAttribute('title', 'Copied');
+
     setTimeout(function() {
-        sparkle.style.opacity = '0';
-        setTimeout(function() { sparkle.remove(); }, 300);
-    }, 700);
+        icon.className = previousClass;
+        if (previousTitle) {
+            element.setAttribute('title', previousTitle);
+        } else {
+            element.removeAttribute('title');
+        }
+        delete icon.dataset.copyFlashing;
+    }, 2000);
 }
 
 function deleteRecord(itemId, event) {

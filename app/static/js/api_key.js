@@ -1,20 +1,30 @@
-document.getElementById('toggle-api-key-visibility').addEventListener('click', function() {
+// API key show/hide + copy. Only present on the user form when a key exists,
+// so every lookup is guarded.
+(function () {
+    var toggle = document.getElementById('toggle-api-key-visibility');
+    var copyBtn = document.getElementById('copy-api-key');
     var apiKeyElement = document.getElementById('api-key');
-    if (apiKeyElement.classList.contains('blur-text')) {
-        apiKeyElement.classList.remove('blur-text');
-        apiKeyElement.classList.add('unblur-text');
-    } else {
-        apiKeyElement.classList.add('blur-text');
-        apiKeyElement.classList.remove('unblur-text');
-    }
-});
+    if (!apiKeyElement) return;
 
-document.getElementById('copy-api-key').addEventListener('click', function() {
-    var apiKey = document.getElementById('api-key').innerText;
-    var trigger = this;
-    navigator.clipboard.writeText(apiKey).then(function() {
-        showCopyFlash(trigger);
-    }, function(err) {
-        console.error('Could not copy text: ', err);
-    });
-});
+    if (toggle) {
+        toggle.addEventListener('click', function () {
+            var hidden = apiKeyElement.classList.toggle('blur-text');
+            apiKeyElement.classList.toggle('unblur-text', !hidden);
+            toggle.className = 'bi ' + (hidden ? 'bi-eye' : 'bi-eye-slash') + ' action-items';
+        });
+    }
+
+    if (copyBtn) {
+        copyBtn.addEventListener('click', function () {
+            var apiKey = apiKeyElement.innerText;
+            var done = function () { flashCopied(copyBtn); };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(apiKey).then(done, done);
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = apiKey; document.body.appendChild(ta); ta.select();
+                document.execCommand('copy'); document.body.removeChild(ta); done();
+            }
+        });
+    }
+})();

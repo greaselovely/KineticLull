@@ -10,7 +10,7 @@
             {% else %}Edit {{ edit_user.email }}{% endif %}
         </h3>
         {% if user.is_superuser and not is_self %}
-        <a href="{% url 'app:user_list' %}" class="btn btn-sm btn-outline-secondary">Back</a>
+        <a href="{% url 'app:user_list' %}" title="Back to Users"><i class="bi bi-arrow-left action-items"></i></a>
         {% endif %}
     </div>
 
@@ -93,7 +93,7 @@
             {% if api_key %}
             <div id="api-key-container" class="mb-3">
                 <p style="font-size: 0.85rem;" class="mb-2">{% if is_self %}Your{% else %}{{ edit_user.email }}'s{% endif %} API key:</p>
-                <div class="d-flex align-items-center gap-2 api-key-row" style="position: relative; padding-right: 22px;">
+                <div class="d-flex align-items-center gap-2 api-key-row">
                     <code id="api-key" class="blur-text flex-grow-1" style="font-size: 0.85rem; padding: 6px 10px; background: #f5f6fa; border-radius: 4px;">{{ api_key }}</code>
                     <i class="bi bi-eye action-items" id="toggle-api-key-visibility" style="cursor: pointer;" title="Show/Hide"></i>
                     <i class="bi bi-clipboard action-items" id="copy-api-key" style="cursor: pointer;" title="Copy"></i>

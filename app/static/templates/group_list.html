@@ -4,8 +4,8 @@
 <div class="content-card" style="max-width: 900px;">
     <div class="d-flex justify-content-between align-items-center">
         <h3 class="mb-0">Groups</h3>
-        <div class="d-flex" style="gap: 8px;">
-            <a href="{% url 'app:user_list' %}" class="btn btn-sm btn-outline-secondary">Back to Users</a>
+        <div class="d-flex align-items-center" style="gap: 12px;">
+            <a href="{% url 'app:user_list' %}" title="Back to Users"><i class="bi bi-arrow-left action-items"></i></a>
             <a href="{% url 'app:group_create' %}" class="btn btn-sm btn-primary">Add Group</a>
         </div>
     </div>

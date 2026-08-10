@@ -6,7 +6,7 @@
 <div style="max-width: 800px;">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="mb-0">{% if short_url %}Edit Short URL{% else %}New Short URL{% endif %}</h3>
-        <a href="{% url 'app:short_urls' %}" class="btn btn-sm btn-outline-secondary">Back</a>
+        <a href="{% url 'app:short_urls' %}" title="Back to Short URLs"><i class="bi bi-arrow-left action-items"></i></a>
     </div>
     {% if short_url %}
     <p class="text-muted mb-3" style="font-size: 0.85rem;">Short code: <code>{{ short_url.short_code }}</code> &middot; Hits: {{ short_url.hit_count }}</p>

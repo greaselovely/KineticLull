@@ -4,7 +4,7 @@
 <div style="max-width: 800px;">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="mb-0">{% if mode == 'create' %}New Group{% else %}Edit Group: {{ group.name }}{% endif %}</h3>
-        <a href="{% url 'app:group_list' %}" class="btn btn-sm btn-outline-secondary">Back</a>
+        <a href="{% url 'app:group_list' %}" title="Back to Groups"><i class="bi bi-arrow-left action-items"></i></a>
     </div>
     <form method="post">
         {% csrf_token %}
