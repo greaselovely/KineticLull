@@ -85,6 +85,7 @@ urlpatterns = [
     path('pastes/new/', views.paste_create_view, name='paste_create'),
     path('pastes/<int:paste_id>/edit/', views.paste_edit_view, name='paste_edit'),
     path('pastes/<str:code>/delete/', views.paste_delete_view, name='paste_delete'),
+    path('pastes/<str:code>/clear/', views.paste_clear_view, name='paste_clear'),
     path('p/<str:code>/raw/', views.paste_raw_view, name='paste_raw'),
     path('p/<str:code>/', views.paste_view, name='paste_view'),
     path('s/<str:short_code>/', redirect_short_url, name='redirect_short_url'),

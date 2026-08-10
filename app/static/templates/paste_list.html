@@ -52,6 +52,7 @@
                         <a href="{% url 'app:paste_view' p.code %}" title="View"><i class="bi bi-eye action-items"></i></a>
                         <a href="{% url 'app:paste_raw' p.code %}" title="Raw" target="_blank"><i class="bi bi-file-text action-items"></i></a>
                         <a href="{% url 'app:paste_edit' p.id %}" title="Edit"><i class="bi bi-pencil action-items"></i></a>
+                        <i class="bi bi-eraser action-items text-danger" onclick="clearPaste('{{ p.code }}', event)" title="Clear Content"></i>
                         <i class="bi bi-trash action-items text-danger" onclick="deletePaste('{{ p.code }}', event)" title="Delete"></i>
                     </span>
                 </td>
@@ -69,6 +70,25 @@
 
 {% block scripts %}
 <script>
+function clearPaste(code, event) {
+    event.preventDefault();
+    showConfirmModal('Clear this paste? The content is replaced with a random word and cannot be recovered. The link keeps working.', function() {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        fetch('{% url "app:paste_clear" code="PLACEHOLDER" %}'.replace('PLACEHOLDER', code), {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrfToken},
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'cleared') {
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to clear');
+            }
+        });
+    });
+}
+
 function deletePaste(code, event) {
     event.preventDefault();
     showConfirmModal('Delete this paste?', function() {

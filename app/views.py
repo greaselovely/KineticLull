@@ -4186,6 +4186,26 @@ PASTE_LANGUAGES = [
     ('diff', 'Diff'),
 ]
 
+# A paste body cannot be empty, so "clearing" one overwrites it with a single
+# harmless word. Kept as a literal list rather than reading /usr/share/dict/words
+# so the behaviour is identical on every host and inside a slim container.
+PASTE_FILLER_WORDS = [
+    'bamboozle', 'kerfuffle', 'flummox', 'gubbins', 'wibble', 'skedaddle',
+    'lollygag', 'brouhaha', 'malarkey', 'hullabaloo', 'gobbledygook', 'widget',
+    'snollygoster', 'collywobbles', 'discombobulate', 'persnickety', 'gadzooks',
+    'balderdash', 'poppycock', 'codswallop', 'shenanigans', 'razzmatazz',
+    'flibbertigibbet', 'rigmarole', 'whatchamacallit', 'thingamajig', 'doohickey',
+    'gizmo', 'kajigger', 'noodle', 'squabble', 'bumfuzzle', 'cattywampus',
+    'gardyloo', 'taradiddle', 'widdershins', 'wabbit', 'snickersnee', 'nudiustertian',
+    'quibble', 'kerplunk', 'zonk', 'blatherskite', 'fiddlesticks', 'tomfoolery',
+    'jiggery', 'pokery', 'hodgepodge', 'mishmash', 'kittywampus', 'bodacious',
+    'hornswoggle', 'skullduggery', 'absquatulate', 'gallivant', 'canoodle',
+    'mollycoddle', 'pettifogger', 'ragamuffin', 'scallywag', 'whippersnapper',
+    'flapdoodle', 'jabberwocky', 'namby', 'pamby', 'higgledy', 'piggledy',
+    'argy', 'bargy', 'yeet', 'borked', 'frobnicate', 'grok', 'kludge', 'foobar',
+    'quux', 'yak', 'bikeshed', 'heisenbug', 'wombat', 'platypus', 'narwhal',
+]
+
 
 @login_required
 def paste_list_view(request):
@@ -4295,6 +4315,23 @@ def paste_delete_view(request, code):
     paste.delete()
     log_activity(request, 'delete_paste', label)
     return JsonResponse({'status': 'deleted'})
+
+
+@login_required
+@require_http_methods(["POST"])
+def paste_clear_view(request, code):
+    """Wipe a paste's content (owner only), leaving the link alive.
+
+    The body column is non-empty by design, so it is replaced with one nonsense
+    word. Written with .update() so the expiry clock and view count are left
+    exactly as they were - Paste.save() would recompute expires_at from
+    expiry_hours and silently extend the paste's life.
+    """
+    paste = get_object_or_404(Paste, code=code, created_by=request.user)
+    word = secrets.choice(PASTE_FILLER_WORDS)
+    Paste.objects.filter(id=paste.id).update(body=word)
+    log_activity(request, 'clear_paste', paste.title or paste.code, f'replaced with "{word}"')
+    return JsonResponse({'status': 'cleared', 'word': word})
 
 
 def paste_view(request, code):

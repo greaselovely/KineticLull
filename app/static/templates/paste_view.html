@@ -21,13 +21,17 @@
                 <span class="mx-1">|</span>created {{ paste.created_at|date:app_timestamp_format }}
             </div>
         </div>
-        <div class="d-flex gap-2">
-            <button type="button" id="copy-paste-btn" class="btn btn-sm btn-primary"><i class="bi bi-clipboard me-1"></i><span id="copy-paste-label">Copy</span></button>
-            <a href="{% url 'app:paste_raw' paste.code %}" class="btn btn-sm btn-outline-secondary" target="_blank"><i class="bi bi-file-text me-1"></i>Raw</a>
-            {% if user.is_authenticated and user == paste.created_by %}
-            <a href="{% url 'app:paste_edit' paste.id %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil me-1"></i>Edit</a>
+        <span class="actions-row d-flex align-items-center gap-3">
+            {% if user.is_authenticated %}
+            <a href="{% url 'app:paste_list' %}" title="Back to Pastes"><i class="bi bi-arrow-left action-items"></i></a>
             {% endif %}
-        </div>
+            <i class="bi bi-clipboard action-items" id="copy-paste-btn" title="Copy"></i>
+            <a href="{% url 'app:paste_raw' paste.code %}" title="Raw" target="_blank"><i class="bi bi-file-text action-items"></i></a>
+            {% if user.is_authenticated and user == paste.created_by %}
+            <a href="{% url 'app:paste_edit' paste.id %}" title="Edit"><i class="bi bi-pencil action-items"></i></a>
+            <i class="bi bi-eraser action-items text-danger" onclick="clearPaste('{{ paste.code }}', event)" title="Clear Content"></i>
+            {% endif %}
+        </span>
     </div>
 
     <pre class="paste-code"><code id="paste-body"{% if paste.language and paste.language != 'auto' %} class="language-{{ paste.language }}"{% endif %}>{{ paste.body }}</code></pre>
@@ -38,19 +42,43 @@
 {% block scripts %}
 <script src="{% static 'vendor/highlight/highlight.min.js' %}"></script>
 <script>
+function clearPaste(code, event) {
+    event.preventDefault();
+    showConfirmModal('Clear this paste? The content is replaced with a random word and cannot be recovered. The link keeps working.', function() {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        fetch('{% url "app:paste_clear" code="PLACEHOLDER" %}'.replace('PLACEHOLDER', code), {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrfToken},
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'cleared') {
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to clear');
+            }
+        });
+    });
+}
+
 (function () {
     var block = document.getElementById('paste-body');
     if (window.hljs && block) {
         hljs.highlightElement(block);
     }
     var btn = document.getElementById('copy-paste-btn');
-    var label = document.getElementById('copy-paste-label');
     if (btn && block) {
         btn.addEventListener('click', function () {
             var text = block.textContent;
             var done = function () {
-                label.textContent = 'Copied';
-                setTimeout(function () { label.textContent = 'Copy'; }, 2000);
+                btn.classList.remove('bi-clipboard');
+                btn.classList.add('bi-clipboard-check', 'text-success');
+                btn.setAttribute('title', 'Copied');
+                setTimeout(function () {
+                    btn.classList.remove('bi-clipboard-check', 'text-success');
+                    btn.classList.add('bi-clipboard');
+                    btn.setAttribute('title', 'Copy');
+                }, 2000);
             };
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text).then(done, done);
