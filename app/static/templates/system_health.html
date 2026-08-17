@@ -6,7 +6,7 @@
         <h3 class="mb-0">System Health</h3>
         <a href="{% url 'app:index' %}" title="Back to Dashboard"><i class="bi bi-arrow-left action-items"></i></a>
     </div>
-    <p class="text-muted small mt-2 mb-3">Conditions the app cannot auto-remediate. Each warning lists the exact command to run — and, where safe, a one-click fix.</p>
+    <p class="text-muted small mt-2 mb-3">Conditions the app cannot auto-remediate. Each warning lists the exact command to run and, where safe, a one-click fix.</p>
 
     {% for check in checks %}
     <div class="card mb-3 {% if check.severity == 'error' %}border-danger{% elif check.severity == 'warning' %}border-warning{% elif check.severity == 'ok' %}border-success{% endif %}">

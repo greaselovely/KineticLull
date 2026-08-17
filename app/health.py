@@ -81,7 +81,7 @@ def check_nginx_log_readable():
             'sudo systemctl restart kineticlull',
         ],
         runnable_fix_id='nginx_log_add_user',
-        post_fix_note='Group change applied. The service was restarted — the rejection counter will begin populating within 5 minutes.',
+        post_fix_note='Group change applied. The service was restarted, and the rejection counter will begin populating within 5 minutes.',
     )
 
 
@@ -238,12 +238,12 @@ def check_version_up_to_date():
     except Exception:
         return _check('version', 'Version', True, 'info', 'Could not determine version state.')
     if not latest:
-        return _check('version', 'Version', True, 'info', f'Version {current} — could not reach origin to check for updates.')
+        return _check('version', 'Version', True, 'info', f'Version {current}. Could not reach origin to check for updates.')
     if current == latest:
         return _check('version', 'Version', True, 'ok', f'Up to date ({current}).')
     return _check(
         'version', 'Version', False, 'warning',
-        f'Installed: {current} — available: {latest}.',
+        f'Installed: {current}, available: {latest}.',
         why='The code on disk is behind origin/main. Fixes and features you see in documentation or screenshots will not appear until you upgrade.',
         fix_commands=[
             'bash upgrade.sh  # CLI path',
@@ -528,7 +528,7 @@ def _fix_restart_kineticlull():
         stderr = (r.stderr or '').strip()
         return False, (
             f'Restart helper failed (rc={r.returncode}).\n\n'
-            f'Most likely the helper isn\'t installed yet — run `bash upgrade.sh` once on the server '
+            f'Most likely the helper isn\'t installed yet. Run `bash upgrade.sh` once on the server '
             f'to install /usr/local/bin/kl-restart and the matching sudoers entry.\n\n'
             f'stderr:\n{stderr}'
         )
