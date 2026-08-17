@@ -15,7 +15,12 @@
     </div>
 
     {% if total_rejections > 0 %}
-    <div class="text-muted small mt-2">{{ total_rejections }} total rejections in the last 30 days</div>
+    <div class="text-muted small mt-2">
+        {{ total_rejections }} total rejections in the last 30 days.
+        {% if unattributed_rejections > 0 %}
+        {{ unattributed_rejections }} came from addresses no longer covered by any entry below, so the per-row counts sum to {{ attributed_rejections }}.
+        {% endif %}
+    </div>
     {% endif %}
 
     <table class="table table-hover mt-3" style="font-size: 0.85rem;">

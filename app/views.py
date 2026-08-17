@@ -2655,6 +2655,90 @@ def deployment_migrate_view(request):
     return render(request, 'deployment_migrate.html', context)
 
 
+def _attribute_rejections(blocked_entries, rejection_counts):
+    """Map per-client-IP rejection counts onto blocked entries by network
+    containment, matching BlockedIP.is_blocked's semantics.
+
+    NginxRejection.ip_address is always a single client address, but
+    BlockedIP.ip_address may hold a CIDR block produced by subnet
+    aggregation, so exact string equality loses every rejection covered by a
+    CIDR row. ip_network(..., strict=False) reads a bare address as a /32
+    (or /128), letting both shapes share one code path.
+
+    Each rejection is attributed to at most one entry, the most specific
+    block containing it, so an exact /32 row beats an enclosing /24 and the
+    per-row badges sum to the attributed total instead of double counting
+    overlapping blocks.
+
+    Returns (counts keyed by entry.ip_address, unattributed count).
+    """
+    counts = {entry.ip_address: 0 for entry in blocked_entries}
+
+    nets = []
+    for entry in blocked_entries:
+        try:
+            nets.append((ipaddress.ip_network(entry.ip_address, strict=False), entry.ip_address))
+        except ValueError:
+            # A malformed row renders as 0 rather than breaking the page.
+            continue
+    # Most specific first, then a stable tiebreak so equally specific
+    # overlapping blocks always claim the same rejections across requests.
+    nets.sort(key=lambda pair: (
+        -pair[0].prefixlen, pair[0].version, int(pair[0].network_address), pair[1],
+    ))
+
+    unattributed = 0
+    for rej_ip, count in rejection_counts.items():
+        try:
+            addr = ipaddress.ip_address(rej_ip)
+        except ValueError:
+            unattributed += count
+            continue
+        for net, key in nets:
+            # Cross-family containment is False rather than an error, so a
+            # v4 rejection simply never lands in a v6 block.
+            if addr in net:
+                counts[key] += count
+                break
+        else:
+            unattributed += count
+
+    return counts, unattributed
+
+
+def _rejection_ips_within(target):
+    """Resolve a blocked-list key to the client addresses in NginxRejection
+    that it covers.
+
+    `target` is a single address or a CIDR. Single addresses take the indexed
+    exact path; a CIDR is expanded to the distinct rejection IPs it contains
+    so the caller can keep filtering the string column with __in. Filtering
+    the member set in Python (rather than a __startswith prefix on the
+    column) stays correct for non-octet-aligned prefixes and for IPv6.
+
+    Returns a list of ip_address strings, or None if `target` is not a valid
+    address or network.
+    """
+    try:
+        net = ipaddress.ip_network(target, strict=False)
+    except ValueError:
+        return None
+
+    if net.prefixlen == net.max_prefixlen:
+        return [str(net.network_address)]
+
+    matches = []
+    known = NginxRejection.objects.values_list('ip_address', flat=True).distinct()
+    for candidate in known:
+        try:
+            addr = ipaddress.ip_address(candidate)
+        except ValueError:
+            continue
+        if addr in net:
+            matches.append(candidate)
+    return matches
+
+
 @login_required
 def blocked_ips_view(request):
     if not request.user.is_superuser:
@@ -2675,6 +2759,7 @@ def blocked_ips_view(request):
             timestamp__gte=timezone.now() - timedelta(days=30)
         ).values_list('ip_address').annotate(count=Count('id')).values_list('ip_address', 'count')
     )
+    attributed_counts, unattributed_rejections = _attribute_rejections(blocked_ips, rejection_counts)
 
     # Get top paths per IP (last 5 unique paths from activity logs before block)
     top_paths = {}
@@ -2701,7 +2786,7 @@ def blocked_ips_view(request):
     for entry in blocked_ips:
         blocked_data.append({
             'entry': entry,
-            'rejection_count': rejection_counts.get(entry.ip_address, 0),
+            'rejection_count': attributed_counts.get(entry.ip_address, 0),
             'top_paths': top_paths.get(entry.ip_address, []),
         })
 
@@ -2709,6 +2794,11 @@ def blocked_ips_view(request):
         'title': 'Blocked IPs',
         'blocked_data': blocked_data,
         'total_rejections': sum(rejection_counts.values()),
+        # total_rejections counts every rejection in the window, including
+        # ones from IPs that are not (or are no longer) blocked. Surfacing
+        # the split lets the footer reconcile with the row badges.
+        'attributed_rejections': sum(attributed_counts.values()),
+        'unattributed_rejections': unattributed_rejections,
     }
     return render(request, 'blocked_ips.html', context)
 
@@ -2799,6 +2889,14 @@ def blocked_ip_timeline_view(request):
     if not ip:
         return JsonResponse({'error': 'IP required'}, status=400)
 
+    # `ip` is whatever the blocked list put in data-ip, so it may be a CIDR.
+    # Validate it before it reaches the ORM and expand it to the member
+    # addresses actually present, so a CIDR row charts its real traffic
+    # instead of an empty window.
+    match_ips = _rejection_ips_within(ip)
+    if match_ips is None:
+        return JsonResponse({'error': 'Invalid IP address or subnet'}, status=400)
+
     window = request.GET.get('window', '30d')
     if window not in ('24h', '7d', '30d'):
         window = '30d'
@@ -2839,7 +2937,7 @@ def blocked_ip_timeline_view(request):
 
     counts_by_bin = dict(
         NginxRejection.objects.filter(
-            ip_address=ip, timestamp__gte=window_start,
+            ip_address__in=match_ips, timestamp__gte=window_start,
         ).annotate(bin=trunc_fn('timestamp', tzinfo=app_tz))
         .values('bin').annotate(count=Count('id'))
         .values_list('bin', 'count')
@@ -2875,7 +2973,7 @@ def blocked_ip_timeline_view(request):
     last_rejection = None
     if not any(values):
         last_dt = (
-            NginxRejection.objects.filter(ip_address=ip)
+            NginxRejection.objects.filter(ip_address__in=match_ips)
             .order_by('-timestamp').values_list('timestamp', flat=True).first()
         )
         if last_dt:
