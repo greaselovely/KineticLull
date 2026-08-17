@@ -109,28 +109,28 @@ Dependencies are scanned with [Snyk](https://snyk.io/). When a scan flags a vuln
 package, the pin is bumped in `requirements.txt` (and the floor in `requirements.in`
 where applicable) and the change ships in the next release. The web-UI **Upgrade** and
 `upgrade.sh` both run `pip install -r requirements.txt`, so package fixes deploy together
-with code — no separate step is required.
+with code - no separate step is required.
 
 ### 1.1.3.001 (2026-07-13)
 
-**URL shortener — `mailto:` and `tel:` support** — shortened links can now point at
+**URL shortener - `mailto:` and `tel:` support** - shortened links can now point at
 `mailto:` (and `tel:`) targets, not just web URLs. Django's `URLField`/`URLValidator`
 hardcodes `scheme://` and rejects opaque-scheme URIs, so `ShortenedURL.original_url`
 moved to a `CharField` with a custom `validate_short_link` validator (migration
 `0046`).
 
 - **Scheme allowlist** (`ALLOWED_LINK_SCHEMES`): `http, https, ftp, ftps, mailto, tel`
-  — a strict allowlist, since a public redirector must never forward to `javascript:`,
+  - a strict allowlist, since a public redirector must never forward to `javascript:`,
   `data:`, or `file:`. Single source of truth, reused by the validator and the redirect.
 - `mailto:` addresses are validated with Django's `EmailValidator` (supports comma-lists
   and `?subject=` params); `tel:` is accepted opaquely.
 - `redirect_short_url` now uses a `ShortLinkRedirect` response subclass that widens
-  `allowed_schemes` to match — plain `HttpResponseRedirect` raises `DisallowedRedirect`
+  `allowed_schemes` to match - plain `HttpResponseRedirect` raises `DisallowedRedirect`
   on `mailto:`/`tel:`.
 
 ### 1.1.3.000 (2026-07-13)
 
-**Dependency security upgrades** — closes all 12 findings from the Snyk scan of
+**Dependency security upgrades** - closes all 12 findings from the Snyk scan of
 `requirements.txt` (0 vulnerable paths remaining after upgrade):
 
 | Package | From | To | Highest severity | Findings closed (Snyk ID) |
@@ -141,7 +141,7 @@ moved to a `CharField` with a custom `validate_short_link` validator (migration
 | `urllib3` | 2.6.3 | 2.7.0 | **High** | Sensitive info in sent data (16642024), Decompression Bomb (16642059) |
 
 Notes:
-- `django` stays within the `>=5.2.x,<5.3` LTS line — a patch bump, no major-version jump.
+- `django` stays within the `>=5.2.x,<5.3` LTS line - a patch bump, no major-version jump.
 - `cryptography` 46→48 is a larger jump but uses stable symmetric (`Fernet`) APIs; no
   application code change was required. Verify with `python manage.py check` and a
   One-Time Secret/File create+burn after upgrading.

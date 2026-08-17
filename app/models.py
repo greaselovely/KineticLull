@@ -84,7 +84,7 @@ class ExtDynLists(models.Model):
         constraints = [
             # Partial unique index: at most one row with is_system=True.
             # Closes the multi-worker race where every gunicorn worker calls
-            # sync_system_blocklist() in apps.ready() — without this, concurrent
+            # sync_system_blocklist() in apps.ready() - without this, concurrent
             # get_or_create() can produce duplicate system EDL rows.
             models.UniqueConstraint(
                 fields=['is_system'],
@@ -296,7 +296,7 @@ class AppSettings(models.Model):
     autoblock_threshold = models.PositiveIntegerField(default=50, verbose_name='Auto-Block Threshold (requests)')
     autoblock_window_seconds = models.PositiveIntegerField(default=60, verbose_name='Auto-Block Window (seconds)')
     autoblock_duration_minutes = models.PositiveIntegerField(default=0, verbose_name='Auto-Block Duration (minutes, 0=permanent)')
-    # Cumulative-window check — catches paced scanners that evade the burst window
+    # Cumulative-window check - catches paced scanners that evade the burst window
     autoblock_long_threshold = models.PositiveIntegerField(default=30, verbose_name='Slow-Probe Threshold (cumulative hits)')
     autoblock_long_window_hours = models.PositiveIntegerField(default=24, verbose_name='Slow-Probe Window (hours)')
     # Operator-added scanner path patterns (one per line). Appended to the
@@ -340,7 +340,7 @@ class AppSettings(models.Model):
     b2_last_upload_filename = models.CharField(max_length=255, blank=True, default='', verbose_name='B2 Last Uploaded File')
     b2_last_upload_error = models.TextField(blank=True, default='', verbose_name='B2 Last Upload Error')
 
-    # robots.txt content served at /robots.txt — operator-editable.
+    # robots.txt content served at /robots.txt - operator-editable.
     # Default lives in DEFAULT_ROBOTS_TXT and is seeded by AppSettings.load()
     # on first create. Keeping the field default empty means edits to
     # DEFAULT_ROBOTS_TXT do not generate stale-default migrations.
@@ -502,7 +502,7 @@ class BlockedIP(models.Model):
         if cls.objects.filter(ip_address=cidr).exists():
             return False
 
-        # Skip if any whitelisted IP lives inside this /24 — operators
+        # Skip if any whitelisted IP lives inside this /24 - operators
         # explicitly want those addresses reachable, even if neighbors
         # are noisy.
         for wl in WhitelistedIP.objects.values_list('ip_address', flat=True):
@@ -576,11 +576,11 @@ class BlockedIP(models.Model):
         except Exception:
             pass  # don't let an EDL sync hiccup break the nginx blocklist write
 
-    # Path patterns that indicate scanner / exploit probing — any single hit
+    # Path patterns that indicate scanner / exploit probing - any single hit
     # blocks the source IP immediately, regardless of rate. These are paths a
     # legitimate user has zero reason to ever request. Substrings are matched
     # case-insensitively against the URL path. Add only signals you're confident
-    # carry no false positives — operator complaints about over-blocking belong
+    # carry no false positives - operator complaints about over-blocking belong
     # higher in the priority queue than missing a scanner.
     SCANNER_PATH_PATTERNS = (
         # Secrets & dotfiles
@@ -606,7 +606,7 @@ class BlockedIP(models.Model):
         'wp-json/',
         'wlwmanifest',
         'xmlrpc.php',
-        # PHP info / generic probes (KL is Django — customers don't serve PHP)
+        # PHP info / generic probes (KL is Django - customers don't serve PHP)
         'phpinfo.php',
         'info.php',
         'php.php',
@@ -878,7 +878,7 @@ class NginxRejection(models.Model):
 
 # Schemes a shortened link is allowed to point at. This is an allowlist on
 # purpose: a public redirector must never forward to javascript:, data:,
-# file:, etc. — those are phishing/XSS vectors. Web links + the "contact"
+# file:, etc. - those are phishing/XSS vectors. Web links + the "contact"
 # schemes (mailto/tel) cover the real use cases. Kept here as the single
 # source of truth, reused by both the field validator and the redirect
 # response class in views.py.
@@ -907,7 +907,7 @@ def validate_short_link(value):
         )
 
     if scheme == 'mailto':
-        # mailto:addr[,addr...][?query] — validate the address portion(s).
+        # mailto:addr[,addr...][?query] - validate the address portion(s).
         addresses = value[len('mailto:'):].split('?', 1)[0]
         email_validator = EmailValidator(message='Enter a valid email address after mailto:.')
         for addr in filter(None, (a.strip() for a in addresses.split(','))):

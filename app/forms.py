@@ -47,7 +47,7 @@ class ShortenedURLForm(forms.ModelForm):
             'original_url': forms.TextInput(attrs={
                 'class': 'form-control form-control-sm mb-3',
                 'id': 'originalUrlInput',
-                'placeholder': 'https://example.com/long/url — or mailto:you@example.com',
+                'placeholder': 'https://example.com/long/url - or mailto:you@example.com',
                 'required': 'required',
             }),
             'notes': forms.Textarea(attrs={

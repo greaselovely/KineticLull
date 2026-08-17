@@ -8,7 +8,7 @@ class EdlConfig(AppConfig):
     def ready(self):
         from django.db.models.signals import post_migrate
         post_migrate.connect(ensure_superuser_group, sender=self)
-        from . import signals  # noqa: F401 — registers auth signal receivers
+        from . import signals  # noqa: F401 - registers auth signal receivers
         from . import health
         health.set_boot_snapshot()
 
@@ -31,7 +31,7 @@ def _ensure_blocklist_file_exists():
 
     nginx `include`s this file and refuses to start when it's absent. The file
     is git-ignored (operator state, varies per install) so a pull or fresh
-    clone won't have it. Idempotent and safe to run from every worker — pure
+    clone won't have it. Idempotent and safe to run from every worker - pure
     filesystem, no DB.
     """
     import os
@@ -70,10 +70,10 @@ def _is_startup_leader():
     """Return True if this process should run one-shot startup tasks.
 
     Two gates:
-      1. We're under gunicorn or `runserver` — not a `manage.py migrate` /
+      1. We're under gunicorn or `runserver` - not a `manage.py migrate` /
          `collectstatic` / shell, where startup work would either crash on a
          not-ready DB or run pointlessly.
-      2. We won the fcntl flock on backups/.startup.lock — exactly one
+      2. We won the fcntl flock on backups/.startup.lock - exactly one
          process per host can hold it. Other workers see EWOULDBLOCK and
          return False. The kernel releases the lock when the holder dies, so
          a worker restart re-elects automatically.
@@ -93,7 +93,7 @@ def _is_startup_leader():
     if not (is_runserver or is_gunicorn):
         return False
 
-    # Gate 2: fcntl flock — only one worker wins.
+    # Gate 2: fcntl flock - only one worker wins.
     import fcntl
     from django.conf import settings
 
@@ -118,7 +118,7 @@ def _is_startup_leader():
 def _start_scheduler_threads():
     """Spawn the daily-backup, cleanup, and rejection-parser background threads.
 
-    Caller must already have confirmed leader status — this function does not
+    Caller must already have confirmed leader status - this function does not
     re-check, it just spawns. Each thread has its own startup grace period
     and internal scheduling.
     """

@@ -3,7 +3,7 @@ Management command to parse Nginx access logs for 403 rejections.
 Stores results in the NginxRejection model for display in the UI.
 
 This command is called automatically every 5 minutes by a background thread
-started in apps.py — you should NOT need to schedule it yourself.
+started in apps.py - you should NOT need to schedule it yourself.
 
 Manual invocation:
     python manage.py parse_nginx_rejections

@@ -128,7 +128,7 @@
                             })
                             .catch(function() {});
                     }, 3000);
-                }, 5000);  // 5s grace before first poll — restart needs a beat to actually go down
+                }, 5000);  // 5s grace before first poll - restart needs a beat to actually go down
             }).catch(function(e) {
                 outEl.innerHTML = '<div class="alert alert-danger mb-0">Request failed: ' + e + '</div>';
                 btn.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Run Fix';

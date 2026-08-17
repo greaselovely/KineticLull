@@ -22,7 +22,7 @@ def _get_resend():
 
 
 def send_file_shared_email(recipient_email, filename, share_url, sender_name):
-    """Email #1: Sent on upload — tells the recipient a file is waiting for them."""
+    """Email #1: Sent on upload - tells the recipient a file is waiting for them."""
     resend, from_email = _get_resend()
     if not resend:
         return False
@@ -51,7 +51,7 @@ def send_file_shared_email(recipient_email, filename, share_url, sender_name):
 
 
 def send_otp_email(recipient_email, otp, noun='file'):
-    """Email #2: Sent when the recipient clicks the link — contains only the OTP.
+    """Email #2: Sent when the recipient clicks the link - contains only the OTP.
 
     ``noun`` lets the shared OTP copy serve both files and secrets.
     """
@@ -111,7 +111,7 @@ def send_access_notification(uploader_email, recipient_email, item_label, noun='
 
 
 def send_secret_shared_email(recipient_email, label, share_url, sender_name):
-    """Sent on create (if enabled) — tells the recipient a secret is waiting for them."""
+    """Sent on create (if enabled) - tells the recipient a secret is waiting for them."""
     resend, from_email = _get_resend()
     if not resend:
         return False

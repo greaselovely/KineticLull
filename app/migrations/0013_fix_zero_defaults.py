@@ -17,7 +17,7 @@ DEFAULTS = {
     'api_key_expiration_days': 90,
 }
 
-# Minimum allowed values — anything below this is invalid
+# Minimum allowed values - anything below this is invalid
 MINIMUMS = {
     'max_edls_per_group': 1,
     'max_entries_per_edl': 100,

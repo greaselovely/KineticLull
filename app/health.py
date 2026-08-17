@@ -18,7 +18,7 @@ from pathlib import Path
 from django.conf import settings
 
 
-# Captured at app.ready() — see app/apps.py. Used to detect when code on disk
+# Captured at app.ready() - see app/apps.py. Used to detect when code on disk
 # diverges from what the running workers imported (stale workers after a pull).
 BOOT_VERSION = None
 BOOT_TIME = None
@@ -152,7 +152,7 @@ def check_sudoers():
 def check_ssl_cert():
     """Check the cert nginx is actually serving by opening a TLS connection to 127.0.0.1:443.
 
-    Reads the cert from the live handshake — no filesystem access needed, no
+    Reads the cert from the live handshake - no filesystem access needed, no
     permission changes required, works for every cert type (LE, self-signed,
     symlinked, etc.). Also catches the case where the config path doesn't
     match what's actually being served.
@@ -312,7 +312,7 @@ def check_b2_backup_freshness():
 
 # ─── Nginx package patch state ──────────────────────────────────────────────
 # Distro builds that shipped with a security fix deliberately withheld. These
-# matter because `apt upgrade` does NOT resolve them — the operator needs to
+# matter because `apt upgrade` does NOT resolve them - the operator needs to
 # know the fix is absent rather than merely pending. Keyed by exact dpkg version.
 NGINX_WITHHELD_PATCHES = {
     '1.24.0-2ubuntu7.15': (
@@ -340,7 +340,7 @@ def _dpkg_version(pkg):
 def _apt_candidate(pkg):
     """(candidate_version, on_upstream_repo) read from the local apt cache.
 
-    Cached metadata only — no network call, so candidate accuracy depends on
+    Cached metadata only - no network call, so candidate accuracy depends on
     when `apt-get update` last ran. _apt_lists_age_days() covers that gap.
     """
     try:
@@ -483,7 +483,7 @@ def count_issues():
 # ─── Allowlisted fixes ──────────────────────────────────────────────────────
 # Keys are referenced by `runnable_fix_id` on individual checks. Values are
 # callables that return (ok, stdout_text). Never accept arbitrary user input
-# into subprocess arguments — only lookups into this dict.
+# into subprocess arguments - only lookups into this dict.
 
 def _fix_nginx_log_add_user():
     """Add the app user to the adm group so nginx access log is readable, then restart the service."""

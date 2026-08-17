@@ -35,11 +35,11 @@ def decrypt(value: str) -> str:
     if not value:
         return value
     if not value.startswith(_ENCRYPTED_PREFIX):
-        return value  # legacy plaintext — caller handles upgrade
+        return value  # legacy plaintext - caller handles upgrade
     try:
         return _fernet().decrypt(value[len(_ENCRYPTED_PREFIX):].encode()).decode()
     except InvalidToken:
-        return ''  # unrecoverable (e.g., SECRET_KEY rotated) — return empty
+        return ''  # unrecoverable (e.g., SECRET_KEY rotated) - return empty
 
 
 def is_encrypted(value: str) -> bool:

@@ -59,7 +59,7 @@ class Command(BaseCommand):
         with open(data_json_path) as f:
             data = json.load(f)
 
-        # Groups (create any missing — permissions are re-synced by apps.ready())
+        # Groups (create any missing - permissions are re-synced by apps.ready())
         for name in data.get('groups', []):
             Group.objects.get_or_create(name=name)
             self.stdout.write(f'  Group: {name}')
@@ -211,7 +211,7 @@ class Command(BaseCommand):
                 },
             )
 
-        # AppSettings (singleton — update fields in place)
+        # AppSettings (singleton - update fields in place)
         app_settings_data = data.get('app_settings')
         if app_settings_data:
             s = AppSettings.load()

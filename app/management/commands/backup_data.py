@@ -96,7 +96,7 @@ class Command(BaseCommand):
             'created_at': iso(s.created_at),
         } for s in ShortenedURL.objects.select_related('created_by').all()]
 
-        # OneTimeFiles (record metadata — actual file bytes travel in the tar)
+        # OneTimeFiles (record metadata - actual file bytes travel in the tar)
         data['one_time_files'] = [{
             'file_path': o.file.name,  # relative to MEDIA_ROOT, e.g. "otf/abc.bin"
             'original_filename': o.original_filename,

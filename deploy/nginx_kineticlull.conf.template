@@ -49,7 +49,7 @@ server {
         add_header Referrer-Policy "same-origin" always;
     }
 
-    # Branding images only (NOT uploaded files — those go through Django for access control)
+    # Branding images only (NOT uploaded files - those go through Django for access control)
     location /media/branding/ {
         alias {{PROJECT_DIR}}/media/branding/;
         expires 1d;

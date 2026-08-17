@@ -6,7 +6,7 @@ KineticLull uses [Resend](https://resend.com) to send OTP emails for secure file
 
 1. Sign up at https://resend.com
 2. Go to **API Keys** and create a new key
-3. Copy the API key — you'll add it to KineticLull's Settings page
+3. Copy the API key - you'll add it to KineticLull's Settings page
 
 ## 2. Add Your Sending Domain
 
@@ -18,7 +18,7 @@ In Resend dashboard:
 
 ## 3. Configure DNS Records
 
-You'll need to add the following DNS records at your domain registrar or DNS provider. Resend provides the exact values — these are the types you'll see:
+You'll need to add the following DNS records at your domain registrar or DNS provider. Resend provides the exact values - these are the types you'll see:
 
 ### SPF (Sender Policy Framework)
 
@@ -26,7 +26,7 @@ SPF tells receiving mail servers which services are allowed to send email on beh
 
 | Type | Host | Value |
 |------|------|-------|
-| TXT | `@` or subdomain | Resend provides this — typically includes `include:resend.com` |
+| TXT | `@` or subdomain | Resend provides this - typically includes `include:resend.com` |
 
 **If you already have an SPF record**, don't create a second one. Merge the `include:resend.com` into your existing record:
 
@@ -38,7 +38,7 @@ v=spf1 include:_spf.google.com include:resend.com ~all
 
 ### DKIM (DomainKeys Identified Mail)
 
-DKIM cryptographically signs outgoing emails so recipients can verify they haven't been tampered with. Resend handles the signing — you just publish the public key in DNS.
+DKIM cryptographically signs outgoing emails so recipients can verify they haven't been tampered with. Resend handles the signing - you just publish the public key in DNS.
 
 Resend will give you one or more CNAME records:
 
@@ -59,9 +59,9 @@ Add this TXT record:
 | TXT | `_dmarc` | `v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com; pct=100` |
 
 **DMARC policy options:**
-- `p=none` — monitor only, don't take action on failures (good for initial setup)
-- `p=quarantine` — send failures to spam (recommended)
-- `p=reject` — reject failures outright (strictest, use after monitoring)
+- `p=none` - monitor only, don't take action on failures (good for initial setup)
+- `p=quarantine` - send failures to spam (recommended)
+- `p=reject` - reject failures outright (strictest, use after monitoring)
 
 **Recommended approach:**
 1. Start with `p=none` to monitor for a week
@@ -102,14 +102,14 @@ In KineticLull's **Settings** page (once the email feature is deployed):
 
 ### DNS records not verifying
 - Use [MXToolbox](https://mxtoolbox.com/SuperTool.aspx) to check your records
-- SPF: `mxtoolbox.com/spf.aspx` — enter your domain
-- DKIM: `mxtoolbox.com/dkim.aspx` — enter `resend._domainkey.yourdomain.com`
-- DMARC: `mxtoolbox.com/dmarc.aspx` — enter your domain
+- SPF: `mxtoolbox.com/spf.aspx` - enter your domain
+- DKIM: `mxtoolbox.com/dkim.aspx` - enter `resend._domainkey.yourdomain.com`
+- DMARC: `mxtoolbox.com/dmarc.aspx` - enter your domain
 - If using Cloudflare, make sure DNS-only mode (grey cloud) is on for CNAME records
 
 ### "No SPF record found"
 - You may have added the TXT record to the wrong host. For root domain, use `@`. For subdomain, use the subdomain.
-- Check for duplicate SPF records — only one is allowed per domain.
+- Check for duplicate SPF records - only one is allowed per domain.
 
 ## DNS Propagation Check
 
@@ -128,6 +128,6 @@ dig TXT _dmarc.yourdomain.com
 
 ## Notes
 
-- Resend free tier: 100 emails/day, 3,000/month — plenty for OTP use
-- Emails are transactional only (OTP codes), not marketing — deliverability should be high
+- Resend free tier: 100 emails/day, 3,000/month - plenty for OTP use
+- Emails are transactional only (OTP codes), not marketing - deliverability should be high
 - The sending domain does not need to match the KineticLull server domain

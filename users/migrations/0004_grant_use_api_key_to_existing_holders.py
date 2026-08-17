@@ -30,7 +30,7 @@ def grant_use_api_key_to_holder_groups(apps, schema_editor):
         content_type__app_label='users',
     ).first()
     if perm is None:
-        return  # permission didn't get created — nothing to do
+        return  # permission didn't get created - nothing to do
 
     holder_user_ids = set(APIKey.objects.values_list('user_id', flat=True))
     if not holder_user_ids:

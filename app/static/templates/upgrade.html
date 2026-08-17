@@ -127,7 +127,7 @@ function klPollUntilBootVersion(target, statusEl, onSuccess, onFailure) {
                     setTimeout(onSuccess, 500);
                 }
             })
-            .catch(function () { /* restart window — keep polling */ });
+            .catch(function () { /* restart window - keep polling */ });
     }, POLL_MS);
 }
 

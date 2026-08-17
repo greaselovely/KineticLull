@@ -5,7 +5,7 @@ from django.conf import settings
 handler404 = 'app.views.custom_404'
 
 urlpatterns = [
-    # path('admin/', admin.site.urls),  # Disabled — use in-app user management instead
+    # path('admin/', admin.site.urls),  # Disabled - use in-app user management instead
     path('', include('app.urls')),
 ]
 

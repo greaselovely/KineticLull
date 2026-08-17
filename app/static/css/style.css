@@ -206,7 +206,7 @@
     margin-left: var(--sidebar-collapsed);
 }
 
-/* Instant state from <html> class — prevents flash on page load */
+/* Instant state from <html> class - prevents flash on page load */
 html.sidebar-is-collapsed .sidebar {
     width: var(--sidebar-collapsed);
 }

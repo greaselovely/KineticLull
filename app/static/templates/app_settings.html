@@ -590,7 +590,7 @@
     font-weight: 500;
 }
 
-/* Page-wide sticky save footer — pinned to viewport bottom, offset by sidebar */
+/* Page-wide sticky save footer - pinned to viewport bottom, offset by sidebar */
 .settings-save-bar {
     position: fixed;
     bottom: 0;
@@ -607,7 +607,7 @@ html.sidebar-is-collapsed .settings-save-bar,
     left: var(--sidebar-collapsed);
 }
 
-/* Backups tab — uniform action buttons.
+/* Backups tab - uniform action buttons.
    Colors picked for WCAG AA contrast against their text color:
      Backup Now:  #15803d (emerald-700) + white  → ~4.6 contrast
      Restore:     #f59e0b (amber-500)   + #1f2937 → ~9 contrast */
@@ -641,7 +641,7 @@ html.sidebar-is-collapsed .settings-save-bar,
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Tab persistence — URL hash takes priority, then localStorage, then default (General)
+    // Tab persistence - URL hash takes priority, then localStorage, then default (General)
     var STORAGE_KEY = 'kl-settings-active-tab';
     var hash = window.location.hash;
     var saved = localStorage.getItem(STORAGE_KEY);

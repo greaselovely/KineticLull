@@ -248,7 +248,7 @@ TMPEOF
 
     sudo nginx -t 2>>"${LOGFILE}" && sudo systemctl restart nginx
 
-    # Request the certificate (retry once — first attempt can fail with
+    # Request the certificate (retry once - first attempt can fail with
     # "No such authorization" if the account was just registered)
     log "Requesting certificate for ${SERVER_NAME}..."
     local LE_SUCCESS=false

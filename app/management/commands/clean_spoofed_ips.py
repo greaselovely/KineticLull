@@ -20,7 +20,7 @@ This command undoes that damage on the host where KineticLull runs:
   3. Re-syncs the Nginx blocklist file / system EDL.
 
 ActivityLog is an immutable SHA256-chained audit trail and is NEVER modified
-here — rewriting historical rows would (correctly) trip verify_chain(). The
+here - rewriting historical rows would (correctly) trip verify_chain(). The
 recorded requests genuinely presented those spoofed headers; that is a true
 fact worth keeping. We only recover the real IP from them.
 

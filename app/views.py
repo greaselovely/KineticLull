@@ -151,15 +151,15 @@ def get_client_ip(request):
     127.0.0.1) to poison the audit log and evade IP-based auto-blocking. We
     therefore trust ONLY what our own reverse proxy sets, in this order:
 
-      1. X-Real-IP        — Nginx sets this from $remote_addr and OVERWRITES
+      1. X-Real-IP        - Nginx sets this from $remote_addr and OVERWRITES
                             any client-supplied value
                             (proxy_set_header X-Real-IP $remote_addr).
-      2. Rightmost X-Forwarded-For token — Nginx APPENDS the real peer on the
+      2. Rightmost X-Forwarded-For token - Nginx APPENDS the real peer on the
                             right; every token to the left is client-supplied
                             and must not be trusted. (The old code took the
                             LEFTMOST token, which is exactly the value the
-                            attacker controls — that is the bug.)
-      3. REMOTE_ADDR      — direct-connection fallback when there is no proxy.
+                            attacker controls - that is the bug.)
+      3. REMOTE_ADDR      - direct-connection fallback when there is no proxy.
 
     We never read X-Client-IP / True-Client-IP / X-Originating-IP / X-Azure-*
     / X-Host, and never trust anything but the rightmost XFF token. Candidates
@@ -1490,7 +1490,7 @@ def app_settings_view(request):
                 ts = None
             backups.append({'filename': f.name, 'timestamp': ts})
 
-    # B2 versions (offsite restore source) — fetched at render time so the
+    # B2 versions (offsite restore source) - fetched at render time so the
     # dropdown reflects current bucket state. Only when fully configured.
     b2_versions = []
     b2_versions_error = None
@@ -1801,7 +1801,7 @@ def user_edit_view(request, user_id):
         edit_user.first_name = request.POST.get('first_name', '').strip()
         edit_user.last_name = request.POST.get('last_name', '').strip()
 
-        # Group + active changes — superuser only
+        # Group + active changes - superuser only
         if request.user.is_superuser:
             new_is_active = request.POST.get('is_active') == 'on'
             selected_groups = request.POST.getlist('groups')
@@ -1878,7 +1878,7 @@ def group_list_view(request):
             if group.name == 'Superuser':
                 messages.error(request, 'The Superuser group cannot be deleted.')
             elif group.user_set.exists():
-                messages.error(request, f'Cannot delete "{group.name}" — it still has members.')
+                messages.error(request, f'Cannot delete "{group.name}" - it still has members.')
             else:
                 log_activity(request, 'delete_group', group.name)
                 group.delete()
@@ -2168,7 +2168,7 @@ def upgrade_view(request):
                 if f.stat().st_mtime < cutoff_ts:
                     f.unlink()
 
-        # Step 1: git pull — protect state files (db, env, blocklist.conf) from older
+        # Step 1: git pull - protect state files (db, env, blocklist.conf) from older
         # installs that still track them. These files represent operator state and
         # must not be touched by the pull.
         db_protect = os.path.join(base_dir, 'db.sqlite3.upgrade_protect')
@@ -2244,7 +2244,7 @@ def upgrade_view(request):
         # log_activity writes to the DB. After migrate has been run via subprocess,
         # the worker's existing SQLite connection can land in a state where writes
         # fail ("attempt to write a readonly database") until the worker restarts.
-        # Don't let an audit-log failure crash the upgrade — the restart is about
+        # Don't let an audit-log failure crash the upgrade - the restart is about
         # to fire and the new workers will log correctly.
         try:
             log_activity(request, 'upgrade', f'v{current_version}', 'Code updated, restarting')
@@ -2257,7 +2257,7 @@ def upgrade_view(request):
                 pass
 
         if not success:
-            # git pull/migrate/collectstatic had errors — return JSON so JS knows
+            # git pull/migrate/collectstatic had errors - return JSON so JS knows
             return JsonResponse({'status': 'error', 'message': 'Upgrade completed with errors. Check server logs.'})
 
         # Step 5: Patch Nginx config if needed, then restart
@@ -2292,7 +2292,7 @@ def upgrade_view(request):
 
         os.makedirs(os.path.join(base_dir, 'media', 'branding'), exist_ok=True)
 
-        # Ensure blocklist file exists — nginx config `include`s it.
+        # Ensure blocklist file exists - nginx config `include`s it.
         blocklist_file = os.path.join(base_dir, 'deploy', 'blocklist.conf')
         if not os.path.exists(blocklist_file):
             os.makedirs(os.path.dirname(blocklist_file), exist_ok=True)
@@ -2925,7 +2925,7 @@ def blocked_ip_timeline_view(request):
     )[window]
 
     # Split the configured timestamp format for the empty-state "last
-    # rejection" line — same pattern used by the URL stats modal.
+    # rejection" line - same pattern used by the URL stats modal.
     _split = re.search(r'\s+([HhGg].*)$', app_ts_fmt)
     date_fmt = app_ts_fmt[:_split.start()].rstrip() if _split else app_ts_fmt
     time_fmt = _split.group(1) if _split else ''
@@ -3168,7 +3168,7 @@ ok "Nginx installed."
 # ── Step 2: SSL Certs ──
 mkdir -p "${{CERT_DIR}}"
 if [ "$SSL_MODE" = "letsencrypt" ]; then
-    # Check if LE cert already exists — reuse if so.
+    # Check if LE cert already exists - reuse if so.
     if [ -f "/etc/letsencrypt/live/${{SERVER_NAME}}/fullchain.pem" ]; then
         log "Let's Encrypt certificate already exists for ${{SERVER_NAME}}."
     else
@@ -3294,7 +3294,7 @@ if [ -n "$APP_USER" ] && getent group adm >/dev/null 2>&1; then
         log "App user $APP_USER already in adm group."
     else
         log "Adding $APP_USER to adm group for nginx log access..."
-        usermod -aG adm "$APP_USER" 2>>"${{LOGFILE}}" || warn "Could not add $APP_USER to adm — rejection counter may not populate."
+        usermod -aG adm "$APP_USER" 2>>"${{LOGFILE}}" || warn "Could not add $APP_USER to adm - rejection counter may not populate."
     fi
 fi
 
@@ -3472,7 +3472,7 @@ class ShortLinkRedirect(HttpResponseRedirect):
 
 
 def redirect_short_url(request, short_code):
-    """Public redirect endpoint — no login required."""
+    """Public redirect endpoint - no login required."""
     short_url = get_object_or_404(ShortenedURL, short_code=short_code)
     ShortenedURL.objects.filter(pk=short_url.pk).update(hit_count=models.F('hit_count') + 1)
     log_activity(request, 'short_url_visit', short_code, f'-> {short_url.original_url}')
@@ -4065,7 +4065,7 @@ def otf_casual_download_view(request, casual_token):
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# One-Time Secret (OTS) — secure-mode text/credential sharing, sibling of OTF
+# One-Time Secret (OTS) - secure-mode text/credential sharing, sibling of OTF
 # ══════════════════════════════════════════════════════════════════════════
 
 def _ots_log_access(secret_obj, email, request, recipient=None):
@@ -4149,7 +4149,7 @@ def ots_create_view(request):
             if send_email_flag:
                 send_secret_shared_email(email, secret.label, share_url, sender_name)
 
-        # Never log the secret payload — label only.
+        # Never log the secret payload - label only.
         log_activity(
             request, 'create_ots', secret.label,
             f'recipients={len(recipients)}, expiry={expiry_hours}h',
@@ -4263,7 +4263,7 @@ def ots_reveal_view(request, token):
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# Paste — unlisted, link-shared text/code snippets (encrypted at rest)
+# Paste - unlisted, link-shared text/code snippets (encrypted at rest)
 # ══════════════════════════════════════════════════════════════════════════
 
 # highlight.js language slugs offered in the create/edit form. 'auto' lets the

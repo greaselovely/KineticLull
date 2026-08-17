@@ -13,7 +13,7 @@ def migrate_user_email_to_fk(apps, schema_editor):
             entry.submitted_by = user
             entry.save(update_fields=['submitted_by'])
         except CustomUser.DoesNotExist:
-            pass  # Orphaned entry — no matching user, leave submitted_by null
+            pass  # Orphaned entry - no matching user, leave submitted_by null
 
 
 def reverse_migration(apps, schema_editor):
