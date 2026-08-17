@@ -10,6 +10,7 @@ test.sh
 deploy/migrate_to_nginx.sh
 deploy/blocklist.conf
 .migration_backup_*/
+.nginx_migration_backup_*/
 ssl/
 .nginx_parse_state
 db.sqlite3

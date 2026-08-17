@@ -9,6 +9,7 @@ limit_req_zone $binary_remote_addr zone=kineticlull_api:10m rate=10r/s;
 server {
     listen 443 ssl;
     server_name {{SERVER_NAME}};
+    server_tokens off;
 
     ssl_certificate {{CERT_PATH}};
     ssl_certificate_key {{KEY_PATH}};
@@ -25,6 +26,8 @@ server {
     include {{PROJECT_DIR}}/deploy/blocklist.conf;
 
     # Security headers
+    # NOTE: add_header does not inherit into a location block that declares its
+    # own add_header. Any location below that sets a header must repeat this set.
     add_header X-Frame-Options DENY always;
     add_header X-Content-Type-Options nosniff always;
     add_header X-XSS-Protection "1; mode=block" always;
@@ -37,6 +40,13 @@ server {
         expires 30d;
         access_log off;
         add_header Cache-Control "public, immutable";
+
+        # Repeated: this block's own add_header cancels the server-level set
+        add_header X-Frame-Options DENY always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Referrer-Policy "same-origin" always;
     }
 
     # Branding images only (NOT uploaded files — those go through Django for access control)
@@ -44,6 +54,7 @@ server {
         alias {{PROJECT_DIR}}/media/branding/;
         expires 1d;
         access_log off;
+        # No add_header here on purpose: this block inherits the server-level set.
     }
 
     # API endpoints - rate limited
@@ -72,5 +83,6 @@ server {
 server {
     listen 80;
     server_name {{SERVER_NAME}};
+    server_tokens off;
     return 301 https://$host$request_uri;
 }

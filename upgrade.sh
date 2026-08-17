@@ -680,6 +680,28 @@ else
             NGINX_CHANGED=true
         fi
 
+        # Suppress the Nginx version banner (both server blocks) if missing
+        if ! grep -q "server_tokens" "$NGINX_CONF" 2>/dev/null; then
+            sudo sed -i '/^[[:space:]]*server_name/a\    server_tokens off;' "$NGINX_CONF"
+            log "Added server_tokens off to Nginx config."
+            NGINX_CHANGED=true
+        fi
+
+        # Repeat security headers inside /static/. Its own add_header cancels
+        # the inherited server-level set, so static assets ship bare without this.
+        if [ "$(grep -c 'X-Content-Type-Options' "$NGINX_CONF" 2>/dev/null)" -lt 2 ]; then
+            sudo sed -i '/add_header Cache-Control "public, immutable";/a\
+\
+        # Repeated: this block'"'"'s own add_header cancels the server-level set\
+        add_header X-Frame-Options DENY always;\
+        add_header X-Content-Type-Options nosniff always;\
+        add_header X-XSS-Protection "1; mode=block" always;\
+        add_header Strict-Transport-Security "max-age=31536000" always;\
+        add_header Referrer-Policy "same-origin" always;' "$NGINX_CONF"
+            log "Repeated security headers inside /static/ in Nginx config."
+            NGINX_CHANGED=true
+        fi
+
         if [ "$NGINX_CHANGED" = true ]; then
             if sudo nginx -t 2>>"${LOGFILE}"; then
                 ok "Nginx config updated and tested OK."

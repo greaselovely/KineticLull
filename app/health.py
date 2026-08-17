@@ -310,6 +310,144 @@ def check_b2_backup_freshness():
     )
 
 
+# ─── Nginx package patch state ──────────────────────────────────────────────
+# Distro builds that shipped with a security fix deliberately withheld. These
+# matter because `apt upgrade` does NOT resolve them — the operator needs to
+# know the fix is absent rather than merely pending. Keyed by exact dpkg version.
+NGINX_WITHHELD_PATCHES = {
+    '1.24.0-2ubuntu7.15': (
+        'CVE-2026-42533',
+        'Ubuntu shipped the fix in 7.14, then disabled it in 7.15 over an ABI '
+        'regression (LP #2161362).',
+    ),
+}
+
+
+def _dpkg_version(pkg):
+    """Installed version of a dpkg package, or None if absent / not Debian."""
+    try:
+        r = subprocess.run(
+            ['dpkg-query', '-W', '-f=${Version}', pkg],
+            capture_output=True, text=True, timeout=3,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    return None
+
+
+def _apt_candidate(pkg):
+    """(candidate_version, on_upstream_repo) read from the local apt cache.
+
+    Cached metadata only — no network call, so candidate accuracy depends on
+    when `apt-get update` last ran. _apt_lists_age_days() covers that gap.
+    """
+    try:
+        r = subprocess.run(
+            ['apt-cache', 'policy', pkg],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None, False
+    if r.returncode != 0:
+        return None, False
+    candidate = None
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if line.startswith('Candidate:'):
+            # Split once: Debian versions may carry an epoch (1:1.24.0-...).
+            candidate = line.split(':', 1)[1].strip()
+            break
+    if candidate in ('(none)', ''):
+        candidate = None
+    return candidate, ('nginx.org' in r.stdout)
+
+
+def _apt_lists_age_days():
+    """Days since apt metadata was refreshed, or None if undeterminable."""
+    for p in ('/var/lib/apt/periodic/update-success-stamp', '/var/lib/apt/lists'):
+        try:
+            return (time.time() - os.path.getmtime(p)) / 86400
+        except OSError:
+            continue
+    return None
+
+
+def check_nginx_patch_state():
+    """Flag nginx builds carrying a withheld security fix or a pending update.
+
+    Three conditions, kept separate because the operator response differs:
+      withheld fix     -> no patched build exists; upgrading changes nothing
+      update available -> apt upgrade resolves it
+      stale apt lists  -> we genuinely cannot tell, so say so
+    """
+    if not os.path.exists('/etc/debian_version'):
+        return _check('nginx_patch', 'Nginx patch state', True, 'info',
+                      'Package tracking is Debian/Ubuntu only on this build.')
+
+    installed = _dpkg_version('nginx')
+    if not installed:
+        return _check('nginx_patch', 'Nginx patch state', True, 'info',
+                      'Nginx is not installed from a system package.')
+
+    candidate, upstream_repo = _apt_candidate('nginx')
+    withheld = NGINX_WITHHELD_PATCHES.get(installed)
+
+    if withheld and not upstream_repo:
+        cve, detail = withheld
+        if candidate and candidate != installed:
+            return _check(
+                'nginx_patch', 'Nginx patch state', False, 'warning',
+                f'{installed} withholds the {cve} fix, and {candidate} is now available.',
+                why=f'{detail} A newer package has appeared, which likely restores the fix.',
+                fix_commands=[
+                    'apt-get changelog nginx | head -20   # confirm the fix is back',
+                    'sudo apt-get update && sudo apt-get install --only-upgrade nginx',
+                    'sudo nginx -t && sudo systemctl reload nginx',
+                ],
+            )
+        return _check(
+            'nginx_patch', 'Nginx patch state', False, 'warning',
+            f'{installed} ships with the {cve} fix disabled, and no fixed build is available.',
+            why=(f'{detail} There is nothing to upgrade to yet. Exposure depends on '
+                 'configuration: the vector named by the advisory is the `map` directive, '
+                 'which KineticLull does not use. A clean check means reduced exposure, '
+                 'not zero.'),
+            fix_commands=[
+                "sudo grep -rn '^[[:space:]]*map[[:space:]]' /etc/nginx/   # confirm the named vector is absent",
+                'apt-get changelog nginx | head -20                       # check whether the fix has returned',
+                'bash deploy/migrate_nginx_upstream.sh                    # optional: move to nginx.org builds',
+            ],
+        )
+
+    if candidate and candidate != installed:
+        return _check(
+            'nginx_patch', 'Nginx patch state', False, 'warning',
+            f'Nginx {installed} installed, {candidate} available.',
+            why='A newer nginx package is available. The web server terminating your TLS '
+                'should not sit on an unapplied update.',
+            fix_commands=[
+                'sudo apt-get update && sudo apt-get install --only-upgrade nginx',
+                'sudo nginx -t && sudo systemctl reload nginx',
+            ],
+        )
+
+    age = _apt_lists_age_days()
+    if age is not None and age > 7:
+        return _check(
+            'nginx_patch', 'Nginx patch state', False, 'warning',
+            f'Nginx {installed}; apt metadata is {age:.0f} days old.',
+            why='Pending-update detection reads the local apt cache. This stale, it cannot '
+                'be trusted to reveal an available nginx security update.',
+            fix_commands=['sudo apt-get update'],
+        )
+
+    src = 'nginx.org' if upstream_repo else 'distro'
+    return _check('nginx_patch', 'Nginx patch state', True, 'ok',
+                  f'{installed} ({src}), no pending package updates.')
+
+
 CHECKS = [
     check_code_stale,
     check_version_up_to_date,
@@ -318,6 +456,7 @@ CHECKS = [
     check_cryptography,
     check_sudoers,
     check_ssl_cert,
+    check_nginx_patch_state,
     check_b2_backup_freshness,
 ]
 
