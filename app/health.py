@@ -448,6 +448,79 @@ def check_nginx_patch_state():
                   f'{installed} ({src}), no pending package updates.')
 
 
+def check_panos_userid_push():
+    """Flag when PAN-OS User-ID push is enabled but not actually delivering.
+
+    A silently broken push is the worst failure mode here: the firewall keeps
+    ageing out mappings, traffic quietly loses attribution, and nothing looks
+    wrong until someone goes looking for a username in a log.
+    """
+    try:
+        from .models import AppSettings, UserIdMapping
+        app_settings = AppSettings.objects.filter(pk=1).first()
+    except Exception:
+        return _check('panos_userid', 'PAN-OS User-ID push', True, 'info', 'Settings not yet initialized.')
+
+    if not app_settings or not app_settings.panos_enabled:
+        return _check('panos_userid', 'PAN-OS User-ID push', True, 'info', 'Not enabled.')
+
+    host = app_settings.panos_host or '(unset)'
+
+    if not app_settings.panos_host or not app_settings.panos_api_key:
+        return _check(
+            'panos_userid', 'PAN-OS User-ID push', False, 'error',
+            'Enabled but the firewall host or API key is not configured.',
+            why='Nothing can be pushed without both a host and a key, so mappings collect and expire unsent.',
+            fix_commands=['# Set the firewall host and API key in Settings → Integrations → Palo Alto User-ID'],
+        )
+
+    if app_settings.panos_last_push_status == 'failed':
+        return _check(
+            'panos_userid', 'PAN-OS User-ID push', False, 'error',
+            f'Last push to {host} failed: {(app_settings.panos_last_push_error or "")[:200]}',
+            why='The firewall rejected or did not answer the last push. Traffic logs lose usernames as existing mappings time out.',
+            fix_commands=[
+                '# Open System → User-ID and click "Test Connection" for the exact error',
+                '# Verify the API key is valid: curl -k "https://<firewall>/api/?type=keygen&user=<user>&password=<pass>"',
+            ],
+        )
+
+    mapping_count = UserIdMapping.objects.count()
+    if mapping_count == 0:
+        return _check(
+            'panos_userid', 'PAN-OS User-ID push', True, 'info',
+            'Enabled, but no collector has checked in yet.',
+        )
+
+    # Two refresh intervals with nothing delivered means the thread is wedged
+    # or the mappings are all being rejected.
+    from django.utils import timezone as djtz
+    stale_minutes = max(app_settings.panos_refresh_interval_minutes * 2, 5)
+    last_at = app_settings.panos_last_push_at
+
+    if last_at is None:
+        return _check(
+            'panos_userid', 'PAN-OS User-ID push', False, 'warning',
+            f'{mapping_count} mapping(s) recorded but nothing has been pushed to {host} yet.',
+            why='The push thread runs only in the startup-leader worker. If it never started, mappings never reach the firewall.',
+            fix_commands=['# Restart the service so the scheduler threads start: sudo systemctl restart kineticlull'],
+        )
+
+    age_minutes = (djtz.now() - last_at).total_seconds() / 60
+    if age_minutes > stale_minutes:
+        return _check(
+            'panos_userid', 'PAN-OS User-ID push', False, 'warning',
+            f'Last push to {host} was {age_minutes:.0f}m ago, past the {stale_minutes:.0f}m refresh window.',
+            why='Mappings are refreshed before they expire on the firewall. Going past the window means entries are ageing out.',
+            fix_commands=['# Open System → User-ID and click "Push Now", then check the result'],
+        )
+
+    return _check(
+        'panos_userid', 'PAN-OS User-ID push', True, 'ok',
+        f'{mapping_count} mapping(s), last push to {host} {age_minutes:.0f}m ago.',
+    )
+
+
 CHECKS = [
     check_code_stale,
     check_version_up_to_date,
@@ -458,6 +531,7 @@ CHECKS = [
     check_ssl_cert,
     check_nginx_patch_state,
     check_b2_backup_freshness,
+    check_panos_userid_push,
 ]
 
 

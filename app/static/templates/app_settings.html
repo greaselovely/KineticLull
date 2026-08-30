@@ -177,6 +177,100 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase mb-3">Palo Alto User-ID</h6>
+                        <p class="text-muted" style="font-size: 0.8rem;">
+                            Managed browsers report who is signed in. KineticLull records the source
+                            address it observes and pushes user-to-IP mappings to the firewall so
+                            traffic logs carry a username instead of just an address.
+                        </p>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="panos_enabled" id="panos_enabled"
+                                    {% if app_settings.panos_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="panos_enabled">Enable PAN-OS User-ID Push</label>
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label for="panos_host" class="form-label">Firewall Host</label>
+                                <input type="text" name="panos_host" id="panos_host" class="form-control form-control-sm" value="{{ app_settings.panos_host }}" placeholder="firewall.example.com">
+                            </div>
+                            <div class="col-6">
+                                <label for="panos_api_key" class="form-label">PAN-OS API Key</label>
+                                <input type="password" name="panos_api_key" id="panos_api_key" class="form-control form-control-sm" value="{{ app_settings.panos_api_key }}" placeholder="LUFRPT1..." autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-3">
+                                <label for="panos_vsys" class="form-label">vsys</label>
+                                <input type="text" name="panos_vsys" id="panos_vsys" class="form-control form-control-sm" value="{{ app_settings.panos_vsys }}" placeholder="optional">
+                            </div>
+                            <div class="col-3">
+                                <label for="panos_mapping_timeout_minutes" class="form-label">Mapping Timeout</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="panos_mapping_timeout_minutes" id="panos_mapping_timeout_minutes" class="form-control" value="{{ app_settings.panos_mapping_timeout_minutes }}" min="5" max="1440">
+                                    <span class="input-group-text">min</span>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <label for="panos_push_interval_seconds" class="form-label">Push Every</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="panos_push_interval_seconds" id="panos_push_interval_seconds" class="form-control" value="{{ app_settings.panos_push_interval_seconds }}" min="10" max="300">
+                                    <span class="input-group-text">sec</span>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <label for="panos_refresh_interval_minutes" class="form-label">Refresh Every</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="panos_refresh_interval_minutes" id="panos_refresh_interval_minutes" class="form-control" value="{{ app_settings.panos_refresh_interval_minutes }}" min="1" max="720">
+                                    <span class="input-group-text">min</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-4">
+                                <label for="userid_heartbeat_seconds" class="form-label">Collector Check-in</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="userid_heartbeat_seconds" id="userid_heartbeat_seconds" class="form-control" value="{{ app_settings.userid_heartbeat_seconds }}" min="60" max="3600">
+                                    <span class="input-group-text">sec</span>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <label for="userid_jitter_seconds" class="form-label">Check-in Jitter</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="userid_jitter_seconds" id="userid_jitter_seconds" class="form-control" value="{{ app_settings.userid_jitter_seconds }}" min="0" max="600">
+                                    <span class="input-group-text">sec</span>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <label for="userid_stale_after_minutes" class="form-label">Drop After Silence</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" name="userid_stale_after_minutes" id="userid_stale_after_minutes" class="form-control" value="{{ app_settings.userid_stale_after_minutes }}" min="5" max="1440">
+                                    <span class="input-group-text">min</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="panos_only_private_ips" id="panos_only_private_ips"
+                                {% if app_settings.panos_only_private_ips %}checked{% endif %}>
+                            <label class="form-check-label" for="panos_only_private_ips">
+                                Accept check-ins from private addresses only
+                                <span class="text-muted d-block" style="font-size: 0.78rem;">Stops a device taken off-site from attaching a name to its home public address.</span>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="panos_verify_ssl" id="panos_verify_ssl"
+                                {% if app_settings.panos_verify_ssl %}checked{% endif %}>
+                            <label class="form-check-label" for="panos_verify_ssl">
+                                Verify the firewall's TLS certificate
+                                <span class="text-muted d-block" style="font-size: 0.78rem;">Leave off if the management interface uses a self-signed certificate.</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {# ────────────── SECURITY ────────────── #}

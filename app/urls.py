@@ -7,7 +7,7 @@ from .views import KineticLullLoginView
 from django.views.generic.base import RedirectView
 
 from . import views
-from .views import SubmitFQDNView, update_edl_fqdn, short_urls_view, create_short_url, edit_short_url, delete_short_url, redirect_short_url, restart_services_view
+from .views import SubmitFQDNView, update_edl_fqdn, short_urls_view, create_short_url, edit_short_url, delete_short_url, redirect_short_url
 
 app_name = "app"
 
@@ -24,6 +24,8 @@ urlpatterns = [
     path('login/', KineticLullLoginView.as_view(template_name='login.html'), name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('item-detail/<int:item_id>/', views.item_detail_view, name='item_detail'),
+    # Frozen legacy paths. Hardcoded in shipped GhostHunter builds and in
+    # customer scripts; both are thin shims over app.api.services.
     path('api/submit_fqdn/', SubmitFQDNView.as_view(), name='submit_fqdn'),
     path('api/update_edl/', update_edl_fqdn, name='update_edl'),
     path('submission_list/', views.submission_list, name='submission_list'),
@@ -35,12 +37,7 @@ urlpatterns = [
     path('deployment/migrate/', views.deployment_migrate_view, name='deployment_migrate'),
     path('blocked-ips/', views.blocked_ips_view, name='blocked_ips'),
     path('whitelisted-ips/', views.whitelisted_ips_view, name='whitelisted_ips'),
-    path('api/block-ip/', views.block_ip_view, name='block_ip'),
-    path('api/unblock-ip/', views.unblock_ip_view, name='unblock_ip'),
-    path('api/blocked-ip-timeline/', views.blocked_ip_timeline_view, name='blocked_ip_timeline'),
-    path('api/whitelist-ip/', views.whitelist_ip_view, name='whitelist_ip'),
-    path('api/remove-whitelist-ip/', views.remove_whitelist_ip_view, name='remove_whitelist_ip'),
-    path('api/restart-services/', restart_services_view, name='restart_services'),
+    path('user-id/', views.user_id_mappings_view, name='user_id_mappings'),
     path('blocked-ips/export/', views.blocklist_export_view, name='blocklist_export'),
     path('favorites/', views.favorites_view, name='favorites'),  # legacy redirect support
     path('favorite/<int:item_id>/', views.toggle_favorite, name='toggle_favorite'),

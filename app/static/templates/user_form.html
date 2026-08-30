@@ -90,13 +90,38 @@
     <div class="card mb-3 mt-4">
         <div class="card-body">
             <h6 class="text-muted text-uppercase mb-3">API Key</h6>
-            {% if api_key %}
+            {% if new_api_key %}
             <div id="api-key-container" class="mb-3">
-                <p style="font-size: 0.85rem;" class="mb-2">{% if is_self %}Your{% else %}{{ edit_user.email }}'s{% endif %} API key:</p>
+                <div class="alert alert-warning py-2 px-3 mb-2" style="font-size: 0.85rem;">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Copy this key now. It is stored as a hash and cannot be shown again.
+                </div>
                 <div class="d-flex align-items-center gap-2 api-key-row">
-                    <code id="api-key" class="blur-text flex-grow-1" style="font-size: 0.85rem; padding: 6px 10px; background: #f5f6fa; border-radius: 4px;">{{ api_key }}</code>
+                    <code id="api-key" class="blur-text flex-grow-1" style="font-size: 0.85rem; padding: 6px 10px; background: #f5f6fa; border-radius: 4px;">{{ new_api_key }}</code>
                     <i class="bi bi-eye action-items" id="toggle-api-key-visibility" style="cursor: pointer;" title="Show/Hide"></i>
                     <i class="bi bi-clipboard action-items" id="copy-api-key" style="cursor: pointer;" title="Copy"></i>
+                </div>
+            </div>
+            {% elif api_key_obj %}
+            <div class="mb-3">
+                <p style="font-size: 0.85rem;" class="mb-2">{% if is_self %}Your{% else %}{{ edit_user.email }}'s{% endif %} API key:</p>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <code style="font-size: 0.85rem; padding: 6px 10px; background: #f5f6fa; border-radius: 4px;">{{ api_key_obj.display_key }}</code>
+                    {% if api_key_obj.is_revoked %}
+                    <span class="badge bg-danger">Revoked</span>
+                    {% elif api_key_obj.is_expired %}
+                    <span class="badge bg-warning text-dark">Expired</span>
+                    {% else %}
+                    <span class="badge bg-success">Active</span>
+                    {% endif %}
+                </div>
+                <div class="text-muted mt-2" style="font-size: 0.8rem;">
+                    Created {{ api_key_obj.created_at|date:app_timestamp_format }}.
+                    {% if api_key_obj.expires_at %}Expires {{ api_key_obj.expires_at|date:app_timestamp_format }}.{% endif %}
+                    Last used {% if api_key_obj.last_used_at %}{{ api_key_obj.last_used_at|date:app_timestamp_format }}{% else %}never{% endif %}.
+                </div>
+                <div class="text-muted mt-1" style="font-size: 0.8rem;">
+                    Scopes: <code>{% for scope in api_key_obj.scopes %}{{ scope }}{% if not forloop.last %}, {% endif %}{% empty %}*{% endfor %}</code>
                 </div>
             </div>
             {% else %}
@@ -106,7 +131,7 @@
             <form method="post" class="m-0">
                 {% csrf_token %}
                 <button name="generate_api_key" type="submit" class="btn btn-sm btn-outline-warning">
-                    {% if api_key %}Regenerate{% else %}Generate{% endif %} API Key
+                    {% if api_key_obj %}Regenerate{% else %}Generate{% endif %} API Key
                 </button>
             </form>
         </div>

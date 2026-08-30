@@ -741,6 +741,10 @@ def generate_api_key(user):
     This function uses `secrets.token_urlsafe()` to generate a secure, random API key. It ensures that each user has only
     one API key by checking for an existing key and updating it if found. If no key exists, it creates a new APIKey instance.
 
+    Only the SHA-256 digest is stored. The returned plaintext is the single
+    opportunity to show it to the operator; it cannot be recovered afterwards,
+    so callers must surface it immediately.
+
     Parameters:
     - user: User instance for whom the API key is being generated or updated.
 
@@ -749,36 +753,50 @@ def generate_api_key(user):
     """
     app_settings = AppSettings.load()
     api_key, created = APIKey.objects.get_or_create(user=user)
-    new_key = secrets.token_urlsafe(50)
-    api_key.key = new_key
+    # `kl_` marks the credential as ours in logs, in secret scanners, and in a
+    # support ticket where someone pastes a token with no other context.
+    new_key = f"kl_{secrets.token_urlsafe(50)}"
+    api_key.key = ''
+    api_key.key_hash = APIKey.hash_key(new_key)
+    api_key.key_prefix = new_key[:12]
     api_key.expires_at = datetime.now(timezone.utc) + timedelta(days=app_settings.api_key_expiration_days)
+    api_key.revoked_at = None
+    if not api_key.scopes:
+        api_key.scopes = [APIKey.SCOPE_WILDCARD]
     api_key.save()
+    # The only time the plaintext exists. It is not recoverable after this.
     return new_key, created
 
 def validate_api_key(key: str) -> bool:
     """
     Validates an API key by checking if it exists in the database.
 
-    This function queries the database to see if the provided API key exists within the APIKey model. It's used
-    to verify that an API key is valid and has been issued, as part of authentication or permission checks in
-    API or system operations that require key-based access control.
+    Hashes the supplied key and looks for a matching digest, then confirms the key is neither expired nor
+    revoked. Used for permission checks in API or system operations that require key-based access control.
 
     Parameters:
     - key: A string representing the API key to be validated.
 
     Returns:
-    - A boolean value: True if the API key exists in the database, False otherwise.
+    - A boolean value: True if the key matches a usable APIKey, False otherwise.
     """
-    return APIKey.objects.filter(key=key).exists()
+    key_hash = APIKey.hash_key(key)
+    if not key_hash:
+        return False
+    api_key = APIKey.objects.filter(key_hash=key_hash).first()
+    return api_key is not None and api_key.is_usable
 
 def authenticate_user(api_key_header):
     """
     Authenticates a user based on an API key provided in the header.
 
-    This function expects the `api_key_header` to be in the format "Bearer YOUR_API_KEY_HERE". It attempts to
-    extract the API key from the header and then checks if this key corresponds to an existing APIKey instance
-    in the database. If a matching APIKey instance is found, the associated user is returned, otherwise, None
-    is returned, indicating that authentication has failed.
+    This function expects the `api_key_header` to be in the format "Bearer YOUR_API_KEY_HERE", and also accepts
+    a bare key with no scheme because keys deployed before v1 are used that way. It hashes the extracted key
+    and looks for a usable (unexpired, unrevoked) APIKey. If one is found, the associated user is returned,
+    otherwise None, indicating that authentication has failed.
+
+    Scope is deliberately not checked here. This helper backs the frozen legacy endpoints, whose keys predate
+    scopes; `app.api.auth.APIKeyAuth` is the scope-aware path for `/api/v1/`.
 
     Parameters:
     - api_key_header: The API key header string, expected to start with "Bearer " followed by the API key.
@@ -786,19 +804,19 @@ def authenticate_user(api_key_header):
     Returns:
     - The user associated with the provided API key if authentication is successful; otherwise, None.
     """
+    from app.api.auth import resolve_api_key
+
+    if not api_key_header:
+        return None
+
     try:
         _, api_key = api_key_header.split()  # This unpacks the header into two parts: "Bearer" and the actual key
     except ValueError:
         # If split() fails or doesn't produce exactly two items, then we have only received the key already and just assign it for user lookup.
         api_key = api_key_header
 
-    try:
-        api_key_instance = APIKey.objects.get(key=api_key)
-        if api_key_instance.is_expired:
-            return None
-        return api_key_instance.user
-    except APIKey.DoesNotExist:
-        return None
+    api_key_instance = resolve_api_key(api_key)
+    return api_key_instance.user if api_key_instance else None
 
 def logout_view(request):
     """
@@ -838,23 +856,23 @@ class SubmitFQDNView(View):
       (401 for invalid API key, 400 for invalid FQDN list, etc.) and error messages.
     """
     def post(self, request, *args, **kwargs):
+        from app.api import services
+
         api_key = request.headers.get('Authorization')
         user = authenticate_user(api_key)
-        
+
         if user is None:
             return JsonResponse({'error': 'Invalid API key'}, status=401)
-        
-        data = json.loads(request.body)
-        fqdn_list = data.get('fqdn_list', [])
-        fqdn_list = [domain.replace("http://", "").replace("https://", "") for domain in fqdn_list]
 
-        app_settings = AppSettings.load()
-        if not fqdn_list or len(fqdn_list) > app_settings.max_fqdns_per_submission:
-            return JsonResponse({'error': f'FQDN list must be 1-{app_settings.max_fqdns_per_submission} entries'}, status=400)
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
-        InboxEntry.objects.create(submitted_by=user, fqdn_list="\r\n".join(fqdn_list))
-        log_activity(request, 'api_submit', f'{len(fqdn_list)} FQDNs', user=user)
-        return JsonResponse({'message': 'Submission successful'}, status=201)
+        payload, status, context = services.submit_fqdns(user, data.get('fqdn_list', []))
+        if status == 201:
+            log_activity(request, 'api_submit', f'{context["count"]} FQDNs', user=user)
+        return JsonResponse(payload, status=status)
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -868,88 +886,52 @@ def update_edl_fqdn(request):
     and 'command' indicating the update operation mode ('update' or 'overwrite'). FQDNs are cleansed of protocols
     (http://, https://) before processing.
 
+    Frozen legacy path. `app.api.edl.update_edl` serves the same logic at
+    /api/v1/ and both go through `app.api.services.update_edl`, so the two
+    cannot drift.
+
     Parameters:
     - request: HttpRequest object containing metadata about the request including 'Authorization' header with the API key,
                and a JSON body with 'auto_url', 'fqdn_list', and 'command'.
 
     Returns:
-    - JsonResponse indicating the outcome of the operation. Returns HTTP 201 with a success message if the update
+    - JsonResponse indicating the outcome of the operation. Returns HTTP 200 with a success message if the update
       is successful, HTTP 401 for unauthorized requests, HTTP 400 for requests with missing or invalid data,
-      or HTTP 500 for server errors.
+      HTTP 403 for system EDLs, HTTP 404 when the EDL does not exist, or HTTP 500 for server errors.
     """
+    from app.api import services
+
     try:
-        current_date_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        data = json.loads(request.body)
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
         auth_header = request.headers.get('Authorization')
         api_key = auth_header.split(' ')[-1] if auth_header else None
         user = authenticate_user(api_key)
-        user = str(user)
-        user, _ = user.split("@")
 
+        # Historically this branch was unreachable: `user` was stringified
+        # before the None check, so a bad key raised inside the try and
+        # surfaced as a 500 "An error occurred" instead of a 401.
         if user is None:
             return JsonResponse({'error': 'Unauthorized'}, status=401)
 
-        # Extract the auto_url from the request data
-        full_auto_url = data.get('auto_url', '')
-        fqdn_list = data.get('fqdn_list', [])
-        fqdn_list = [domain.replace("http://", "").replace("https://", "") for domain in fqdn_list]
-        command = data.get('command', 'update')  # Default to 'update'
-
-        # Obtain the base URL from settings or .env
-        base_url = getattr(settings, 'KINETICLULL_URL', os.getenv('KINETICLULL_URL', ''))
-
-        # Remove the base URL part from the full_auto_url
-        if base_url and full_auto_url.startswith(base_url):
-            auto_url = full_auto_url.replace(base_url, '', 1).lstrip('/')
-        else:
-            auto_url = full_auto_url
-
-        if not auto_url:
-            return JsonResponse({'error': 'Missing auto_url'}, status=400)
-
-        app_settings = AppSettings.load()
-        if not fqdn_list or len(fqdn_list) > app_settings.max_fqdns_per_update:
-            return JsonResponse({'error': f'FQDN list must be 1-{app_settings.max_fqdns_per_update} entries'}, status=400)
-
-        try:
-            edl = ExtDynLists.objects.get(auto_url=auto_url)
-        except ExtDynLists.DoesNotExist:
-            return JsonResponse({'error': 'EDL not found'}, status=404)
-
-        if edl.is_system:
-            return JsonResponse(
-                {'error': 'System EDL is read-only and cannot be modified via API.'},
-                status=403,
+        payload, status, context = services.update_edl(
+            user,
+            data.get('auto_url', ''),
+            data.get('fqdn_list', []),
+            data.get('command', 'update'),
+        )
+        if status == 200:
+            log_activity(
+                request,
+                f'api_{context["command"]}',
+                context['friendly_name'],
+                f'{context["count"]} FQDNs',
             )
-
-        if command == 'overwrite':
-            # For 'overwrite', treat all provided domains as new
-            edl.ip_fqdn = "\r\n".join([f"{domain} # {current_date_time} by {user}" for domain in set(fqdn_list)])
-        elif command == 'update':
-            existing_fqdns = edl.ip_fqdn.split("\r\n")
-            
-            # Extract just the domain names from existing entries to identify new domains
-            existing_domains = set(entry.split(' ')[0] for entry in existing_fqdns if entry.strip())
-            
-            # Determine which domains from the provided list are new
-            new_domains = [domain for domain in fqdn_list if domain not in existing_domains]
-            
-            # Append additional info only to new domains
-            new_fqdn_entries = [f"{domain} # {current_date_time} by {user}" for domain in new_domains]
-            
-            # Combine new entries with existing ones, no need to deduplicate here as existing entries are preserved as is
-            updated_fqdns = existing_fqdns + new_fqdn_entries
-            edl.ip_fqdn = "\r\n".join(updated_fqdns)
-        
-        else:
-            return JsonResponse({'error': 'Invalid Command'}, status=400)
-
-        edl.save()
-        log_activity(request, f'api_{command}', edl.friendly_name, f'{len(fqdn_list)} FQDNs')
-        return JsonResponse({'message': 'Command Successful'}, status=200)
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    except Exception as e:
+        return JsonResponse(payload, status=status)
+    except Exception:
         return JsonResponse({'error': 'An error occurred'}, status=500)
 
 @login_required
@@ -1239,6 +1221,14 @@ def app_settings_view(request):
         ('log_retention_days', 'log_retention_days', 1, 180, 90),
         ('session_timeout_minutes', 'session_timeout_minutes', 5, 480, 30),
         ('api_key_expiration_days', 'api_key_expiration_days', 14, 365, 90),
+        # PAN-OS User-ID. The push floor of 10s is deliberate: below that the
+        # firewall gets more requests than a login storm ever generates.
+        ('panos_mapping_timeout_minutes', 'panos_mapping_timeout_minutes', 5, 1440, 45),
+        ('panos_push_interval_seconds', 'panos_push_interval_seconds', 10, 300, 30),
+        ('panos_refresh_interval_minutes', 'panos_refresh_interval_minutes', 1, 720, 15),
+        ('userid_heartbeat_seconds', 'userid_heartbeat_seconds', 60, 3600, 600),
+        ('userid_jitter_seconds', 'userid_jitter_seconds', 0, 600, 120),
+        ('userid_stale_after_minutes', 'userid_stale_after_minutes', 5, 1440, 30),
     ]
 
     if request.method == 'POST':
@@ -1449,6 +1439,26 @@ def app_settings_view(request):
         if new_b2_bucket != app_settings.b2_bucket_name:
             app_settings.b2_bucket_name = new_b2_bucket
             changes.append(f'b2_bucket_name={new_b2_bucket}')
+
+        # Palo Alto User-ID
+        for flag in ('panos_enabled', 'panos_verify_ssl', 'panos_only_private_ips'):
+            new_flag = request.POST.get(flag) == 'on'
+            if new_flag != getattr(app_settings, flag):
+                setattr(app_settings, flag, new_flag)
+                changes.append(f'{flag}={new_flag}')
+
+        for field in ('panos_host', 'panos_vsys'):
+            new_val = request.POST.get(field, '').strip()
+            if new_val != getattr(app_settings, field):
+                setattr(app_settings, field, new_val)
+                changes.append(f'{field}={new_val}')
+
+        # Blank means "leave it alone", so a round-trip through the form does
+        # not wipe a key the field never rendered.
+        new_panos_key = request.POST.get('panos_api_key', '').strip()
+        if new_panos_key and new_panos_key != app_settings.panos_api_key:
+            app_settings.panos_api_key = new_panos_key
+            changes.append('panos_api_key=***')
 
         if 'otf_brand_image' in request.FILES:
             logo = request.FILES['otf_brand_image']
@@ -1783,10 +1793,15 @@ def user_edit_view(request, user_id):
                 messages.error(request, 'This user does not have permission to use an API key.')
                 return redirect('app:user_edit', user_id=user_id)
             APIKey.objects.filter(user=edit_user).delete()
-            generate_api_key(edit_user)
+            new_key, _ = generate_api_key(edit_user)
+            # Only the digest is stored, so this redirect is the last chance to
+            # show the operator the key. Hand it off through the session and pop
+            # it on the next render so a refresh does not re-reveal it.
+            request.session['new_api_key'] = new_key
+            request.session['new_api_key_for'] = edit_user.id
             actor_note = '' if is_self else f' for {edit_user.email}'
             log_activity(request, 'generate_api_key', edit_user.email, f'Regenerated{actor_note}')
-            messages.success(request, 'New API key generated.')
+            messages.success(request, 'New API key generated. Copy it now, it will not be shown again.')
             return redirect('app:user_edit', user_id=user_id)
 
         # Snapshot before state
@@ -1854,13 +1869,22 @@ def user_edit_view(request, user_id):
         return redirect('app:user_list')
 
     api_key_obj = APIKey.objects.filter(user=edit_user).first() if can_use_api_key else None
+
+    # One-shot reveal: present only on the render immediately following
+    # generation, and gone from the session afterwards.
+    new_api_key = None
+    if request.session.get('new_api_key_for') == edit_user.id:
+        new_api_key = request.session.pop('new_api_key', None)
+        request.session.pop('new_api_key_for', None)
+
     return render(request, 'user_form.html', {
         'edit_user': edit_user,
         'groups': groups,
         'mode': 'edit',
         'is_self': is_self,
         'can_use_api_key': can_use_api_key,
-        'api_key': api_key_obj.key if api_key_obj else None,
+        'api_key_obj': api_key_obj,
+        'new_api_key': new_api_key,
     })
 
 
@@ -2804,6 +2828,29 @@ def blocked_ips_view(request):
 
 
 @login_required
+def user_id_mappings_view(request):
+    """Live user-to-IP mappings and the health of the firewall push."""
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    from .models import UserIdMapping
+    from . import panos as panos_module
+
+    app_settings = AppSettings.load()
+    mappings = list(UserIdMapping.objects.all())
+
+    return render(request, 'user_id_mappings.html', {
+        'mappings': mappings,
+        'app_settings': app_settings,
+        'refresh_interval': app_settings.panos_refresh_interval_minutes,
+        'stale_after': app_settings.userid_stale_after_minutes,
+        # Shown verbatim when a push fails, so an operator can reproduce it by
+        # hand instead of guessing at what we sent.
+        'curl_equivalent': panos_module.curl_equivalent(app_settings),
+    })
+
+
+@login_required
 def whitelisted_ips_view(request):
     if not request.user.is_superuser:
         raise PermissionDenied
@@ -2814,59 +2861,6 @@ def whitelisted_ips_view(request):
         'user_ip': user_ip,
         'user_ip_whitelisted': user_ip_whitelisted,
     })
-
-
-@login_required
-@require_http_methods(["POST"])
-def whitelist_ip_view(request):
-    """Add an IP or subnet to the whitelist."""
-    if not request.user.is_superuser:
-        return JsonResponse({'error': 'Forbidden'}, status=403)
-
-    ip = request.POST.get('ip_address', '').strip()
-    reason = request.POST.get('reason', '').strip()
-
-    if not ip:
-        return JsonResponse({'error': 'IP address or subnet required'}, status=400)
-
-    # Validate IP or CIDR
-    try:
-        if '/' in ip:
-            ipaddress.ip_network(ip, strict=False)
-        else:
-            ipaddress.ip_address(ip)
-    except ValueError:
-        return JsonResponse({'error': 'Invalid IP address or subnet'}, status=400)
-
-    obj, created = WhitelistedIP.objects.get_or_create(
-        ip_address=ip,
-        defaults={'reason': reason, 'added_by': request.user}
-    )
-
-    if created:
-        log_activity(request, 'whitelist_ip', ip, reason)
-        # Remove from blocklist if currently blocked
-        blocked = BlockedIP.objects.filter(ip_address=ip)
-        if blocked.exists():
-            blocked.delete()
-            BlockedIP.sync_to_nginx()
-        return JsonResponse({'status': 'whitelisted'})
-    return JsonResponse({'status': 'already_whitelisted'})
-
-
-@login_required
-@require_http_methods(["POST"])
-def remove_whitelist_ip_view(request):
-    """Remove an IP from the whitelist."""
-    if not request.user.is_superuser:
-        return JsonResponse({'error': 'Forbidden'}, status=403)
-
-    ip = request.POST.get('ip_address', '').strip()
-    deleted, _ = WhitelistedIP.objects.filter(ip_address=ip).delete()
-    if deleted:
-        log_activity(request, 'remove_whitelist', ip)
-        return JsonResponse({'status': 'removed'})
-    return JsonResponse({'error': 'Not found'}, status=404)
 
 
 @login_required
@@ -3003,61 +2997,6 @@ def blocklist_export_view(request):
     response = HttpResponse(content, content_type='text/plain')
     response['Content-Disposition'] = 'attachment; filename="kineticlull_blocklist.txt"'
     return response
-
-
-@login_required
-@require_http_methods(["POST"])
-def block_ip_view(request):
-    if not request.user.is_superuser:
-        return JsonResponse({'error': 'Forbidden'}, status=403)
-
-    ip = request.POST.get('ip_address', '').strip()
-    reason = request.POST.get('reason', 'Manually blocked').strip()
-
-    if not ip:
-        return JsonResponse({'error': 'IP address required'}, status=400)
-
-    try:
-        ipaddress.ip_address(ip)
-    except ValueError:
-        return JsonResponse({'error': 'Invalid IP address'}, status=400)
-
-    from .models import WhitelistedIP
-    if WhitelistedIP.is_whitelisted(ip):
-        return JsonResponse({'error': 'Cannot block a whitelisted IP'}, status=400)
-
-    obj, created = BlockedIP.objects.get_or_create(
-        ip_address=ip,
-        defaults={
-            'reason': reason,
-            'blocked_by': request.user,
-            'auto_blocked': False,
-        }
-    )
-
-    if created:
-        BlockedIP.sync_to_nginx()
-        log_activity(request, 'ip_blocked', ip, reason)
-
-    return JsonResponse({'status': 'blocked', 'created': created, 'ip': ip})
-
-
-@login_required
-@require_http_methods(["POST"])
-def unblock_ip_view(request):
-    if not request.user.is_superuser:
-        return JsonResponse({'error': 'Forbidden'}, status=403)
-
-    ip = request.POST.get('ip_address', '').strip()
-    if not ip:
-        return JsonResponse({'error': 'IP address required'}, status=400)
-
-    deleted, _ = BlockedIP.objects.filter(ip_address=ip).delete()
-    if deleted:
-        BlockedIP.sync_to_nginx()
-        log_activity(request, 'ip_unblocked', ip)
-
-    return JsonResponse({'status': 'unblocked', 'ip': ip})
 
 
 def _generate_migration_script(base_dir, server_name, cert_dir, nginx_config, svc_config, python_path, ssl_mode='selfsigned', letsencrypt_email='', app_user=''):

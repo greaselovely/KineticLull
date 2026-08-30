@@ -116,7 +116,7 @@ def _is_startup_leader():
 
 
 def _start_scheduler_threads():
-    """Spawn the daily-backup, cleanup, and rejection-parser background threads.
+    """Spawn the daily-backup, cleanup, rejection-parser, and user-ID threads.
 
     Caller must already have confirmed leader status - this function does not
     re-check, it just spawns. Each thread has its own startup grace period
@@ -229,12 +229,102 @@ def _start_scheduler_threads():
                 pass
             time.sleep(300)
 
+    def _user_id_push_loop():
+        """Push user-to-IP mappings to the firewall's User-ID XML API.
+
+        One loop covers both cadences the design calls for:
+
+          - New and changed mappings go out on the next pass, so attribution
+            for a fresh login is seconds old rather than minutes.
+          - Mappings already on the firewall are re-sent before their timeout
+            expires, which keeps them alive without the collector having to
+            heartbeat fast enough to beat the firewall clock.
+
+        Batching is the point. Twenty students logging in at 8:05 produce one
+        firewall request, not twenty, because everything that arrived during
+        the interval ships in a single uid-message.
+
+        Mappings that have gone quiet are dropped rather than refreshed. A
+        departed device generates no traffic to attribute, and holding its
+        entry open would leave a stale name on whatever takes that address
+        next.
+        """
+        time.sleep(45)  # startup grace, staggered against the other loops
+
+        while True:
+            sleep_secs = 60
+            try:
+                from app.models import AppSettings
+
+                app_settings = AppSettings.objects.filter(pk=1).first()
+                if not app_settings or not app_settings.panos_enabled:
+                    time.sleep(60)
+                    continue
+
+                sleep_secs = max(10, min(app_settings.panos_push_interval_seconds, 300))
+                push_due_user_id_mappings(app_settings)
+            except Exception:
+                pass
+            time.sleep(sleep_secs)
+
     t = threading.Thread(target=_backup_loop, daemon=True)
     t.start()
     t2 = threading.Thread(target=_cleanup_loop, daemon=True)
     t2.start()
     t3 = threading.Thread(target=_rejection_parser_loop, daemon=True)
     t3.start()
+    t4 = threading.Thread(target=_user_id_push_loop, daemon=True)
+    t4.start()
+
+
+def _stale_cutoff(stale_after_minutes):
+    """Timestamp before which a mapping counts as abandoned."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    return timezone.now() - timedelta(minutes=stale_after_minutes)
+
+
+def push_due_user_id_mappings(app_settings):
+    """Run one push pass: prune the abandoned, ship everything else that is due.
+
+    Split out of the loop so it can be exercised directly and so the settings
+    page's "Push Now" button runs exactly the same code path the scheduler
+    does. Returns (pushed_count, message).
+    """
+    from django.utils import timezone
+
+    from app import panos
+    from app.models import UserIdMapping
+
+    UserIdMapping.objects.filter(
+        last_checkin__lt=_stale_cutoff(app_settings.userid_stale_after_minutes)
+    ).delete()
+
+    due = [
+        m for m in UserIdMapping.objects.all()
+        if m.is_dirty or m.needs_refresh(app_settings.panos_refresh_interval_minutes)
+    ]
+    if not due:
+        return 0, 'Nothing due.'
+
+    success, message = panos.push_user_id_mappings(due, app_settings)
+    app_settings.save()
+
+    if not success:
+        return 0, message
+
+    # Only record what the firewall actually accepted. Stamping these before
+    # the push would let a failed batch look delivered and sit unretried until
+    # its refresh interval came round.
+    now = timezone.now()
+    for mapping in due:
+        mapping.last_pushed_at = now
+        mapping.pushed_username = mapping.username
+    UserIdMapping.objects.bulk_update(due, ['last_pushed_at', 'pushed_username'])
+
+    return len(due), message
 
 
 def _maybe_upload_to_b2():

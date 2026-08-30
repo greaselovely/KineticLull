@@ -89,11 +89,25 @@ class Command(BaseCommand):
             owner = CustomUser.objects.filter(email=k['user_email']).first()
             if not owner:
                 continue
+
+            # Backups taken before keys were hashed carry the plaintext under
+            # 'key'. Hash it on the way in rather than dropping those keys.
+            key_hash = k.get('key_hash') or APIKey.hash_key(k.get('key', ''))
+            if not key_hash:
+                continue
+            key_prefix = k.get('key_prefix') or (k.get('key', '') or '')[:12]
+
             APIKey.objects.update_or_create(
-                key=k['key'],
+                key_hash=key_hash,
                 defaults={
                     'user': owner,
+                    'key': '',
+                    'key_prefix': key_prefix,
+                    'name': k.get('name', ''),
+                    'scopes': k.get('scopes') or ['*'],
                     'expires_at': _parse_dt(k.get('expires_at')),
+                    'last_used_at': _parse_dt(k.get('last_used_at')),
+                    'revoked_at': _parse_dt(k.get('revoked_at')),
                 },
             )
             self.stdout.write(f'  API key for: {k["user_email"]}')

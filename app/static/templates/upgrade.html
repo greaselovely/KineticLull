@@ -221,7 +221,7 @@ function klShowRestartFailure(target, lastSeen) {
             var failed = document.getElementById('upgrade-failed');
             status.style.display = 'block';
 
-            fetch('{% url "app:restart_services" %}', {
+            fetch('{% url "api_v1:restart_services" %}', {
                 method: 'POST',
                 headers: {'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')},
             }).then(function (resp) {

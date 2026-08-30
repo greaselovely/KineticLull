@@ -87,7 +87,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var reason = document.getElementById('whitelist-reason-input').value.trim();
         if (!ip) return;
 
-        fetch('{% url "app:whitelist_ip" %}', {
+        fetch('{% url "api_v1:whitelist_ip" %}', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
             body: 'ip_address=' + encodeURIComponent(ip) + '&reason=' + encodeURIComponent(reason)
@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var myIpBtn = document.getElementById('whitelist-my-ip');
     if (myIpBtn) {
         myIpBtn.addEventListener('click', function() {
-            fetch('{% url "app:whitelist_ip" %}', {
+            fetch('{% url "api_v1:whitelist_ip" %}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
                 body: 'ip_address={{ user_ip }}&reason=Auto-whitelisted (admin session)'
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             var ip = this.getAttribute('data-ip');
             showConfirmModal('Remove ' + ip + ' from whitelist?', function() {
-                fetch('{% url "app:remove_whitelist_ip" %}', {
+                fetch('{% url "api_v1:remove_whitelist_ip" %}', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
                     body: 'ip_address=' + encodeURIComponent(ip)

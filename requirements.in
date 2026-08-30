@@ -5,6 +5,7 @@ python-dotenv
 gunicorn>=22.0
 cryptography
 resend
+django-ninja>=1.4
 # Transitive deps via resend>requests; pinned to floor-versions that
 # close the Snyk findings (urllib3 carries 3 High-severity CVEs at 2.2.1).
 requests>=2.33.0

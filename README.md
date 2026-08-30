@@ -165,6 +165,20 @@ Notes:
 
 All API endpoints require a Bearer token in the Authorization header. Generate an API key from **Admin → My Account** (your group must have the `Can use an API key` permission, which superusers always have).
 
+Keys are stored as a SHA-256 hash, so the plaintext is displayed **once**, at generation. Copy it then; there is no way to recover it afterwards. The account page keeps showing the key's prefix, scopes, expiry, and last-used time so you can tell keys apart and spot dead integrations.
+
+### Versioned API (`/api/v1/`)
+
+The current API is served by Django Ninja at `/api/v1/`, with interactive documentation at `/api/v1/docs` (superusers only) and the OpenAPI schema at `/api/v1/openapi.json`.
+
+| Endpoint | Method | Scope | Purpose |
+|---|---|---|---|
+| `/api/v1/edl/submit` | POST | `edl:write` | Queue FQDNs for review |
+| `/api/v1/edl/update` | POST | `edl:write` | Append to or overwrite an EDL |
+| `/api/v1/system/boot_version` | GET | none | Version this worker is running |
+
+The `/api/submit_fqdn/` and `/api/update_edl/` paths below are **frozen** for compatibility with shipped GhostHunter builds and existing customer scripts. They run the same code as their `/api/v1/` equivalents and are not going away, but new integrations should target `/api/v1/`.
+
 ### Submit FQDNs for Review
 
 Creates a new inbox entry for admin review:
@@ -203,6 +217,48 @@ curl -k -X POST https://<kineticlull_url>/api/update_edl/ \
 - Maximum 50 FQDNs per request.
 - Protocol prefixes (`http://`, `https://`) are automatically stripped.
 - When updating or overwriting, entries are annotated with timestamp and user. Palo Alto Networks firewalls ignore everything after the first space in EDL entries.
+- Errors are always shaped `{"error": "..."}`, on both the legacy paths and `/api/v1/`. Request-validation failures on `/api/v1/` add a `detail` array with the full field-level breakdown.
+- An `Authorization` header without the `Bearer ` prefix is accepted, since keys issued before `/api/v1/` were used that way.
+
+## Palo Alto User-ID
+
+KineticLull can attribute firewall traffic to usernames without standing up RADIUS and without asking end users to log in a second time.
+
+A managed browser extension posts the signed-in identity to KineticLull on a heartbeat. **KineticLull records the source address it observes on that connection**, never an address the client claims, and keeps the user-to-IP mapping. A background thread batches mappings and pushes them to the firewall's User-ID XML API.
+
+Configure it under **Settings → Integrations → Palo Alto User-ID**, then watch it under **System → User-ID**, which has Test Connection and Push Now buttons and shows the exact `curl` to reproduce a failed push by hand.
+
+### How the sync behaves
+
+- New and changed mappings ship on the next push pass (default every 30 seconds). Twenty students signing in at once produce **one** firewall request, not twenty, because everything that arrived in the interval goes out in a single `uid-message`.
+- Mappings already on the firewall are re-sent every refresh interval (default 15 minutes), comfortably inside the mapping timeout (default 45 minutes), so entries never age out while a device is still online.
+- A device that goes quiet past the stale window (default 30 minutes) is dropped rather than refreshed. It generates no traffic to attribute, and holding its entry open would leave a stale name on whatever picks up that address next.
+- Check-ins from non-private addresses are rejected by default. A device taken home reports its home NAT address, and attaching a student's name to a public IP is both wrong and a privacy problem.
+
+### Collector endpoints
+
+The extension is a thin client: it fetches its own timing from the server on every check-in, so intervals can change without repackaging and redeploying to every device.
+
+```bash
+curl -k -X POST https://<kineticlull_url>/api/v1/userid/checkin \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer <api_key_scoped_userid:write>" \
+    -d '{"username": "student@example.org", "device_id": "CB-1", "agent_version": "0.1.0"}'
+```
+
+```json
+{"status": "ok", "enabled": true, "heartbeat_seconds": 600, "jitter_seconds": 120}
+```
+
+`GET /api/v1/userid/config` returns the same configuration block for a collector that has not checked in yet. Both require an API key carrying the `userid:write` scope.
+
+Check-ins are deliberately **not** written to the activity log; only a new mapping or an address changing hands is recorded. Logging every heartbeat would bury the audit log and put a write amplification on the database for no information.
+
+### Security note
+
+The identity in the request body is self-asserted: the API key identifies the integration, not the person. Someone who extracts the key from a force-installed extension could claim a different username, but only ever for **their own** address, because the mapping is bound to the source IP the server observed. That trade is reasonable for attribution. It would not be reasonable if User-ID mappings later drive enforcement policy, at which point the identity should be a signed token verified server-side rather than a string in a request body.
+
+Give the collector's key the `userid:write` scope and nothing else, so a leaked extension cannot touch EDLs.
 
 ## About EDLs
 

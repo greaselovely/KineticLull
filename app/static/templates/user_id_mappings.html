@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% load tz %}
+{% block title %}- User-ID Mappings{% endblock %}
+{% block content %}
+{% timezone app_timezone %}
+<div class="content-card edl-card">
+    <div class="d-flex justify-content-between align-items-center">
+        <h3 class="mb-0">User-ID Mappings</h3>
+        <div class="d-flex gap-2">
+            <button id="test-connection-btn" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-plug"></i> Test Connection
+            </button>
+            <button id="push-now-btn" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-upload"></i> Push Now
+            </button>
+        </div>
+    </div>
+
+    <p class="text-muted mt-2 mb-3" style="font-size: 0.85rem;">
+        Managed browsers report who is signed in. The address is taken from the connection,
+        never from the request body, so a device can only ever claim an identity for its own
+        traffic. Mappings refresh every {{ refresh_interval }} minutes and are dropped after
+        {{ stale_after }} minutes of silence.
+    </p>
+
+    {% if not app_settings.panos_enabled %}
+    <div class="alert alert-secondary py-2 px-3" style="font-size: 0.85rem;">
+        <i class="bi bi-pause-circle me-1"></i>
+        PAN-OS User-ID push is off. Check-ins are still recorded below, but nothing is being
+        sent to a firewall. Turn it on under <a href="{% url 'app:app_settings' %}">Settings &rarr; Integrations</a>.
+    </div>
+    {% elif app_settings.panos_last_push_status == 'failed' %}
+    <div class="alert alert-danger py-2 px-3" style="font-size: 0.85rem;">
+        <div><i class="bi bi-exclamation-octagon me-1"></i>
+            Last push failed{% if app_settings.panos_last_push_at %} at {{ app_settings.panos_last_push_at|date:app_timestamp_format }}{% endif %}:
+            {{ app_settings.panos_last_push_error }}
+        </div>
+        <div class="mt-2">Reproduce it by hand with:</div>
+        <code class="d-block mt-1" style="font-size: 0.8rem; word-break: break-all;">{{ curl_equivalent }}</code>
+    </div>
+    {% elif app_settings.panos_last_push_status == 'success' %}
+    <div class="alert alert-success py-2 px-3" style="font-size: 0.85rem;">
+        <i class="bi bi-check-circle me-1"></i>
+        Last push sent {{ app_settings.panos_last_push_count }} mapping{{ app_settings.panos_last_push_count|pluralize }}
+        to {{ app_settings.panos_host }}{% if app_settings.panos_last_push_at %} at {{ app_settings.panos_last_push_at|date:app_timestamp_format }}{% endif %}.
+    </div>
+    {% endif %}
+
+    <div id="action-result" class="alert py-2 px-3 d-none" style="font-size: 0.85rem;"></div>
+
+    <div style="overflow-x: auto;">
+    <table class="table table-hover mt-3" style="font-size: 0.85rem;">
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>IP Address</th>
+                <th>Device</th>
+                <th>Last Check-in</th>
+                <th>On Firewall</th>
+                <th>Agent</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in mappings %}
+            <tr>
+                <td>{{ m.username }}</td>
+                <td><code>{{ m.ip_address }}</code></td>
+                <td class="text-muted">{{ m.device_id|default:"-" }}</td>
+                <td>{{ m.last_checkin|date:app_timestamp_format }}</td>
+                <td>
+                    {% if m.is_dirty %}
+                    <span class="badge bg-warning text-dark">Pending</span>
+                    {% else %}
+                    <span class="badge bg-success">Synced</span>
+                    <span class="text-muted ms-1">{{ m.last_pushed_at|date:app_timestamp_format }}</span>
+                    {% endif %}
+                </td>
+                <td class="text-muted">{{ m.agent_version|default:"-" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-muted text-center py-4">
+                    No check-ins yet. Once the collector extension is deployed and a managed
+                    device signs in, its mapping appears here.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endtimezone %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    var result = document.getElementById('action-result');
+
+    function show(ok, message) {
+        result.className = 'alert py-2 px-3 ' + (ok ? 'alert-success' : 'alert-danger');
+        result.textContent = message;
+    }
+
+    function run(button, url, reloadOnSuccess) {
+        var original = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Working...';
+        fetch(url, {method: 'POST', headers: {'X-CSRFToken': csrfToken}})
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                show(data.status === 'ok', data.message || data.error || 'Done.');
+                if (reloadOnSuccess && data.status === 'ok') {
+                    setTimeout(function () { window.location.reload(); }, 1200);
+                }
+            })
+            .catch(function () { show(false, 'Request failed.'); })
+            .finally(function () {
+                button.disabled = false;
+                button.innerHTML = original;
+            });
+    }
+
+    document.getElementById('test-connection-btn').addEventListener('click', function () {
+        run(this, '{% url "api_v1:panos_test_connection" %}', false);
+    });
+    document.getElementById('push-now-btn').addEventListener('click', function () {
+        run(this, '{% url "api_v1:panos_push_now" %}', true);
+    });
+})();
+</script>
+{% endblock %}

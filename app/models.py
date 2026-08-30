@@ -340,6 +340,34 @@ class AppSettings(models.Model):
     b2_last_upload_filename = models.CharField(max_length=255, blank=True, default='', verbose_name='B2 Last Uploaded File')
     b2_last_upload_error = models.TextField(blank=True, default='', verbose_name='B2 Last Upload Error')
 
+    # Palo Alto User-ID
+    # Mappings arrive from managed browsers via /api/v1/userid/checkin and are
+    # pushed to the firewall's User-ID XML API by a background thread.
+    panos_enabled = models.BooleanField(default=False, db_default=False, verbose_name='Enable PAN-OS User-ID Push')
+    panos_host = models.CharField(max_length=255, blank=True, default='', db_default='', verbose_name='Firewall Host')
+    panos_api_key = EncryptedCharField(max_length=512, blank=True, default='', db_default='', verbose_name='PAN-OS API Key')
+    panos_vsys = models.CharField(max_length=32, blank=True, default='', db_default='', verbose_name='vsys (optional)')
+    # Firewall management interfaces almost always present a self-signed cert,
+    # so verification is off by default rather than making the feature fail
+    # out of the box in the environment it is built for.
+    panos_verify_ssl = models.BooleanField(default=False, db_default=False, verbose_name='Verify Firewall TLS Certificate')
+    panos_mapping_timeout_minutes = models.PositiveIntegerField(default=45, db_default=45, verbose_name='Mapping Timeout (minutes)')
+    panos_push_interval_seconds = models.PositiveIntegerField(default=30, db_default=30, verbose_name='Push Interval (seconds)')
+    panos_refresh_interval_minutes = models.PositiveIntegerField(default=15, db_default=15, verbose_name='Refresh Interval (minutes)')
+    # A device taken off-site reports its home NAT address. Mapping a public IP
+    # to a named user is both wrong and a privacy problem, so reject by default.
+    panos_only_private_ips = models.BooleanField(default=True, db_default=True, verbose_name='Accept Private Source IPs Only')
+    panos_last_push_at = models.DateTimeField(null=True, blank=True, verbose_name='Last Push')
+    panos_last_push_status = models.CharField(max_length=16, blank=True, default='', db_default='', verbose_name='Last Push Status')
+    panos_last_push_error = models.CharField(max_length=1000, blank=True, default='', db_default='', verbose_name='Last Push Error')
+    panos_last_push_count = models.PositiveIntegerField(default=0, db_default=0, verbose_name='Mappings In Last Push')
+
+    # User-ID collector (browser extension) settings, fetched by the client on
+    # every check-in so timing can change without repackaging the extension.
+    userid_heartbeat_seconds = models.PositiveIntegerField(default=600, db_default=600, verbose_name='Check-in Interval (seconds)')
+    userid_jitter_seconds = models.PositiveIntegerField(default=120, db_default=120, verbose_name='Check-in Jitter (seconds)')
+    userid_stale_after_minutes = models.PositiveIntegerField(default=30, db_default=30, verbose_name='Drop Mapping After Silence (minutes)')
+
     # robots.txt content served at /robots.txt - operator-editable.
     # Default lives in DEFAULT_ROBOTS_TXT and is seeded by AppSettings.load()
     # on first create. Keeping the field default empty means edits to
@@ -1286,6 +1314,73 @@ class InboxEntry(models.Model):
     class Meta:
         verbose_name = "API Submission"
         verbose_name_plural = "API Submissions"
+
+class UserIdMapping(models.Model):
+    """A user-to-IP mapping awaiting or holding a place in the firewall.
+
+    Keyed on `ip_address`, not on the user. PAN-OS User-ID resolves one user
+    per address, so a new identity checking in from an address replaces the
+    previous one rather than sitting alongside it. That also matches reality:
+    a Chromebook handed to a different student keeps the same DHCP lease.
+
+    The address is whatever the server observed on the connection, never a
+    value the client supplied, so a device can only ever claim an identity for
+    its own traffic.
+    """
+
+    ip_address = models.GenericIPAddressField(unique=True, verbose_name='IP Address')
+    username = models.CharField(max_length=255, verbose_name='Username')
+    device_id = models.CharField(max_length=255, blank=True, default='', db_default='', verbose_name='Device ID')
+    agent_version = models.CharField(max_length=32, blank=True, default='', db_default='', verbose_name='Agent Version')
+    chrome_version = models.CharField(max_length=32, blank=True, default='', db_default='', verbose_name='Browser Version')
+
+    first_seen = models.DateTimeField(auto_now_add=True, verbose_name='First Seen')
+    last_checkin = models.DateTimeField(verbose_name='Last Check-in')
+    last_pushed_at = models.DateTimeField(null=True, blank=True, verbose_name='Last Pushed')
+    # What the firewall was last told. Lets an identity change on a recycled
+    # address register as dirty even when the check-in timestamps look settled.
+    pushed_username = models.CharField(max_length=255, blank=True, default='', db_default='', verbose_name='Pushed Username')
+
+    class Meta:
+        verbose_name = "User-ID Mapping"
+        verbose_name_plural = "User-ID Mappings"
+        ordering = ["-last_checkin"]
+
+    @property
+    def is_dirty(self):
+        """True when the firewall does not have what we currently believe."""
+        if self.last_pushed_at is None:
+            return True
+        if self.pushed_username != self.username:
+            return True
+        return self.last_checkin > self.last_pushed_at
+
+    def is_stale(self, stale_after_minutes):
+        """True when the device has gone quiet long enough to stop refreshing.
+
+        A departed device needs no mapping: it generates no traffic to
+        attribute, and holding the entry open would keep a stale name on
+        whatever picks up that address next.
+        """
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        return timezone.now() - self.last_checkin > timedelta(minutes=stale_after_minutes)
+
+    def needs_refresh(self, refresh_interval_minutes):
+        """True when the firewall entry is old enough to be worth renewing."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        if self.last_pushed_at is None:
+            return True
+        return timezone.now() - self.last_pushed_at > timedelta(minutes=refresh_interval_minutes)
+
+    def __str__(self):
+        return f"{self.username} @ {self.ip_address}"
+
 
 # class Script(models.Model):
 #     name = models.CharField(max_length=255, verbose_name='Script Name')

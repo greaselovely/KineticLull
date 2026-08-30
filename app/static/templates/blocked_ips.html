@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var reason = document.getElementById('block-reason-input').value.trim();
         if (!ip) return;
 
-        fetch('{% url "app:block_ip" %}', {
+        fetch('{% url "api_v1:block_ip" %}', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
             body: 'ip_address=' + encodeURIComponent(ip) + '&reason=' + encodeURIComponent(reason)
@@ -184,7 +184,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             var ip = this.getAttribute('data-ip');
             showConfirmModal('Unblock ' + ip + '?', function() {
-                fetch('{% url "app:unblock_ip" %}', {
+                fetch('{% url "api_v1:unblock_ip" %}', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
                     body: 'ip_address=' + encodeURIComponent(ip)
@@ -203,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var currentTimelineIp = null;
 
     function loadTimeline(ip, window) {
-        var url = '{% url "app:blocked_ip_timeline" %}?ip=' + encodeURIComponent(ip) + '&window=' + encodeURIComponent(window);
+        var url = '{% url "api_v1:blocked_ip_timeline" %}?ip=' + encodeURIComponent(ip) + '&window=' + encodeURIComponent(window);
         return fetch(url)
             .then(function(r) { return r.json(); })
             .then(function(data) {

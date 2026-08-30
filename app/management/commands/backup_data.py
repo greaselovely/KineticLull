@@ -67,11 +67,19 @@ class Command(BaseCommand):
         } for u in CustomUser.objects.all()]
 
         # API keys
+        # Only the digest exists to export; the plaintext was never stored.
+        # A restored key keeps working because clients present the plaintext
+        # they already hold and we compare hashes.
         data['api_keys'] = [{
             'user_email': k.user.email,
-            'key': k.key,
+            'key_hash': k.key_hash,
+            'key_prefix': k.key_prefix,
+            'name': k.name,
+            'scopes': k.scopes,
             'created_at': iso(k.created_at),
             'expires_at': iso(k.expires_at),
+            'last_used_at': iso(k.last_used_at),
+            'revoked_at': iso(k.revoked_at),
         } for k in APIKey.objects.select_related('user').all()]
 
         # EDLs
