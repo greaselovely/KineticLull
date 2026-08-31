@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}- Firewall Groups{% endblock %}
+{% block content %}
+<div class="content-card" style="max-width: 900px;">
+    <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'app:firewall_list' %}" title="Back to Firewalls"><i class="bi bi-arrow-left action-items"></i></a>
+            <h3 class="mb-0">Firewall Groups</h3>
+        </div>
+        <a href="{% url 'app:firewall_group_create' %}" class="btn btn-sm btn-primary">New Group</a>
+    </div>
+
+    <p class="text-muted mt-2 mb-3" style="font-size: 0.85rem;">
+        Scope an EDL to a whole site at once, or nominate a group in Settings to receive User-ID mappings.
+    </p>
+
+    <table class="table table-hover mt-3" style="font-size: 0.85rem;">
+        <thead>
+            <tr>
+                <th style="width: 25%;">Name</th>
+                <th style="width: 30%;">Description</th>
+                <th>Members</th>
+                <th style="width: 130px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for group in groups %}
+            <tr>
+                <td>{{ group.name }}</td>
+                <td class="text-muted">{{ group.description|default:"-" }}</td>
+                <td class="text-muted">
+                    {% for fw in group.firewalls.all %}{{ fw.name }}{% if not forloop.last %}, {% endif %}{% empty %}No members{% endfor %}
+                </td>
+                <td>
+                    <a href="{% url 'app:firewall_group_edit' group.id %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                    {% if group.edls.exists %}
+                    <button class="btn btn-sm btn-outline-danger" disabled
+                            title="Named in the ACL of {{ group.edls.count }} EDL(s)">Delete</button>
+                    {% else %}
+                    <form method="post" style="display:inline;"
+                          onsubmit="event.preventDefault(); var f=this; showConfirmModal('Delete group {{ group.name|escapejs }}?', function(){ f.submit(); });">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="group_id" value="{{ group.id }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-muted text-center py-4">No firewall groups yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

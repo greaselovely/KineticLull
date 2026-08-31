@@ -7,9 +7,9 @@
     <div class="d-flex justify-content-between align-items-center">
         <h3 class="mb-0">User-ID Mappings</h3>
         <div class="d-flex gap-2">
-            <button id="test-connection-btn" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-plug"></i> Test Connection
-            </button>
+            <a href="{% url 'app:firewall_list' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-hdd-network"></i> Firewalls
+            </a>
             <button id="push-now-btn" class="btn btn-sm btn-outline-primary">
                 <i class="bi bi-upload"></i> Push Now
             </button>
@@ -29,20 +29,52 @@
         PAN-OS User-ID push is off. Check-ins are still recorded below, but nothing is being
         sent to a firewall. Turn it on under <a href="{% url 'app:app_settings' %}">Settings &rarr; Integrations</a>.
     </div>
-    {% elif app_settings.panos_last_push_status == 'failed' %}
-    <div class="alert alert-danger py-2 px-3" style="font-size: 0.85rem;">
-        <div><i class="bi bi-exclamation-octagon me-1"></i>
-            Last push failed{% if app_settings.panos_last_push_at %} at {{ app_settings.panos_last_push_at|date:app_timestamp_format }}{% endif %}:
-            {{ app_settings.panos_last_push_error }}
-        </div>
-        <div class="mt-2">Reproduce it by hand with:</div>
-        <code class="d-block mt-1" style="font-size: 0.8rem; word-break: break-all;">{{ curl_equivalent }}</code>
+    {% elif not targets %}
+    <div class="alert alert-warning py-2 px-3" style="font-size: 0.85rem;">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        Push is enabled but no firewall is set to receive mappings. Tick
+        <strong>Receives User-ID mappings</strong> on a
+        <a href="{% url 'app:firewall_list' %}">firewall</a>, or nominate a group in Settings.
     </div>
-    {% elif app_settings.panos_last_push_status == 'success' %}
-    <div class="alert alert-success py-2 px-3" style="font-size: 0.85rem;">
-        <i class="bi bi-check-circle me-1"></i>
-        Last push sent {{ app_settings.panos_last_push_count }} mapping{{ app_settings.panos_last_push_count|pluralize }}
-        to {{ app_settings.panos_host }}{% if app_settings.panos_last_push_at %} at {{ app_settings.panos_last_push_at|date:app_timestamp_format }}{% endif %}.
+    {% else %}
+    <div class="table-responsive mb-3">
+        <table class="table table-sm mb-0" style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th>Firewall</th>
+                    <th>Address</th>
+                    <th>Last Push</th>
+                    <th>Mappings</th>
+                    <th>Detail</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fw in targets %}
+                <tr>
+                    <td><a href="{% url 'app:firewall_edit' fw.id %}">{{ fw.name }}</a></td>
+                    <td><code>{{ fw.address }}</code></td>
+                    <td>
+                        {% if fw.last_push_status == 'failed' %}
+                        <span class="badge bg-danger">Failed</span>
+                        {% elif fw.last_push_status == 'success' %}
+                        <span class="badge bg-success">OK</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Never</span>
+                        {% endif %}
+                        {% if fw.last_push_at %}<span class="text-muted ms-1">{{ fw.last_push_at|date:app_timestamp_format }}</span>{% endif %}
+                    </td>
+                    <td class="text-muted">{{ fw.last_push_count }}</td>
+                    <td class="text-muted">
+                        {% if fw.last_push_status == 'failed' %}
+                        {{ fw.last_push_error }}
+                        <div class="mt-1">Reproduce by hand:</div>
+                        <code class="d-block" style="font-size: 0.78rem; word-break: break-all;">{{ fw.curl_equivalent }}</code>
+                        {% else %}-{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
     {% endif %}
 
@@ -55,6 +87,7 @@
                 <th>User</th>
                 <th>IP Address</th>
                 <th>Device</th>
+                <th>Location</th>
                 <th>Last Check-in</th>
                 <th>On Firewall</th>
                 <th>Agent</th>
@@ -65,21 +98,21 @@
             <tr>
                 <td>{{ m.username }}</td>
                 <td><code>{{ m.ip_address }}</code></td>
-                <td class="text-muted">{{ m.device_id|default:"-" }}</td>
+                <td class="text-muted"{% if m.directory_device_id %} title="Directory ID: {{ m.directory_device_id }}"{% endif %}>{{ m.device_id|default:"-" }}</td>
+                <td class="text-muted">{{ m.device_location|default:"-" }}</td>
                 <td>{{ m.last_checkin|date:app_timestamp_format }}</td>
                 <td>
-                    {% if m.is_dirty %}
-                    <span class="badge bg-warning text-dark">Pending</span>
-                    {% else %}
+                    {% if m.is_synced %}
                     <span class="badge bg-success">Synced</span>
-                    <span class="text-muted ms-1">{{ m.last_pushed_at|date:app_timestamp_format }}</span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark">Pending</span>
                     {% endif %}
                 </td>
                 <td class="text-muted">{{ m.agent_version|default:"-" }}</td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="6" class="text-muted text-center py-4">
+                <td colspan="7" class="text-muted text-center py-4">
                     No check-ins yet. Once the collector extension is deployed and a managed
                     device signs in, its mapping appears here.
                 </td>
@@ -122,9 +155,6 @@
             });
     }
 
-    document.getElementById('test-connection-btn').addEventListener('click', function () {
-        run(this, '{% url "api_v1:panos_test_connection" %}', false);
-    });
     document.getElementById('push-now-btn').addEventListener('click', function () {
         run(this, '{% url "api_v1:panos_push_now" %}', true);
     });

@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load tz %}
+{% block title %}- Firewalls{% endblock %}
+{% block content %}
+{% timezone app_timezone %}
+<div class="content-card">
+    <div class="d-flex justify-content-between align-items-center">
+        <h3 class="mb-0">Firewalls</h3>
+        <div class="d-flex gap-2">
+            <a href="{% url 'app:firewall_group_list' %}" class="btn btn-sm btn-outline-secondary">Groups</a>
+            <a href="{% url 'app:firewall_create' %}" class="btn btn-sm btn-primary">New Firewall</a>
+        </div>
+    </div>
+
+    <p class="text-muted mt-2 mb-3" style="font-size: 0.85rem;">
+        Register a firewall once and reuse it: name it in an EDL's ACL instead of retyping
+        its address, and send it User-ID mappings using the credentials stored here.
+        {% if push_group %}Everything in <strong>{{ push_group.name }}</strong> receives User-ID mappings.{% endif %}
+    </p>
+
+    <div id="action-result" class="alert py-2 px-3 d-none" style="font-size: 0.85rem;"></div>
+
+    <div style="overflow-x: auto;">
+    <table class="table table-hover mt-3" style="font-size: 0.85rem;">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Address</th>
+                <th>Vendor</th>
+                <th>Groups</th>
+                <th>User-ID</th>
+                <th>Last Push</th>
+                <th style="width: 90px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for fw in firewalls %}
+            <tr {% if not fw.enabled %}style="opacity: 0.55;"{% endif %}>
+                <td>
+                    {{ fw.name }}
+                    {% if not fw.enabled %}<span class="badge bg-secondary ms-1">Disabled</span>{% endif %}
+                </td>
+                <td><code>{{ fw.address }}</code></td>
+                <td class="text-muted">{{ fw.get_vendor_display }}</td>
+                <td class="text-muted">
+                    {% for g in fw.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}
+                </td>
+                <td>
+                    {% if fw.is_push_target %}
+                    <span class="badge bg-info text-dark">Target</span>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if fw.last_push_status == 'failed' %}
+                    <span class="badge bg-danger" title="{{ fw.last_push_error }}">Failed</span>
+                    {% elif fw.last_push_status == 'success' %}
+                    <span class="badge bg-success">OK</span>
+                    <span class="text-muted ms-1">{{ fw.last_push_at|date:app_timestamp_format }}</span>
+                    {% else %}
+                    <span class="text-muted">Never</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="actions-row">
+                        <i class="bi bi-plug action-items test-btn" data-id="{{ fw.id }}" data-name="{{ fw.name }}" style="cursor: pointer;" title="Test Connection"></i>
+                        <a href="{% url 'app:firewall_edit' fw.id %}" title="Edit"><i class="bi bi-pencil action-items"></i></a>
+                        <i class="bi bi-trash action-items text-danger" onclick="deleteFirewall('{{ fw.id }}', '{{ fw.name|escapejs }}', event)" title="Delete"></i>
+                    </span>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-muted text-center py-4">
+                    No firewalls registered yet. Add one to scope EDLs by name and to receive User-ID mappings.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endtimezone %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    var result = document.getElementById('action-result');
+
+    function show(ok, message) {
+        result.className = 'alert py-2 px-3 ' + (ok ? 'alert-success' : 'alert-danger');
+        result.textContent = message;
+    }
+
+    window.deleteFirewall = function (id, name, event) {
+        if (event) event.stopPropagation();
+        showConfirmModal('Delete firewall ' + name + '?', function () {
+            fetch('{% url "app:firewall_delete" firewall_id=0 %}'.replace('/0/', '/' + id + '/'), {
+                method: 'POST',
+                headers: {'X-CSRFToken': csrfToken},
+            })
+            .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, data: d}; }); })
+            .then(function (res) {
+                if (res.ok) { window.location.reload(); }
+                else { show(false, res.data.error || 'Could not delete that firewall.'); }
+            });
+        });
+    };
+
+    document.querySelectorAll('.test-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-id');
+            var name = this.getAttribute('data-name');
+            show(true, 'Testing ' + name + '...');
+            fetch('{% url "api_v1:firewall_test_connection" %}?firewall_id=' + encodeURIComponent(id), {
+                method: 'POST',
+                headers: {'X-CSRFToken': csrfToken},
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) { show(data.status === 'ok', name + ': ' + (data.message || data.error || 'Done.')); })
+            .catch(function () { show(false, name + ': request failed.'); });
+        });
+    });
+})();
+</script>
+{% endblock %}

@@ -1,9 +1,13 @@
 """Palo Alto User-ID push over the PAN-OS XML API.
 
-Public entrypoints: `push_user_id_mappings(mappings, app_settings)` and
-`test_connection(app_settings)`. Both return `(success: bool, message: str)`
-and update the AppSettings status fields in-place. Caller is responsible for
-`app_settings.save()`.
+Public entrypoints: `push_user_id_mappings(mappings, firewall, timeout_minutes)`
+and `test_connection(firewall)`. Both return `(success: bool, message: str)` and
+update the firewall's status fields in-place. Caller is responsible for
+`firewall.save()`.
+
+Everything is scoped to one `Firewall` row. Push state lives there rather than
+on the AppSettings singleton because one firewall can reject while another
+accepts, and a single shared status field would flap between them.
 
 Mappings are sent as one `uid-message` document containing many `<entry>`
 elements, which is what lets a morning full of logins collapse into a single
@@ -29,19 +33,23 @@ class PanOSError(Exception):
     pass
 
 
-def _record_failure(app_settings, count: int, message: str) -> tuple[bool, str]:
-    app_settings.panos_last_push_at = timezone.now()
-    app_settings.panos_last_push_status = 'failed'
-    app_settings.panos_last_push_count = count
-    app_settings.panos_last_push_error = message[:1000]
+def _record_failure(firewall, count: int, message: str) -> tuple[bool, str]:
+    # last_push_at is deliberately not touched. It is the delivery watermark,
+    # and a failure delivered nothing.
+    firewall.last_push_status = 'failed'
+    firewall.last_push_count = count
+    firewall.last_push_error = message[:1000]
     return False, message
 
 
-def _record_success(app_settings, count: int) -> tuple[bool, str]:
-    app_settings.panos_last_push_at = timezone.now()
-    app_settings.panos_last_push_status = 'success'
-    app_settings.panos_last_push_count = count
-    app_settings.panos_last_push_error = ''
+def _record_success(firewall, count: int) -> tuple[bool, str]:
+    # last_push_at doubles as the delivery watermark, so it advances only on a
+    # confirmed success. Moving it on failure would mark mappings delivered
+    # that the firewall never received.
+    firewall.last_push_at = timezone.now()
+    firewall.last_push_status = 'success'
+    firewall.last_push_count = count
+    firewall.last_push_error = ''
     return True, f'Pushed {count} user-ID mapping{"" if count == 1 else "s"}.'
 
 
@@ -69,8 +77,8 @@ def build_uid_message(mappings, timeout_minutes: int) -> str:
     )
 
 
-def _api_url(app_settings) -> str:
-    host = (app_settings.panos_host or '').strip()
+def _api_url(firewall) -> str:
+    host = (firewall.address or '').strip()
     if not host:
         raise PanOSError('No firewall host configured.')
     if not host.startswith(('http://', 'https://')):
@@ -96,12 +104,12 @@ def _check_response(text: str) -> None:
     raise PanOSError(message or f'Firewall rejected the request: {text[:200]}')
 
 
-def _post(app_settings, params: dict, files=None) -> str:
+def _post(firewall, params: dict, files=None) -> str:
     response = requests.post(
-        _api_url(app_settings),
+        _api_url(firewall),
         params=params,
         files=files,
-        verify=app_settings.panos_verify_ssl,
+        verify=firewall.verify_ssl,
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
@@ -109,54 +117,58 @@ def _post(app_settings, params: dict, files=None) -> str:
     return response.text
 
 
-def push_user_id_mappings(mappings, app_settings) -> tuple[bool, str]:
-    """Send a batch of user-to-IP mappings to the firewall.
+def push_user_id_mappings(mappings, firewall, timeout_minutes) -> tuple[bool, str]:
+    """Send the active mapping set to one firewall.
 
-    An empty batch is a no-op success so callers do not have to special-case
-    a quiet interval, and so a quiet interval never overwrites the last real
-    push status.
+    An empty batch is a no-op success so callers do not have to special-case a
+    quiet interval, and so a quiet interval never overwrites the last real push
+    status.
+
+    `timeout_minutes` is passed in rather than read off the firewall: how long
+    a mapping should live is a policy decision that applies everywhere, not a
+    property of any one box.
     """
     mappings = list(mappings)
     if not mappings:
         return True, 'No mappings to push.'
 
-    if not (app_settings.panos_api_key or '').strip():
-        return _record_failure(app_settings, len(mappings), 'No PAN-OS API key configured.')
+    if not (firewall.api_key or '').strip():
+        return _record_failure(firewall, len(mappings), 'No API key configured for this firewall.')
 
-    document = build_uid_message(mappings, app_settings.panos_mapping_timeout_minutes)
+    document = build_uid_message(mappings, timeout_minutes)
 
-    params = {'type': 'user-id', 'key': app_settings.panos_api_key}
-    if (app_settings.panos_vsys or '').strip():
-        params['vsys'] = app_settings.panos_vsys.strip()
+    params = {'type': 'user-id', 'key': firewall.api_key}
+    if (firewall.vsys or '').strip():
+        params['vsys'] = firewall.vsys.strip()
 
     try:
-        _post(app_settings, params, files={'file': ('uid.xml', document, 'application/xml')})
+        _post(firewall, params, files={'file': ('uid.xml', document, 'application/xml')})
     except PanOSError as e:
-        return _record_failure(app_settings, len(mappings), str(e))
+        return _record_failure(firewall, len(mappings), str(e))
     except requests.RequestException as e:
-        return _record_failure(app_settings, len(mappings), f'Could not reach the firewall: {e}')
+        return _record_failure(firewall, len(mappings), f'Could not reach the firewall: {e}')
 
-    return _record_success(app_settings, len(mappings))
+    return _record_success(firewall, len(mappings))
 
 
-def test_connection(app_settings) -> tuple[bool, str]:
+def test_connection(firewall) -> tuple[bool, str]:
     """Verify host, credentials, and TLS settings without changing anything.
 
     Deliberately does not touch the push status fields: a connectivity probe
     should not make a healthy integration look like it just failed, or a
     failing one look like it recovered.
     """
-    if not (app_settings.panos_api_key or '').strip():
-        return False, 'No PAN-OS API key configured.'
+    if not (firewall.api_key or '').strip():
+        return False, 'No API key configured for this firewall.'
 
     params = {
         'type': 'op',
         'cmd': '<show><system><info></info></system></show>',
-        'key': app_settings.panos_api_key,
+        'key': firewall.api_key,
     }
 
     try:
-        text = _post(app_settings, params)
+        text = _post(firewall, params)
     except PanOSError as e:
         return False, str(e)
     except requests.RequestException as e:
@@ -173,17 +185,17 @@ def test_connection(app_settings) -> tuple[bool, str]:
         return True, 'Connected.'
 
 
-def curl_equivalent(app_settings) -> str:
+def curl_equivalent(firewall) -> str:
     """The hand-run command that reproduces a push, for the UI to show.
 
     The API key is left as a placeholder rather than rendered: this string is
     displayed in a browser and pasted into tickets.
     """
-    host = (app_settings.panos_host or '<firewall>').strip()
+    host = (firewall.address or '<firewall>').strip()
     if not host.startswith(('http://', 'https://')):
         host = f'https://{host}'
-    insecure = '' if app_settings.panos_verify_ssl else ' -k'
-    vsys = f'&vsys={app_settings.panos_vsys.strip()}' if (app_settings.panos_vsys or '').strip() else ''
+    insecure = '' if firewall.verify_ssl else ' -k'
+    vsys = f'&vsys={firewall.vsys.strip()}' if (firewall.vsys or '').strip() else ''
     return (
         f'curl{insecure} -X POST "{host.rstrip("/")}/api/?type=user-id{vsys}" '
         f'-F key=$PANOS_API_KEY -F file=@uid.xml'

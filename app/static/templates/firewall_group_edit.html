@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}- {% if mode == 'create' %}New Firewall Group{% else %}Edit Firewall Group{% endif %}{% endblock %}
+{% block content %}
+<div style="max-width: 800px;">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <a href="{% url 'app:firewall_group_list' %}" title="Back to Groups"><i class="bi bi-arrow-left action-items"></i></a>
+        <h3 class="mb-0">{% if mode == 'create' %}New Firewall Group{% else %}{{ group.name }}{% endif %}</h3>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">Group</h6>
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label for="name" class="form-label">Name</label>
+                        <input type="text" name="name" id="name" class="form-control form-control-sm" required
+                               value="{{ group.name|default:'' }}" placeholder="site-north">
+                    </div>
+                    <div class="col-md-7">
+                        <label for="description" class="form-label">Description <span class="text-muted" style="font-weight: 400;">(optional)</span></label>
+                        <input type="text" name="description" id="description" class="form-control form-control-sm"
+                               value="{{ group.description|default:'' }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">Members</h6>
+                <div class="border rounded p-2" style="max-height: 260px; overflow-y: auto; font-size: 0.85rem;">
+                    {% for fw in firewalls %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="firewalls" value="{{ fw.id }}" id="fw_{{ fw.id }}"
+                            {% if group and fw in group.firewalls.all %}checked{% endif %}>
+                        <label class="form-check-label" for="fw_{{ fw.id }}">
+                            {{ fw.name }} <span class="text-muted">{{ fw.address }}</span>
+                        </label>
+                    </div>
+                    {% empty %}
+                    <span class="text-muted">No firewalls yet. <a href="{% url 'app:firewall_create' %}">Add one</a>.</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm">{% if mode == 'create' %}Create Group{% else %}Save Changes{% endif %}</button>
+        <a href="{% url 'app:firewall_group_list' %}" class="btn btn-outline-secondary btn-sm">Cancel</a>
+    </form>
+</div>
+{% endblock %}

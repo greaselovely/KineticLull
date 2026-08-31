@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 
 from users.models import APIKey
 # from .models import InboxEntry, ExtDynLists, Script
-from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile, OTFRecipient, OTFSession, OTFDownload, OneTimeSecret, OTSRecipient, OTSAccess, Paste, ALLOWED_LINK_SCHEMES
+from .firewall_drivers import userid_push_targets
+from .models import InboxEntry, ExtDynLists, Favorite, ActivityLog, AppSettings, BlockedIP, NginxRejection, ShortenedURL, WhitelistedIP, OneTimeFile, OTFRecipient, OTFSession, OTFDownload, OneTimeSecret, OTSRecipient, OTSAccess, Paste, Firewall, FirewallGroup, UserIdMapping, ALLOWED_LINK_SCHEMES
 from .forms import ExtDynListsForm, ShortenedURLForm
 from .email import send_file_shared_email, send_otp_email, send_access_notification, send_secret_shared_email
 
@@ -372,8 +373,7 @@ def show_ip_fqdn(request, auto_url):
         request._kl_logged_404 = True
         raise Http404
 
-    acl_list = edl.acl.split('\n')
-    if '*' in acl_list or check_acl(user_ip, acl_list):
+    if edl_allows_ip(edl, user_ip):
         log_activity(request, 'edl_access', edl.friendly_name, detail)
         return HttpResponse(edl.ip_fqdn, content_type="text/plain")
     else:
@@ -429,6 +429,7 @@ def create_new_edl(request):
             edl_instance.acl = "\n".join(corrected_acl)
             edl_instance.save()
             edl_instance.groups.set(request.user.groups.all())
+            _apply_edl_acl_selection(edl_instance, request)
             log_activity(request, 'create_edl', edl_instance.friendly_name)
             update_db_checksum()
             return redirect('app:index')
@@ -437,7 +438,51 @@ def create_new_edl(request):
     else:
         form = ExtDynListsForm(initial={'acl': '*', })
 
-    return render(request, 'edit_edl.html', {'form': form})
+    context = {'form': form}
+    context.update(_edl_acl_context(request=request))
+    return render(request, 'edit_edl.html', context)
+
+def _edl_acl_context(edl=None, request=None):
+    """Checkbox state for the firewall and group selectors on the EDL form."""
+    if request is not None and request.method == 'POST':
+        selected_fw = [int(v) for v in request.POST.getlist('acl_firewalls') if v.isdigit()]
+        selected_grp = [int(v) for v in request.POST.getlist('acl_firewall_groups') if v.isdigit()]
+    elif edl is not None:
+        selected_fw = list(edl.acl_firewalls.values_list('id', flat=True))
+        selected_grp = list(edl.acl_firewall_groups.values_list('id', flat=True))
+    else:
+        selected_fw, selected_grp = [], []
+
+    return {
+        'all_firewalls': Firewall.objects.all(),
+        'all_firewall_groups': FirewallGroup.objects.all(),
+        'selected_firewall_ids': selected_fw,
+        'selected_firewall_group_ids': selected_grp,
+    }
+
+
+def _apply_edl_acl_selection(edl, request):
+    """Persist the selected firewalls and groups, returning a change summary."""
+    before_fw = set(edl.acl_firewalls.values_list('name', flat=True))
+    before_grp = set(edl.acl_firewall_groups.values_list('name', flat=True))
+
+    edl.acl_firewalls.set(
+        Firewall.objects.filter(id__in=request.POST.getlist('acl_firewalls'))
+    )
+    edl.acl_firewall_groups.set(
+        FirewallGroup.objects.filter(id__in=request.POST.getlist('acl_firewall_groups'))
+    )
+
+    after_fw = set(edl.acl_firewalls.values_list('name', flat=True))
+    after_grp = set(edl.acl_firewall_groups.values_list('name', flat=True))
+
+    changes = []
+    if after_fw != before_fw:
+        changes.append(f'Firewalls: {sorted(before_fw)} -> {sorted(after_fw)}')
+    if after_grp != before_grp:
+        changes.append(f'Firewall groups: {sorted(before_grp)} -> {sorted(after_grp)}')
+    return changes
+
 
 @login_required
 def edit_ext_dyn_list_view(request, id=None):
@@ -463,8 +508,19 @@ def edit_ext_dyn_list_view(request, id=None):
     """
     if id:
         edl = get_edl_for_user(request.user, id=id)
-        if edl.is_system:
-            raise PermissionDenied("System EDL is read-only.")
+        # The system EDL's *contents* are auto-managed, but who may fetch it is
+        # an operator decision like any other list, so its ACL stays editable.
+        # Every other field is restored below rather than trusted from the POST.
+        system_edl = edl.is_system
+        # Raw snapshot, taken before the form binds. A ModelForm with an
+        # instance mutates that instance during validation, so by the time
+        # save(commit=False) returns, `edl` already carries the posted values
+        # and is no longer a record of what was there.
+        system_snapshot = {
+            'friendly_name': edl.friendly_name,
+            'ip_fqdn': edl.ip_fqdn,
+            'policy_reference': edl.policy_reference,
+        } if system_edl else None
         # Snapshot before values for diff
         before = {
             'friendly_name': edl.friendly_name,
@@ -477,6 +533,11 @@ def edit_ext_dyn_list_view(request, id=None):
             if form.is_valid():
                 # Apply corrections to the acl field
                 edl_instance = form.save(commit=False)
+
+                if system_edl:
+                    # Only the ACL is the operator's to change here.
+                    for field, value in system_snapshot.items():
+                        setattr(edl_instance, field, value)
 
                 # Process each line in acl, filtering out only blank lines
                 acl_lines = (line.strip() for line in edl_instance.acl.splitlines())
@@ -505,6 +566,7 @@ def edit_ext_dyn_list_view(request, id=None):
                     changes.append(f'Removed ACL: {", ".join(sorted(removed_acl))}')
                 if edl_instance.policy_reference != before['policy_reference']:
                     changes.append('Updated notes')
+                changes += _apply_edl_acl_selection(edl_instance, request)
                 detail = '; '.join(changes) if changes else 'No changes'
                 log_activity(request, 'edit_edl', edl_instance.friendly_name, detail)
                 update_db_checksum()
@@ -522,6 +584,7 @@ def edit_ext_dyn_list_view(request, id=None):
 
     template_name = "edit_edl.html"
     context = {"form": form}
+    context.update(_edl_acl_context(edl=edl if id else None, request=request))
     return render(request, template_name=template_name, context=context)
 
 @login_required
@@ -558,6 +621,10 @@ def clone_ext_dyn_list_view(request, item_id):
             cloned_item.auto_url = ''
             cloned_item.save()
             cloned_item.groups.set(request.user.groups.all())
+            # Carry the scope across too: a clone that silently loses its
+            # firewall ACL would be unreachable and look like a bug.
+            cloned_item.acl_firewalls.set(original_item.acl_firewalls.all())
+            cloned_item.acl_firewall_groups.set(original_item.acl_firewall_groups.all())
             log_activity(request, 'clone_edl', cloned_item.friendly_name, f'Cloned from {original_item.friendly_name}')
             update_db_checksum()
             return redirect(safe_referer_or_index(request))
@@ -574,7 +641,9 @@ def clone_ext_dyn_list_view(request, item_id):
         }
         form = ExtDynListsForm(initial=initial_data)
     
-    return render(request, 'edit_edl.html', {'form': form})
+    context = {'form': form}
+    context.update(_edl_acl_context(edl=original_item, request=request))
+    return render(request, 'edit_edl.html', context)
 
 @login_required
 def download_ip_fqdn(request, item_id):
@@ -669,15 +738,55 @@ def delete_item(request, item_id):
             return HttpResponseRedirect(referer_url)
     return redirect(reverse('app:index'))
 
+def edl_allows_ip(edl, ip):
+    """Whether `ip` may fetch this EDL.
+
+    Four independent grants, any one of which suffices:
+
+      1. a bare '*' line in the text ACL
+      2. an address or CIDR in the text ACL
+      3. a firewall named directly on the EDL
+      4. a firewall belonging to a group named on the EDL
+
+    Registered firewalls and raw addresses coexist deliberately. The registry
+    is the maintainable way to express "our firewalls", but a raw CIDR still
+    has to work for a test box or a consumer nobody wants to register.
+
+    Never raises. A malformed ACL denies, because the alternative is a 500 on
+    the firewall-facing path, and a firewall reading an error page is worse
+    than one reading a denial.
+    """
+    try:
+        acl_lines = (edl.acl or '').split('\n')
+        if '*' in acl_lines or check_acl(ip, acl_lines):
+            return True
+
+        for firewall in edl.acl_firewalls.filter(enabled=True):
+            if firewall.matches_ip(ip):
+                return True
+
+        for firewall in Firewall.objects.filter(
+            enabled=True, groups__in=edl.acl_firewall_groups.all()
+        ).distinct():
+            if firewall.matches_ip(ip):
+                return True
+    except Exception:
+        logger.exception('ACL evaluation failed for EDL %s', getattr(edl, 'auto_url', '?'))
+        return False
+
+    return False
+
+
 def check_acl(ip, networks: list):
     """
     Check if a given IP address is part of any of the specified networks.
 
     This function iterates through a list of network strings and determines 
     whether the given IP address is part of these networks. The function 
-    supports both CIDR notations and single IP addresses. Single IP addresses 
-    are treated as individual networks (with a /32 subnet mask). Commented 
-    lines (starting with '#') in the network list are ignored.
+    supports both CIDR notations and single IP addresses. A bare address is
+    treated as a single host (/32 for IPv4, /128 for IPv6). Commented lines
+    (starting with '#'), wildcard lines and blank lines are ignored, and an
+    unparseable entry is skipped rather than raising.
 
     Parameters:
     ip (str): The IP address to check.
@@ -688,16 +797,31 @@ def check_acl(ip, networks: list):
     bool: True if the IP address is within any of the specified networks, 
         False otherwise.
     """
-    ip_addr = ipaddress.ip_address(ip)
+    try:
+        ip_addr = ipaddress.ip_address(ip)
+    except (ValueError, TypeError):
+        return False
+
     for network_str in networks:
-        if network_str.startswith('#') or network_str.startswith('*'):
-            continue  # Ignore comment lines
+        network_str = (network_str or '').strip()
+        # Blank lines used to reach ip_network('/32') and raise, which surfaced
+        # as a 500 instead of a denial. They arrive via restore_data, which
+        # writes the ACL with no normalization.
+        if not network_str or network_str.startswith('#') or network_str.startswith('*'):
+            continue
 
-        # Add '/32' to single IP addresses to treat them as individual networks
-        if '/' not in network_str:
-            network_str += '/32'
+        try:
+            if '/' in network_str:
+                network = ipaddress.ip_network(network_str, strict=False)
+            else:
+                # A bare address is exactly one host. Appending a fixed '/32'
+                # was an IPv4 assumption: with strict=False it silently
+                # truncated an IPv6 entry, so 2001:db8::1 became 2001::/32 and
+                # authorized an enormous slice of v6 space.
+                network = ipaddress.ip_network(ipaddress.ip_address(network_str))
+        except ValueError:
+            continue  # a typo or a hostname; neither can match an address
 
-        network = ipaddress.ip_network(network_str, strict=False)
         if ip_addr in network:
             return True
     return False
@@ -1441,24 +1565,22 @@ def app_settings_view(request):
             changes.append(f'b2_bucket_name={new_b2_bucket}')
 
         # Palo Alto User-ID
-        for flag in ('panos_enabled', 'panos_verify_ssl', 'panos_only_private_ips'):
+        for flag in ('panos_enabled', 'panos_only_private_ips'):
             new_flag = request.POST.get(flag) == 'on'
             if new_flag != getattr(app_settings, flag):
                 setattr(app_settings, flag, new_flag)
                 changes.append(f'{flag}={new_flag}')
 
-        for field in ('panos_host', 'panos_vsys'):
-            new_val = request.POST.get(field, '').strip()
-            if new_val != getattr(app_settings, field):
-                setattr(app_settings, field, new_val)
-                changes.append(f'{field}={new_val}')
-
-        # Blank means "leave it alone", so a round-trip through the form does
-        # not wipe a key the field never rendered.
-        new_panos_key = request.POST.get('panos_api_key', '').strip()
-        if new_panos_key and new_panos_key != app_settings.panos_api_key:
-            app_settings.panos_api_key = new_panos_key
-            changes.append('panos_api_key=***')
+        # Host, key, vsys and TLS verification are per-firewall now and live on
+        # the Firewall registry. What stays here is policy that applies to every
+        # target: which group receives mappings, and the timing.
+        new_push_group_id = request.POST.get('userid_push_group', '').strip()
+        new_push_group = None
+        if new_push_group_id:
+            new_push_group = FirewallGroup.objects.filter(id=new_push_group_id).first()
+        if new_push_group != app_settings.userid_push_group:
+            app_settings.userid_push_group = new_push_group
+            changes.append(f'userid_push_group={new_push_group.name if new_push_group else "(none)"}')
 
         if 'otf_brand_image' in request.FILES:
             logo = request.FILES['otf_brand_image']
@@ -1537,6 +1659,7 @@ def app_settings_view(request):
         'b2_versions_error': b2_versions_error,
         'builtin_scanner_patterns': BlockedIP.SCANNER_PATH_PATTERNS,
         'bot_list_info': bot_list_info,
+        'firewall_groups': FirewallGroup.objects.all(),
     })
 
 
@@ -1885,6 +2008,254 @@ def user_edit_view(request, user_id):
         'can_use_api_key': can_use_api_key,
         'api_key_obj': api_key_obj,
         'new_api_key': new_api_key,
+    })
+
+
+@login_required
+def firewall_list_view(request):
+    """The registry of firewalls this install knows about."""
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    firewalls = list(Firewall.objects.prefetch_related('groups').all())
+    targets = set(userid_push_targets().values_list('id', flat=True))
+    for firewall in firewalls:
+        firewall.is_push_target = firewall.id in targets
+
+    return render(request, 'firewall_list.html', {
+        'firewalls': firewalls,
+        'push_group': AppSettings.load().userid_push_group,
+    })
+
+
+def _firewall_form_context(mode, firewall=None, posted=None):
+    """Build the firewall form context.
+
+    Field values are resolved here rather than in the template. A chain like
+    `posted.name|default:firewall.name` looks tidy but blows up on the create
+    page, because Django resolves every filter argument whether or not it ends
+    up using it, and there is no firewall yet.
+    """
+    defaults = {
+        'name': '', 'vendor': Firewall.VENDOR_PANOS, 'address': '', 'vsys': '',
+        'extra_source_addresses': '', 'notes': '',
+        'verify_ssl': False, 'receives_user_id': False,
+        'enabled': True,
+    }
+
+    values = dict(defaults)
+    if firewall is not None:
+        for key in defaults:
+            values[key] = getattr(firewall, key)
+    if posted:
+        values.update({k: v for k, v in posted.items() if k != 'group_ids'})
+
+    if posted:
+        selected_groups = [int(g) for g in posted.get('group_ids', []) if str(g).isdigit()]
+    elif firewall is not None:
+        selected_groups = list(firewall.groups.values_list('id', flat=True))
+    else:
+        selected_groups = []
+
+    return {
+        'mode': mode,
+        'firewall': firewall,
+        'values': values,
+        'selected_group_ids': selected_groups,
+        'groups': FirewallGroup.objects.all(),
+        'vendor_choices': Firewall.VENDOR_CHOICES,
+    }
+
+
+def _read_firewall_post(request):
+    return {
+        'name': request.POST.get('name', '').strip(),
+        'vendor': request.POST.get('vendor', Firewall.VENDOR_PANOS).strip(),
+        'address': request.POST.get('address', '').strip(),
+        'vsys': request.POST.get('vsys', '').strip(),
+        'extra_source_addresses': request.POST.get('extra_source_addresses', '').strip(),
+        'notes': request.POST.get('notes', '').strip(),
+        'verify_ssl': request.POST.get('verify_ssl') == 'on',
+        'receives_user_id': request.POST.get('receives_user_id') == 'on',
+        'enabled': request.POST.get('enabled') == 'on',
+        'group_ids': request.POST.getlist('groups'),
+    }
+
+
+@login_required
+def firewall_create_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    if request.method == 'POST':
+        data = _read_firewall_post(request)
+        api_key = request.POST.get('api_key', '').strip()
+
+        if not data['name'] or not data['address']:
+            messages.error(request, 'Name and management address are required.')
+            return render(request, 'firewall_form.html', _firewall_form_context('create', posted=data))
+        if Firewall.objects.filter(name=data['name']).exists():
+            messages.error(request, f'A firewall named "{data["name"]}" already exists.')
+            return render(request, 'firewall_form.html', _firewall_form_context('create', posted=data))
+
+        group_ids = data.pop('group_ids')
+        firewall = Firewall.objects.create(api_key=api_key, **data)
+        firewall.groups.set(FirewallGroup.objects.filter(id__in=group_ids))
+
+        detail_parts = [f'address={firewall.address}', f'vendor={firewall.vendor}']
+        if api_key:
+            detail_parts.append('api_key=***')
+        if firewall.receives_user_id:
+            detail_parts.append('receives_user_id=True')
+        log_activity(request, 'create_firewall', firewall.name, '; '.join(detail_parts))
+        messages.success(request, f'Firewall {firewall.name} created.')
+        return redirect('app:firewall_list')
+
+    return render(request, 'firewall_form.html', _firewall_form_context('create'))
+
+
+@login_required
+def firewall_edit_view(request, firewall_id):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    firewall = get_object_or_404(Firewall, id=firewall_id)
+
+    if request.method == 'POST':
+        data = _read_firewall_post(request)
+        if not data['name'] or not data['address']:
+            messages.error(request, 'Name and management address are required.')
+            return render(request, 'firewall_form.html', _firewall_form_context('edit', firewall, data))
+        if Firewall.objects.filter(name=data['name']).exclude(id=firewall.id).exists():
+            messages.error(request, f'A firewall named "{data["name"]}" already exists.')
+            return render(request, 'firewall_form.html', _firewall_form_context('edit', firewall, data))
+
+        before = {k: getattr(firewall, k) for k in data if k != 'group_ids'}
+        before['groups'] = set(firewall.groups.values_list('name', flat=True))
+
+        group_ids = data.pop('group_ids')
+        for field, value in data.items():
+            setattr(firewall, field, value)
+
+        # Blank means "leave it alone", so a round-trip through the form does
+        # not wipe a key the field never renders back.
+        changes = []
+        new_key = request.POST.get('api_key', '').strip()
+        if new_key and new_key != firewall.api_key:
+            firewall.api_key = new_key
+            changes.append('api_key=***')
+
+        firewall.save()
+        firewall.groups.set(FirewallGroup.objects.filter(id__in=group_ids))
+
+        for field, old_value in before.items():
+            if field == 'groups':
+                continue
+            new_value = getattr(firewall, field)
+            if old_value != new_value:
+                changes.append(f'{field}: {old_value!r} -> {new_value!r}')
+        new_groups = set(firewall.groups.values_list('name', flat=True))
+        if new_groups != before['groups']:
+            changes.append(f'groups: {sorted(before["groups"])} -> {sorted(new_groups)}')
+
+        log_activity(request, 'edit_firewall', firewall.name, '; '.join(changes) if changes else 'No changes')
+        messages.success(request, f'Firewall {firewall.name} updated.')
+        return redirect('app:firewall_list')
+
+    return render(request, 'firewall_form.html', _firewall_form_context('edit', firewall))
+
+
+@login_required
+@require_http_methods(["POST"])
+def firewall_delete_view(request, firewall_id):
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+
+    firewall = get_object_or_404(Firewall, id=firewall_id)
+
+    # Removing a firewall that an EDL relies on would silently narrow that
+    # EDL's ACL, so make the operator unpick it deliberately.
+    in_use = list(firewall.edls.values_list('friendly_name', flat=True))
+    if in_use:
+        return JsonResponse({
+            'error': f'{firewall.name} is still named in the ACL of: {", ".join(in_use)}',
+        }, status=409)
+
+    name = firewall.name
+    firewall.delete()
+    log_activity(request, 'delete_firewall', name)
+    return JsonResponse({'status': 'deleted'})
+
+
+@login_required
+def firewall_group_list_view(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    if request.method == 'POST' and request.POST.get('action') == 'delete':
+        group = get_object_or_404(FirewallGroup, id=request.POST.get('group_id'))
+        if group.edls.exists():
+            messages.error(
+                request,
+                f'Cannot delete "{group.name}" - it is still named in the ACL of '
+                f'{group.edls.count()} EDL(s).',
+            )
+        elif AppSettings.load().userid_push_group_id == group.id:
+            messages.error(
+                request,
+                f'Cannot delete "{group.name}" - it is the User-ID push group in Settings.',
+            )
+        else:
+            log_activity(request, 'delete_firewall_group', group.name)
+            group.delete()
+            messages.success(request, 'Firewall group deleted.')
+        return redirect('app:firewall_group_list')
+
+    return render(request, 'firewall_group_list.html', {
+        'groups': FirewallGroup.objects.prefetch_related('firewalls').all(),
+    })
+
+
+@login_required
+def firewall_group_edit_view(request, group_id=None):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    group = get_object_or_404(FirewallGroup, id=group_id) if group_id else None
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '').strip()
+        member_ids = request.POST.getlist('firewalls')
+
+        if not name:
+            messages.error(request, 'A group name is required.')
+        elif FirewallGroup.objects.filter(name=name).exclude(id=group.id if group else None).exists():
+            messages.error(request, f'A group named "{name}" already exists.')
+        else:
+            before_members = set(group.firewalls.values_list('name', flat=True)) if group else set()
+            if group is None:
+                group = FirewallGroup.objects.create(name=name, description=description)
+                action = 'create_firewall_group'
+            else:
+                group.name = name
+                group.description = description
+                group.save()
+                action = 'edit_firewall_group'
+
+            group.firewalls.set(Firewall.objects.filter(id__in=member_ids))
+            after_members = set(group.firewalls.values_list('name', flat=True))
+            detail = ('members: ' + ', '.join(sorted(after_members))) if after_members else 'no members'
+            if action == 'edit_firewall_group' and after_members == before_members:
+                detail = 'No changes'
+            log_activity(request, action, group.name, detail)
+            messages.success(request, f'Firewall group {group.name} saved.')
+            return redirect('app:firewall_group_list')
+
+    return render(request, 'firewall_group_edit.html', {
+        'group': group,
+        'mode': 'create' if group is None else 'edit',
+        'firewalls': Firewall.objects.all(),
     })
 
 
@@ -2829,24 +3200,32 @@ def blocked_ips_view(request):
 
 @login_required
 def user_id_mappings_view(request):
-    """Live user-to-IP mappings and the health of the firewall push."""
+    """Live user-to-IP mappings and the health of the push to each firewall."""
     if not request.user.is_superuser:
         raise PermissionDenied
 
-    from .models import UserIdMapping
     from . import panos as panos_module
 
     app_settings = AppSettings.load()
+    targets = list(userid_push_targets())
     mappings = list(UserIdMapping.objects.all())
+
+    # Delivery is a fact about each firewall now, so a mapping is only settled
+    # once every target has been pushed since it last changed.
+    for mapping in mappings:
+        mapping.is_synced = mapping.is_synced_to(targets)
+
+    for firewall in targets:
+        # Shown verbatim when a push fails, so an operator can reproduce it by
+        # hand instead of guessing at what we sent.
+        firewall.curl_equivalent = panos_module.curl_equivalent(firewall)
 
     return render(request, 'user_id_mappings.html', {
         'mappings': mappings,
+        'targets': targets,
         'app_settings': app_settings,
         'refresh_interval': app_settings.panos_refresh_interval_minutes,
         'stale_after': app_settings.userid_stale_after_minutes,
-        # Shown verbatim when a push fails, so an operator can reproduce it by
-        # hand instead of guessing at what we sent.
-        'curl_equivalent': panos_module.curl_equivalent(app_settings),
     })
 
 

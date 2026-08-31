@@ -65,14 +65,146 @@ User-agent: *
 Disallow: /
 """
 
+class FirewallGroup(models.Model):
+    """A named set of firewalls, so an EDL can be scoped once instead of per box."""
+
+    name = models.CharField(max_length=100, unique=True, verbose_name='Group Name')
+    description = models.CharField(max_length=255, blank=True, default='', db_default='', verbose_name='Description')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Firewall Group"
+        verbose_name_plural = "Firewall Groups"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class Firewall(models.Model):
+    """A firewall the operator registers in advance.
+
+    One record serves two jobs that previously had no idea about each other:
+    it is an identity an EDL's ACL can name, and it is a destination for
+    User-ID mappings. Both used to be expressed as bare addresses typed in
+    twice, with the credentials for the same box living somewhere else again.
+
+    Named `Firewall` rather than `Device` on purpose: this codebase already
+    uses "device" to mean a Chromebook (see UserIdMapping), and a second
+    meaning for the word would be actively confusing.
+    """
+
+    VENDOR_PANOS = 'panos'
+    VENDOR_CHOICES = [
+        (VENDOR_PANOS, 'Palo Alto (PAN-OS)'),
+    ]
+
+    STATUS_SUCCESS = 'success'
+    STATUS_FAILED = 'failed'
+
+    name = models.CharField(max_length=100, unique=True, verbose_name='Name')
+    # Only PAN-OS is implemented. The field exists so other manufacturers that
+    # consume EDLs can be added without reshaping the table.
+    vendor = models.CharField(
+        max_length=32, default=VENDOR_PANOS, db_default=VENDOR_PANOS,
+        choices=VENDOR_CHOICES, verbose_name='Vendor',
+    )
+    address = models.CharField(max_length=255, verbose_name='Management Address')
+    api_key = EncryptedCharField(max_length=512, blank=True, default='', db_default='', verbose_name='API Key')
+    vsys = models.CharField(max_length=32, blank=True, default='', db_default='', verbose_name='vsys (optional)')
+    # Management interfaces almost always present a self-signed certificate.
+    verify_ssl = models.BooleanField(default=False, db_default=False, verbose_name='Verify TLS Certificate')
+
+    # The address a firewall FETCHES an EDL from is not necessarily the one we
+    # send API calls to; a service route commonly puts EDL fetches on a
+    # dataplane interface. Without this, ACLs silently deny legitimate fetches
+    # and it looks like an EDL problem rather than a routing one.
+    extra_source_addresses = models.TextField(
+        blank=True, default='', db_default='',
+        verbose_name='Additional Source Addresses',
+        help_text='One IP or CIDR per line. Only needed when the firewall fetches EDLs from an address other than its management address.',
+    )
+
+    groups = models.ManyToManyField(FirewallGroup, blank=True, related_name='firewalls', verbose_name='Groups')
+    receives_user_id = models.BooleanField(default=False, db_default=False, verbose_name='Receives User-ID Mappings')
+    enabled = models.BooleanField(default=True, db_default=True, verbose_name='Enabled')
+    notes = models.TextField(blank=True, default='', db_default='', verbose_name='Notes')
+
+    # Per-firewall push state. This cannot live on the AppSettings singleton
+    # any more: one firewall can reject while another accepts, and a single
+    # status field would flap between them.
+    last_push_at = models.DateTimeField(null=True, blank=True, verbose_name='Last Push')
+    last_push_status = models.CharField(max_length=16, blank=True, default='', db_default='', verbose_name='Last Push Status')
+    last_push_error = models.CharField(max_length=1000, blank=True, default='', db_default='', verbose_name='Last Push Error')
+    last_push_count = models.PositiveIntegerField(default=0, db_default=0, verbose_name='Mappings In Last Push')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Firewall"
+        verbose_name_plural = "Firewalls"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def source_networks(self):
+        """Every network this firewall may fetch an EDL from.
+
+        The management address counts unless it is a hostname, which cannot be
+        matched against a source IP without resolving it, and resolving on the
+        request path would put DNS in front of every EDL fetch.
+        """
+        import ipaddress
+
+        candidates = [(self.address or '').strip()]
+        candidates += [line.strip() for line in (self.extra_source_addresses or '').splitlines()]
+
+        networks = []
+        for candidate in candidates:
+            if not candidate or candidate.startswith('#'):
+                continue
+            # Tolerate someone pasting a URL or a host:port into the address.
+            candidate = candidate.split('//')[-1].split('/')[0] if '://' in candidate else candidate
+            try:
+                if '/' in candidate:
+                    networks.append(ipaddress.ip_network(candidate, strict=False))
+                else:
+                    networks.append(ipaddress.ip_network(ipaddress.ip_address(candidate)))
+            except ValueError:
+                continue  # a hostname, or a typo; neither can match an IP
+        return networks
+
+    def matches_ip(self, ip):
+        """Whether `ip` is one of this firewall's known source addresses."""
+        import ipaddress
+
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        return any(addr in network for network in self.source_networks())
+
+
 class ExtDynLists(models.Model):
     SYSTEM_BLOCKLIST_NAME = "System Blocklist - Auto-Blocked IPs"
 
     friendly_name = models.CharField(max_length=255, verbose_name='EDL Name')
     auto_url = models.CharField(max_length=255, unique=True, blank=True)
     ip_fqdn = models.TextField(verbose_name='IP/FQDN')
-    acl = models.TextField(verbose_name='ACL')
+    # Raw addresses, CIDRs, '*' and comments. Optional now that a firewall or
+    # group can carry the whole ACL on its own.
+    acl = models.TextField(blank=True, default='', db_default='', verbose_name='ACL')
     policy_reference = models.TextField(verbose_name='Notes')
+    # Machine access: which registered firewalls may fetch this list.
+    acl_firewalls = models.ManyToManyField(
+        'Firewall', blank=True, related_name='edls', verbose_name='Firewalls',
+    )
+    acl_firewall_groups = models.ManyToManyField(
+        'FirewallGroup', blank=True, related_name='edls', verbose_name='Firewall Groups',
+    )
+    # Human visibility in the UI only. Never consulted when a firewall fetches
+    # the list; see get_visible_edls(). Orthogonal to the two fields above.
     groups = models.ManyToManyField(Group, blank=True, verbose_name='Groups')
     created_date = models.DateTimeField(auto_now_add=True)
     is_system = models.BooleanField(default=False, editable=False)
@@ -105,6 +237,15 @@ class ExtDynLists(models.Model):
 
     def __str__(self):
         return f"{self.id}: {self.friendly_name} ({self.auto_url})"
+
+    @property
+    def is_open_to_all(self):
+        """True when a bare '*' line lets any address fetch this list.
+
+        Surfaced in the list views because the ACL is otherwise invisible
+        outside the edit form, so nobody could see which EDLs were wide open.
+        """
+        return '*' in [line.strip() for line in (self.acl or '').split('\n')]
 
     @classmethod
     def sync_system_blocklist(cls):
@@ -344,20 +485,31 @@ class AppSettings(models.Model):
     # Mappings arrive from managed browsers via /api/v1/userid/checkin and are
     # pushed to the firewall's User-ID XML API by a background thread.
     panos_enabled = models.BooleanField(default=False, db_default=False, verbose_name='Enable PAN-OS User-ID Push')
-    panos_host = models.CharField(max_length=255, blank=True, default='', db_default='', verbose_name='Firewall Host')
-    panos_api_key = EncryptedCharField(max_length=512, blank=True, default='', db_default='', verbose_name='PAN-OS API Key')
-    panos_vsys = models.CharField(max_length=32, blank=True, default='', db_default='', verbose_name='vsys (optional)')
+    # Push targets are firewalls flagged `receives_user_id`, plus every firewall
+    # in this group. Union of the two, so a single box and a whole site are both
+    # expressible without a second mechanism.
+    userid_push_group = models.ForeignKey(
+        'FirewallGroup', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='userid_push_settings', verbose_name='Push To Group',
+    )
+    # DEPRECATED: superseded by the Firewall registry. Migration 0049 copies
+    # these into a Firewall row. Nothing reads them any more, but the columns
+    # stay for one release: upgrade.sh migrates well before it restarts, so
+    # workers running old code would otherwise lose their push target mid-upgrade.
+    panos_host = models.CharField(max_length=255, blank=True, default='', db_default='', verbose_name='Firewall Host (deprecated)')
+    panos_api_key = EncryptedCharField(max_length=512, blank=True, default='', db_default='', verbose_name='PAN-OS API Key (deprecated)')
+    panos_vsys = models.CharField(max_length=32, blank=True, default='', db_default='', verbose_name='vsys (deprecated)')
     # Firewall management interfaces almost always present a self-signed cert,
     # so verification is off by default rather than making the feature fail
     # out of the box in the environment it is built for.
-    panos_verify_ssl = models.BooleanField(default=False, db_default=False, verbose_name='Verify Firewall TLS Certificate')
+    panos_verify_ssl = models.BooleanField(default=False, db_default=False, verbose_name='Verify Firewall TLS Certificate (deprecated)')
     panos_mapping_timeout_minutes = models.PositiveIntegerField(default=45, db_default=45, verbose_name='Mapping Timeout (minutes)')
     panos_push_interval_seconds = models.PositiveIntegerField(default=30, db_default=30, verbose_name='Push Interval (seconds)')
     panos_refresh_interval_minutes = models.PositiveIntegerField(default=15, db_default=15, verbose_name='Refresh Interval (minutes)')
     # A device taken off-site reports its home NAT address. Mapping a public IP
     # to a named user is both wrong and a privacy problem, so reject by default.
     panos_only_private_ips = models.BooleanField(default=True, db_default=True, verbose_name='Accept Private Source IPs Only')
-    panos_last_push_at = models.DateTimeField(null=True, blank=True, verbose_name='Last Push')
+    panos_last_push_at = models.DateTimeField(null=True, blank=True, verbose_name='Last Push (deprecated)')
     panos_last_push_status = models.CharField(max_length=16, blank=True, default='', db_default='', verbose_name='Last Push Status')
     panos_last_push_error = models.CharField(max_length=1000, blank=True, default='', db_default='', verbose_name='Last Push Error')
     panos_last_push_count = models.PositiveIntegerField(default=0, db_default=0, verbose_name='Mappings In Last Push')
@@ -1331,29 +1483,21 @@ class UserIdMapping(models.Model):
     ip_address = models.GenericIPAddressField(unique=True, verbose_name='IP Address')
     username = models.CharField(max_length=255, verbose_name='Username')
     device_id = models.CharField(max_length=255, blank=True, default='', db_default='', verbose_name='Device ID')
+    # Admin-set values read from ChromeOS enterprise policy. Unlike the
+    # username, a student cannot edit these, and the location is what turns an
+    # incident from "some Chromebook" into a room to walk to.
+    directory_device_id = models.CharField(max_length=255, blank=True, default='', db_default='', verbose_name='Directory Device ID')
+    device_location = models.CharField(max_length=255, blank=True, default='', db_default='', verbose_name='Location')
     agent_version = models.CharField(max_length=32, blank=True, default='', db_default='', verbose_name='Agent Version')
     chrome_version = models.CharField(max_length=32, blank=True, default='', db_default='', verbose_name='Browser Version')
 
     first_seen = models.DateTimeField(auto_now_add=True, verbose_name='First Seen')
     last_checkin = models.DateTimeField(verbose_name='Last Check-in')
-    last_pushed_at = models.DateTimeField(null=True, blank=True, verbose_name='Last Pushed')
-    # What the firewall was last told. Lets an identity change on a recycled
-    # address register as dirty even when the check-in timestamps look settled.
-    pushed_username = models.CharField(max_length=255, blank=True, default='', db_default='', verbose_name='Pushed Username')
 
     class Meta:
         verbose_name = "User-ID Mapping"
         verbose_name_plural = "User-ID Mappings"
         ordering = ["-last_checkin"]
-
-    @property
-    def is_dirty(self):
-        """True when the firewall does not have what we currently believe."""
-        if self.last_pushed_at is None:
-            return True
-        if self.pushed_username != self.username:
-            return True
-        return self.last_checkin > self.last_pushed_at
 
     def is_stale(self, stale_after_minutes):
         """True when the device has gone quiet long enough to stop refreshing.
@@ -1368,15 +1512,20 @@ class UserIdMapping(models.Model):
 
         return timezone.now() - self.last_checkin > timedelta(minutes=stale_after_minutes)
 
-    def needs_refresh(self, refresh_interval_minutes):
-        """True when the firewall entry is old enough to be worth renewing."""
-        from datetime import timedelta
+    def is_synced_to(self, firewalls):
+        """True when every target has been pushed since this mapping last changed.
 
-        from django.utils import timezone
-
-        if self.last_pushed_at is None:
-            return True
-        return timezone.now() - self.last_pushed_at > timedelta(minutes=refresh_interval_minutes)
+        Derived rather than stored. With several targets, delivery is a fact
+        about each firewall, not about the mapping, so the mapping's own row
+        has nothing useful to remember.
+        """
+        firewalls = list(firewalls)
+        if not firewalls:
+            return False
+        return all(
+            fw.last_push_at is not None and fw.last_push_at >= self.last_checkin
+            for fw in firewalls
+        )
 
     def __str__(self):
         return f"{self.username} @ {self.ip_address}"

@@ -39,6 +39,10 @@ class UserIdCheckinIn(Schema):
 
     username: str
     device_id: Optional[str] = ''
+    # Admin-set ChromeOS attributes. Absent on every other platform, which is
+    # why they are optional rather than required.
+    directory_device_id: Optional[str] = ''
+    device_location: Optional[str] = ''
     agent_version: Optional[str] = ''
     chrome_version: Optional[str] = ''
 

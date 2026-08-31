@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% block title %}- {% if mode == 'create' %}New Firewall{% else %}Edit Firewall{% endif %}{% endblock %}
+{% block content %}
+<div style="max-width: 800px;">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <a href="{% url 'app:firewall_list' %}" title="Back to Firewalls"><i class="bi bi-arrow-left action-items"></i></a>
+        <h3 class="mb-0">{% if mode == 'create' %}New Firewall{% else %}{{ firewall.name }}{% endif %}</h3>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">Identity</h6>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="name" class="form-label">Name</label>
+                        <input type="text" name="name" id="name" class="form-control form-control-sm" required
+                               value="{{ values.name }}" placeholder="edge-fw-01">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="vendor" class="form-label">Vendor</label>
+                        <select name="vendor" id="vendor" class="form-select form-select-sm">
+                            {% for value, label in vendor_choices %}
+                            <option value="{{ value }}" {% if values.vendor == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label for="notes" class="form-label">Notes <span class="text-muted" style="font-weight: 400;">(optional)</span></label>
+                    <textarea name="notes" id="notes" class="form-control form-control-sm" rows="2">{{ values.notes }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">Management API</h6>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="address" class="form-label">Management Address</label>
+                        <input type="text" name="address" id="address" class="form-control form-control-sm" required
+                               value="{{ values.address }}" placeholder="firewall.example.com">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="api_key" class="form-label">
+                            API Key{% if mode == 'edit' %} <small class="text-muted">(leave blank to keep current)</small>{% endif %}
+                        </label>
+                        <input type="password" name="api_key" id="api_key" class="form-control form-control-sm"
+                               placeholder="LUFRPT1..." autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="vsys" class="form-label">vsys</label>
+                        <input type="text" name="vsys" id="vsys" class="form-control form-control-sm"
+                               value="{{ values.vsys }}" placeholder="optional">
+                    </div>
+                </div>
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" name="verify_ssl" id="verify_ssl"
+                        {% if values.verify_ssl %}checked{% endif %}>
+                    <label class="form-check-label" for="verify_ssl">
+                        Verify the firewall's TLS certificate
+                        <span class="text-muted d-block" style="font-size: 0.78rem;">Leave off if the management interface uses a self-signed certificate.</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">EDL Access</h6>
+                <p class="text-muted" style="font-size: 0.8rem;">
+                    When this firewall is named in an EDL's ACL, a fetch is allowed from its
+                    management address. Add more addresses here if a service route sends its
+                    EDL fetches out a different interface, which is common: the address that
+                    fetches an EDL is often not the one you send API calls to.
+                </p>
+                <label for="extra_source_addresses" class="form-label">Additional Source Addresses</label>
+                <textarea name="extra_source_addresses" id="extra_source_addresses" class="form-control form-control-sm" rows="3"
+                          placeholder="One IP or CIDR per line&#10;10.1.2.3&#10;10.4.0.0/24">{{ values.extra_source_addresses }}</textarea>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase mb-3">Membership</h6>
+                <label class="form-label">Groups</label>
+                <div class="border rounded p-2 mb-3" style="max-height: 200px; overflow-y: auto; font-size: 0.85rem;">
+                    {% for g in groups %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="groups" value="{{ g.id }}" id="group_{{ g.id }}"
+                            {% if g.id in selected_group_ids %}checked{% endif %}>
+                        <label class="form-check-label" for="group_{{ g.id }}">{{ g.name }}</label>
+                    </div>
+                    {% empty %}
+                    <span class="text-muted">No groups yet. <a href="{% url 'app:firewall_group_create' %}">Create one</a>.</span>
+                    {% endfor %}
+                </div>
+
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="receives_user_id" id="receives_user_id"
+                        {% if values.receives_user_id %}checked{% endif %}>
+                    <label class="form-check-label" for="receives_user_id">
+                        Receives User-ID mappings
+                        <span class="text-muted d-block" style="font-size: 0.78rem;">Push to one firewall and let PAN-OS Data Redistribution fan out, or tick several to push directly.</span>
+                    </label>
+                </div>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" name="enabled" id="enabled"
+                        {% if values.enabled %}checked{% endif %}>
+                    <label class="form-check-label" for="enabled">
+                        Enabled
+                        <span class="text-muted d-block" style="font-size: 0.78rem;">Unticking stops pushes and stops this firewall satisfying any EDL ACL.</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm">{% if mode == 'create' %}Create Firewall{% else %}Save Changes{% endif %}</button>
+        <a href="{% url 'app:firewall_list' %}" class="btn btn-outline-secondary btn-sm">Cancel</a>
+    </form>
+</div>
+{% endblock %}

@@ -9,7 +9,11 @@ class ExtDynListsForm(forms.ModelForm):
 
     class Meta:
         model = ExtDynLists
-        exclude = ('auto_url', 'groups',)
+        # The ACL relations are rendered as checkbox lists in the template and
+        # set explicitly in the views, so they stay out of the auto-built form.
+        # Note this Meta uses `exclude`, so anything added to the model and not
+        # listed here would otherwise appear in the form unannounced.
+        exclude = ('auto_url', 'groups', 'acl_firewalls', 'acl_firewall_groups',)
         widgets = {
             'friendly_name' : forms.TextInput(attrs={'class' : 'form-control mb-3', 
                                               'id' : 'friendlyNameInput', 
@@ -22,8 +26,7 @@ class ExtDynListsForm(forms.ModelForm):
                                               'rows' : '4'}),
             'acl' : forms.Textarea(attrs={'class' : 'form-control mb-3',
                                               'id' : 'aclInput', 
-                                              'placeholder' : 'Example:\n* (Any)\n1.1.1.1\n10.0.0.0/24\n#A Note Can Be Entered or Line Commented Out Like This', 
-                                              'required' : 'required',
+                                              'placeholder' : 'Optional. Leave blank to allow only the firewalls selected alongside.\n*\n1.1.1.1\n10.0.0.0/24\n2001:db8::1\n# A note, or a commented-out entry', 
                                               'rows' : '5'}),
             'policy_reference' : forms.Textarea(attrs={'class' : 'form-control mb-3',
                                               'id' : 'policyReferenceInput', 

@@ -48,6 +48,8 @@ def checkin(request, payload: UserIdCheckinIn):
         device_id=payload.device_id,
         agent_version=payload.agent_version,
         chrome_version=payload.chrome_version,
+        directory_device_id=payload.directory_device_id,
+        device_location=payload.device_location,
     )
 
     # Only an address changing hands is worth an audit entry. Logging every
@@ -78,22 +80,29 @@ def config(request):
     return services.userid_config(AppSettings.load())
 
 
-@router.post("/test-connection", auth=SessionAuth, url_name="panos_test_connection",
-             summary="Probe the firewall without changing anything")
-def test_connection(request):
-    """Confirm host, key, and TLS settings from the settings page.
+@router.post("/test-connection", auth=SessionAuth, url_name="firewall_test_connection",
+             summary="Probe one firewall without changing anything")
+def test_connection(request, firewall_id: int):
+    """Confirm address, key, and TLS settings for a single firewall.
 
-    Does not touch the push status fields: a connectivity probe should not
-    make a healthy integration look like it just failed, nor a failing one
-    look recovered.
+    Does not touch that firewall's push status: a connectivity probe should not
+    make a healthy integration look like it just failed, nor a failing one look
+    recovered.
     """
-    from app import panos
-    from app.models import AppSettings
+    from app.firewall_drivers import UnsupportedVendor, driver_for
+    from app.models import Firewall
 
     if not request.user.is_superuser:
         raise PermissionDenied
 
-    ok, message = panos.test_connection(AppSettings.load())
+    firewall = Firewall.objects.filter(id=firewall_id).first()
+    if firewall is None:
+        return {'status': 'error', 'message': 'No such firewall.'}
+
+    try:
+        ok, message = driver_for(firewall).test_connection(firewall)
+    except UnsupportedVendor as e:
+        ok, message = False, str(e)
     return {'status': 'ok' if ok else 'error', 'message': message}
 
 

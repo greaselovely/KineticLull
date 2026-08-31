@@ -41,6 +41,7 @@
                 <td>
                     {{ item.friendly_name }}
                     {% if item.is_system %}<span class="badge bg-secondary ms-1" title="Auto-managed by KineticLull. Read-only.">SYSTEM</span>{% endif %}
+                    {% if item.is_open_to_all %}<span class="badge bg-warning text-dark ms-1" title="Any address can fetch this list. Scope it to a firewall or group to narrow it.">OPEN</span>{% endif %}
                 </td>
                 <td class="text-truncate"><a href="{{ item.full_url }}/" target="_blank">{{ item.full_url }}/</a></td>
                 <td class="cell-wrap">
@@ -59,8 +60,8 @@
                 <td>
                     <span class="actions-row">
                         <i class="bi {% if item.is_favorited %}bi-star-fill text-warning{% else %}bi-star{% endif %} action-items favorite-btn" data-id="{{ item.id }}" title="Favorite"></i>
+                        <a href="{% url 'app:edit' id=item.id %}" title="{% if item.is_system %}Scope access{% else %}Edit{% endif %}"><i class="bi bi-pencil action-items"></i></a>
                         {% if not item.is_system %}
-                        <a href="{% url 'app:edit' id=item.id %}" title="Edit"><i class="bi bi-pencil action-items"></i></a>
                         <a href="{% url 'app:clone' item.id %}" title="Clone"><i class="bi bi-copy action-items"></i></a>
                         {% endif %}
                         <a href="{% url 'app:download_ip_fqdn' item.id %}" title="Download"><i class="bi bi-download action-items"></i></a>

@@ -51,7 +51,7 @@ class Command(BaseCommand):
     def _restore_v2(self, tmpdir, data_json_path):
         from app.models import (
             ExtDynLists, ShortenedURL, OneTimeFile, Favorite,
-            BlockedIP, WhitelistedIP, AppSettings,
+            BlockedIP, WhitelistedIP, AppSettings, Firewall, FirewallGroup,
         )
         from users.models import CustomUser, APIKey
         from django.contrib.auth.models import Group
@@ -112,6 +112,34 @@ class Command(BaseCommand):
             )
             self.stdout.write(f'  API key for: {k["user_email"]}')
 
+        # Firewall registry, before EDLs so an EDL's ACL can attach to one.
+        for g in data.get('firewall_groups', []):
+            FirewallGroup.objects.update_or_create(
+                name=g['name'],
+                defaults={'description': g.get('description', '')},
+            )
+            self.stdout.write(f'  Firewall group: {g["name"]}')
+
+        for f in data.get('firewalls', []):
+            firewall, _ = Firewall.objects.update_or_create(
+                name=f['name'],
+                defaults={
+                    'vendor': f.get('vendor', 'panos'),
+                    'address': f.get('address', ''),
+                    # Stored ciphertext goes back verbatim; encrypt() is
+                    # idempotent, so the field's prep step will not double-wrap it.
+                    'api_key': f.get('api_key', ''),
+                    'vsys': f.get('vsys', ''),
+                    'verify_ssl': f.get('verify_ssl', False),
+                    'extra_source_addresses': f.get('extra_source_addresses', ''),
+                    'receives_user_id': f.get('receives_user_id', False),
+                    'enabled': f.get('enabled', True),
+                    'notes': f.get('notes', ''),
+                },
+            )
+            firewall.groups.set(FirewallGroup.objects.filter(name__in=f.get('groups', [])))
+            self.stdout.write(f'  Firewall: {f["name"]}')
+
         # EDLs
         for e in data.get('edls', []):
             existing = ExtDynLists.objects.filter(auto_url=e['auto_url']).first()
@@ -132,6 +160,10 @@ class Command(BaseCommand):
                 )
             if e.get('groups'):
                 edl.groups.set(Group.objects.filter(name__in=e['groups']))
+            edl.acl_firewalls.set(Firewall.objects.filter(name__in=e.get('acl_firewalls', [])))
+            edl.acl_firewall_groups.set(
+                FirewallGroup.objects.filter(name__in=e.get('acl_firewall_groups', []))
+            )
             self.stdout.write(f'  EDL: {e["friendly_name"]}')
 
         # Shortened URLs

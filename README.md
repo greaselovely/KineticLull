@@ -220,9 +220,48 @@ curl -k -X POST https://<kineticlull_url>/api/update_edl/ \
 - Errors are always shaped `{"error": "..."}`, on both the legacy paths and `/api/v1/`. Request-validation failures on `/api/v1/` add a `detail` array with the full field-level breakdown.
 - An `Authorization` header without the `Bearer ` prefix is accepted, since keys issued before `/api/v1/` were used that way.
 
+## Firewalls
+
+Register your firewalls once under **System → Firewalls**, and reuse them in two places
+instead of retyping addresses and keeping credentials somewhere else again:
+
+- **EDL access.** Name a firewall or a group in an EDL's ACL rather than pasting its
+  address into every list.
+- **User-ID push.** Mappings go to the firewalls you mark as targets, using the
+  credentials stored on each one.
+
+Firewalls can be collected into **groups**, so an EDL can be scoped to a whole site at
+once and a group can be nominated to receive User-ID mappings.
+
+### Management address vs fetch address
+
+A firewall's management address is used both for the API and, by default, for EDL ACL
+matching. Those are not always the same: a service route commonly sends EDL fetches out a
+dataplane interface. When they differ, add the fetch addresses under **Additional Source
+Addresses** on the firewall. Getting this wrong presents as an EDL problem rather than a
+routing one, because the fetch is silently denied.
+
+### EDL access control
+
+An EDL is fetchable if **any** of these matches the requesting address:
+
+| Grant | Notes |
+|---|---|
+| `*` on its own line in the address list | Allows anything. Flagged **OPEN** in the EDL list |
+| An address or CIDR in the address list | A bare address is one host: `/32` for IPv4, `/128` for IPv6 |
+| A firewall named on the EDL | Matches its management address and any additional source addresses |
+| A firewall in a group named on the EDL | |
+
+Disabled firewalls satisfy nothing. A malformed ACL denies rather than erroring.
+
+The System Blocklist EDL is auto-managed, but its access can now be scoped like any other
+list; only its contents and name stay read-only.
+
 ## Palo Alto User-ID
 
 KineticLull can attribute firewall traffic to usernames without standing up RADIUS and without asking end users to log in a second time.
+
+Mappings go to every firewall marked **Receives User-ID mappings**, plus every firewall in the group nominated in Settings. Pushing to a single firewall and letting PAN-OS **Data Redistribution** fan out downstream is Palo Alto's own recommended pattern at scale; pushing to several directly works too. Each firewall is pushed independently, so one failing box never stops the others, and each carries its own last-push status.
 
 A managed browser extension posts the signed-in identity to KineticLull on a heartbeat. **KineticLull records the source address it observes on that connection**, never an address the client claims, and keeps the user-to-IP mapping. A background thread batches mappings and pushes them to the firewall's User-ID XML API.
 

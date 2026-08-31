@@ -287,44 +287,84 @@ def _stale_cutoff(stale_after_minutes):
 
 
 def push_due_user_id_mappings(app_settings):
-    """Run one push pass: prune the abandoned, ship everything else that is due.
+    """Run one push pass: prune the abandoned, ship the active set to each target.
 
-    Split out of the loop so it can be exercised directly and so the settings
-    page's "Push Now" button runs exactly the same code path the scheduler
-    does. Returns (pushed_count, message).
+    Split out of the loop so it can be exercised directly and so the "Push Now"
+    button runs exactly the code path the scheduler does.
+
+    Each firewall is pushed independently and carries its own watermark. A
+    firewall is due when any mapping has checked in since its last successful
+    push, or when that push is older than the refresh interval.
+
+    Every push sends the **full active set** rather than a delta. With several
+    targets, per-mapping delivery tracking would mean a mapping-by-firewall
+    table, and the volume does not justify it: a few hundred entries in one XML
+    document is nothing, registrations are idempotent, and a firewall that
+    missed an update is corrected on the next cycle with no reconciliation
+    logic to get wrong.
+
+    One failing target must not stop the others. Returns (pushed_count, message)
+    where the count is the number of firewalls successfully pushed to.
     """
-    from django.utils import timezone
-
-    from app import panos
+    from app.firewall_drivers import UnsupportedVendor, driver_for, userid_push_targets
     from app.models import UserIdMapping
 
     UserIdMapping.objects.filter(
         last_checkin__lt=_stale_cutoff(app_settings.userid_stale_after_minutes)
     ).delete()
 
-    due = [
-        m for m in UserIdMapping.objects.all()
-        if m.is_dirty or m.needs_refresh(app_settings.panos_refresh_interval_minutes)
-    ]
-    if not due:
+    targets = list(userid_push_targets())
+    if not targets:
+        return 0, 'No firewalls are set to receive User-ID mappings.'
+
+    active = list(UserIdMapping.objects.all())
+    if not active:
+        return 0, 'No active mappings.'
+
+    newest_checkin = max(m.last_checkin for m in active)
+
+    pushed = 0
+    results = []
+    for firewall in targets:
+        if not _firewall_is_due(firewall, newest_checkin, app_settings.panos_refresh_interval_minutes):
+            continue
+
+        try:
+            driver = driver_for(firewall)
+            success, message = driver.push_user_id_mappings(
+                active, firewall, app_settings.panos_mapping_timeout_minutes
+            )
+        except UnsupportedVendor as e:
+            success, message = False, str(e)
+            firewall.last_push_status = 'failed'
+            firewall.last_push_error = message[:1000]
+
+        firewall.save()
+        results.append(f'{firewall.name}: {message}')
+        if success:
+            pushed += 1
+
+    if not results:
         return 0, 'Nothing due.'
+    return pushed, '; '.join(results)
 
-    success, message = panos.push_user_id_mappings(due, app_settings)
-    app_settings.save()
 
-    if not success:
-        return 0, message
+def _firewall_is_due(firewall, newest_checkin, refresh_interval_minutes):
+    """Whether this firewall needs the active set sent to it now.
 
-    # Only record what the firewall actually accepted. Stamping these before
-    # the push would let a failed batch look delivered and sit unretried until
-    # its refresh interval came round.
-    now = timezone.now()
-    for mapping in due:
-        mapping.last_pushed_at = now
-        mapping.pushed_username = mapping.username
-    UserIdMapping.objects.bulk_update(due, ['last_pushed_at', 'pushed_username'])
+    Due when it has never been pushed, when a mapping has changed since its
+    last successful push, or when that push is old enough that the firewall's
+    own entries are approaching expiry.
+    """
+    from datetime import timedelta
 
-    return len(due), message
+    from django.utils import timezone
+
+    if firewall.last_push_at is None:
+        return True
+    if newest_checkin > firewall.last_push_at:
+        return True
+    return timezone.now() - firewall.last_push_at > timedelta(minutes=refresh_interval_minutes)
 
 
 def _maybe_upload_to_b2():

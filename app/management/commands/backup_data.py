@@ -30,7 +30,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from app.models import (
             ExtDynLists, ShortenedURL, OneTimeFile, Favorite,
-            BlockedIP, WhitelistedIP, AppSettings,
+            BlockedIP, WhitelistedIP, AppSettings, Firewall, FirewallGroup,
         )
         from users.models import CustomUser, APIKey
         from django.contrib.auth.models import Group
@@ -82,6 +82,32 @@ class Command(BaseCommand):
             'revoked_at': iso(k.revoked_at),
         } for k in APIKey.objects.select_related('user').all()]
 
+        # Firewall registry. Groups first: the restore side needs them to exist
+        # before it can attach a firewall to one.
+        data['firewall_groups'] = [{
+            'name': g.name,
+            'description': g.description,
+            'created_at': iso(g.created_at),
+        } for g in FirewallGroup.objects.all()]
+
+        data['firewalls'] = [{
+            'name': f.name,
+            'vendor': f.vendor,
+            'address': f.address,
+            # The descriptor decrypts on read, so this MUST be re-encrypted on
+            # the way out. Without it the plaintext key lands in data.json, in
+            # the tarball, and in offsite storage.
+            'api_key': _encrypt_secret(f.api_key or ''),
+            'vsys': f.vsys,
+            'verify_ssl': f.verify_ssl,
+            'extra_source_addresses': f.extra_source_addresses,
+            'receives_user_id': f.receives_user_id,
+            'enabled': f.enabled,
+            'notes': f.notes,
+            'groups': list(f.groups.values_list('name', flat=True)),
+            'created_at': iso(f.created_at),
+        } for f in Firewall.objects.prefetch_related('groups').all()]
+
         # EDLs
         data['edls'] = [{
             'friendly_name': e.friendly_name,
@@ -90,6 +116,8 @@ class Command(BaseCommand):
             'acl': e.acl,
             'policy_reference': e.policy_reference,
             'groups': list(e.groups.values_list('name', flat=True)),
+            'acl_firewalls': list(e.acl_firewalls.values_list('name', flat=True)),
+            'acl_firewall_groups': list(e.acl_firewall_groups.values_list('name', flat=True)),
             'created_date': iso(e.created_date),
         } for e in ExtDynLists.objects.all()]
 

@@ -229,7 +229,8 @@ def userid_config(app_settings):
 
 
 def record_user_id_checkin(username, ip_address, app_settings,
-                           device_id='', agent_version='', chrome_version=''):
+                           device_id='', agent_version='', chrome_version='',
+                           directory_device_id='', device_location=''):
     """Record which user is signed in at an observed address.
 
     `ip_address` must be the address the server saw on the connection, not
@@ -278,6 +279,8 @@ def record_user_id_checkin(username, ip_address, app_settings,
         defaults={
             'username': username,
             'device_id': device_id or '',
+            'directory_device_id': directory_device_id or '',
+            'device_location': device_location or '',
             'agent_version': agent_version or '',
             'chrome_version': chrome_version or '',
             'last_checkin': now,
