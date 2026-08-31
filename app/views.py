@@ -529,7 +529,14 @@ def edit_ext_dyn_list_view(request, id=None):
             'policy_reference': edl.policy_reference,
         }
         if request.method == 'POST':
-            form = ExtDynListsForm(request.POST, instance=edl)
+            post_data = request.POST
+            if system_edl:
+                # The form does not render these for a system EDL, so supply
+                # the stored values: they are required fields, and this also
+                # means a hand-crafted POST cannot smuggle new ones in.
+                post_data = request.POST.copy()
+                post_data.update(system_snapshot)
+            form = ExtDynListsForm(post_data, instance=edl)
             if form.is_valid():
                 # Apply corrections to the acl field
                 edl_instance = form.save(commit=False)
