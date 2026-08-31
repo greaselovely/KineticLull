@@ -41,7 +41,6 @@
                 <td>
                     {{ item.friendly_name }}
                     {% if item.is_system %}<span class="badge bg-secondary ms-1" title="Auto-managed by KineticLull. Read-only.">SYSTEM</span>{% endif %}
-                    {% if item.is_open_to_all %}<span class="badge bg-warning text-dark ms-1" title="Any address can fetch this list. Scope it to a firewall or group to narrow it.">OPEN</span>{% endif %}
                 </td>
                 <td class="text-truncate"><a href="{{ item.full_url }}/" target="_blank">{{ item.full_url }}/</a></td>
                 <td class="cell-wrap">

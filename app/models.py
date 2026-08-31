@@ -238,15 +238,6 @@ class ExtDynLists(models.Model):
     def __str__(self):
         return f"{self.id}: {self.friendly_name} ({self.auto_url})"
 
-    @property
-    def is_open_to_all(self):
-        """True when a bare '*' line lets any address fetch this list.
-
-        Surfaced in the list views because the ACL is otherwise invisible
-        outside the edit form, so nobody could see which EDLs were wide open.
-        """
-        return '*' in [line.strip() for line in (self.acl or '').split('\n')]
-
     @classmethod
     def sync_system_blocklist(cls):
         """Mirror every BlockedIP row into the pinned system EDL.

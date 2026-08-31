@@ -247,7 +247,7 @@ An EDL is fetchable if **any** of these matches the requesting address:
 
 | Grant | Notes |
 |---|---|
-| `*` on its own line in the address list | Allows anything. Flagged **OPEN** in the EDL list |
+| `*` on its own line in the address list | Allows anything |
 | An address or CIDR in the address list | A bare address is one host: `/32` for IPv4, `/128` for IPv6 |
 | A firewall named on the EDL | Matches its management address and any additional source addresses |
 | A firewall in a group named on the EDL | |
