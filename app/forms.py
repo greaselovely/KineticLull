@@ -7,6 +7,20 @@ from users.models import CustomUser
 
 class ExtDynListsForm(forms.ModelForm):
 
+    # The system EDL's name, entries and notes are maintained by KineticLull.
+    # They are dropped from the form entirely rather than rendered read-only and
+    # re-submitted: they are required fields, and an install with an empty
+    # blocklist has an empty ip_fqdn, which would fail validation and silently
+    # refuse to save the one thing that *is* editable here, the ACL.
+    SYSTEM_MANAGED_FIELDS = ('friendly_name', 'ip_fqdn', 'policy_reference')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if getattr(self.instance, 'is_system', False):
+            for name in self.SYSTEM_MANAGED_FIELDS:
+                self.fields.pop(name, None)
+
+
     class Meta:
         model = ExtDynLists
         # The ACL relations are rendered as checkbox lists in the template and

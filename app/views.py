@@ -511,16 +511,10 @@ def edit_ext_dyn_list_view(request, id=None):
         # The system EDL's *contents* are auto-managed, but who may fetch it is
         # an operator decision like any other list, so its ACL stays editable.
         # Every other field is restored below rather than trusted from the POST.
-        system_edl = edl.is_system
-        # Raw snapshot, taken before the form binds. A ModelForm with an
-        # instance mutates that instance during validation, so by the time
-        # save(commit=False) returns, `edl` already carries the posted values
-        # and is no longer a record of what was there.
-        system_snapshot = {
-            'friendly_name': edl.friendly_name,
-            'ip_fqdn': edl.ip_fqdn,
-            'policy_reference': edl.policy_reference,
-        } if system_edl else None
+        # The system EDL's contents are auto-managed, but who may fetch it is an
+        # operator decision like any other list. ExtDynListsForm drops the
+        # managed fields for it, so a posted value for them never reaches the
+        # instance and there is nothing to restore afterwards.
         # Snapshot before values for diff
         before = {
             'friendly_name': edl.friendly_name,
@@ -529,22 +523,10 @@ def edit_ext_dyn_list_view(request, id=None):
             'policy_reference': edl.policy_reference,
         }
         if request.method == 'POST':
-            post_data = request.POST
-            if system_edl:
-                # The form does not render these for a system EDL, so supply
-                # the stored values: they are required fields, and this also
-                # means a hand-crafted POST cannot smuggle new ones in.
-                post_data = request.POST.copy()
-                post_data.update(system_snapshot)
-            form = ExtDynListsForm(post_data, instance=edl)
+            form = ExtDynListsForm(request.POST, instance=edl)
             if form.is_valid():
                 # Apply corrections to the acl field
                 edl_instance = form.save(commit=False)
-
-                if system_edl:
-                    # Only the ACL is the operator's to change here.
-                    for field, value in system_snapshot.items():
-                        setattr(edl_instance, field, value)
 
                 # Process each line in acl, filtering out only blank lines
                 acl_lines = (line.strip() for line in edl_instance.acl.splitlines())
